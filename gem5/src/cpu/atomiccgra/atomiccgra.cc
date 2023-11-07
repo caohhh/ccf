@@ -1423,6 +1423,7 @@ AtomicCGRA::tick()
                 } else {
                     //CGRA execution over
                     DPRINTF(CGRA||CGRA_Detailed,"SHOULD NOT GET HERE!\n");
+                    warn("should not get here\n");
                     Prepare_to_Switch_Back_to_CPU(thread);
                     Restore_CPU_Execution(thread);
                     DPRINTF(CGRA, "Setting CPU_STATE_REG to %d\n", CGRA_SWITCH);
@@ -1709,7 +1710,7 @@ AtomicCGRA::Setup_CGRA()
 
             cgra_PEs[i * CGRA_YDim + j].SetController_Reg();//
             DPRINTF(Setup_DEBUG, "Passed the settin control reg\n");
-            
+
             cgra_PEs[i * CGRA_YDim + j].ClearRegfile();
             DPRINTF(Setup_DEBUG, "Passed the setting of clear reg\n");
         } // end of Ydim for loop
