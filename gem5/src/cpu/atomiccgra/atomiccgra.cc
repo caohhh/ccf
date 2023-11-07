@@ -1534,188 +1534,187 @@ AtomicCGRA::tick()
     return regular;  
     }*/
 
-    void AtomicCGRA::Setup_CGRA()
+
+void 
+AtomicCGRA::Setup_CGRA()
 {
 
-  DPRINTF(Setup_DEBUG, "Inside Setup_CGRA() with  %d x %d and RF %d\n", CGRA_XDim, CGRA_YDim, RFSize);
-  //CGRA_instructions = new uint32_t[16]; //Shail: TODO Parameterize this
-  CGRA_instructions = new uint64_t[CGRA_XDim * CGRA_YDim];
-  //unknownRes = new uint64_t[16]; // Shail: TODO Parameterize this
-  unknownRes = new uint64_t[CGRA_XDim * CGRA_YDim];
-  written = 0;
+    DPRINTF(Setup_DEBUG, "Inside Setup_CGRA() with  %d x %d and RF %d\n", CGRA_XDim, CGRA_YDim, RFSize);
+    //CGRA_instructions = new uint32_t[16]; //Shail: TODO Parameterize this
+    CGRA_instructions = new uint64_t[CGRA_XDim * CGRA_YDim];
+    //unknownRes = new uint64_t[16]; // Shail: TODO Parameterize this
+    unknownRes = new uint64_t[CGRA_XDim * CGRA_YDim];
+    written = 0;
 
-  DPRINTF(Setup_DEBUG, "Passed the first initialization\n");
-  //cgra_PEs.reserve(CGRA_XDim * CGRA_YDim); //set number of PEs.
-  cgra_PEs = new CGRA_PE[CGRA_XDim * CGRA_YDim]; 
+    DPRINTF(Setup_DEBUG, "Passed the first initialization\n");
+    //cgra_PEs.reserve(CGRA_XDim * CGRA_YDim); //set number of PEs.
+    cgra_PEs = new CGRA_PE[CGRA_XDim * CGRA_YDim]; 
 
-  //cgra_PEs = new CGRA_PE[CGRA_XDim * CGRA_YDim];
+    //cgra_PEs = new CGRA_PE[CGRA_XDim * CGRA_YDim];
 
-  DPRINTF(Setup_DEBUG, "Passed CGRA_PE initialization\n");
+    DPRINTF(Setup_DEBUG, "Passed CGRA_PE initialization\n");
 
-  //Setting Neighbors - Populate Output structures
-  for (int i = 0; i < CGRA_XDim; i++)
-  {
-    for (int j = 0; j < CGRA_YDim; j++)
-    {
-      int current_PE = i * CGRA_YDim + j;
-      //int current_position = Position(current_PE, i, j);
-      int iIndex;
-      int jIndex;
-      if (i == 0)
-      {
-        iIndex = CGRA_XDim;
-      }
-      else
-      {
-        iIndex = i;
-      }
-      if (j == 0)
-      {
-        jIndex = CGRA_YDim;
-      }
-      else
-      {
-        jIndex = j;
-      }
+    //Setting Neighbors - Populate Output structures
+    for (int i = 0; i < CGRA_XDim; i++) {
+        for (int j = 0; j < CGRA_YDim; j++) {
+            int current_PE = i * CGRA_YDim + j;
+            //int current_position = Position(current_PE, i, j);
+            int iIndex;
+            int jIndex;
+            if (i == 0) {
+                iIndex = CGRA_XDim;
+            } else {
+                iIndex = i;
+            }
+            if (j == 0) {
+                jIndex = CGRA_YDim;
+            } else {
+                jIndex = j;
+            }
 
-      DPRINTF(Setup_DEBUG, "Passed the for loop with RFSIZE: %d\n", RFSize);
+            DPRINTF(Setup_DEBUG, "Passed the for loop with RFSIZE: %d\n", RFSize);
 
-      //Set regfile and fpregfilesize per PE
-      if(RFSize > 0)
-      {
-        cgra_PEs[i * CGRA_YDim + j].setRF_per_PE(RFSize);  
-        cgra_PEs[i * CGRA_YDim + j].setFPRF_per_PE(RFSize);
-      }
+            //Set regfile and fpregfilesize per PE
+            if(RFSize > 0) {
+                cgra_PEs[i * CGRA_YDim + j].setRF_per_PE(RFSize);  
+                cgra_PEs[i * CGRA_YDim + j].setFPRF_per_PE(RFSize);
+            }
 
-      DPRINTF(Setup_DEBUG, "Passed the setting of RF \n"); 
-      //set neighbors for PEs.
-      //if(connection_type == Simple_Connection) 
+            DPRINTF(Setup_DEBUG, "Passed the setting of RF \n"); 
+            //set neighbors for PEs.
+            //if(connection_type == Simple_Connection) 
 
-      //{
-        // Set Integer Neighbors
-        cgra_PEs[current_PE].SetNeighbours(
-            cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
-            cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),	//Right
-            cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),	//Up
-            cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr());	//Down
+            //{
+            // Set Integer Neighbors
+            cgra_PEs[current_PE].SetNeighbours(
+                cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
+                cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),	//Right
+                cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),	//Up
+                cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr());	//Down
 
-        // Set Floating Point Neighbors
-        cgra_PEs[current_PE].SetFPNeighbours(
-            cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getFPOutputPtr(), //Left
-            cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getFPOutputPtr(),  //Right
-            cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getFPOutputPtr(),  //Up
-            cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getFPOutputPtr()); //Down
+            // Set Floating Point Neighbors
+            cgra_PEs[current_PE].SetFPNeighbours(
+                cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getFPOutputPtr(), //Left
+                cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getFPOutputPtr(),  //Right
+                cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getFPOutputPtr(),  //Up
+                cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getFPOutputPtr()); //Down
 
-        // Set Predicate Neighbors
-        cgra_PEs[current_PE].SetPredNeighbours(
-            cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getPredOutputPtr(), //Left
-            cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getPredOutputPtr(),  //Right
-            cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getPredOutputPtr(),  //Up
-            cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getPredOutputPtr()); //Down
-      //}
-      /*else if(connection_type == Diagonal_Connection)
-      {
+            // Set Predicate Neighbors
+            cgra_PEs[current_PE].SetPredNeighbours(
+                cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getPredOutputPtr(), //Left
+                cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getPredOutputPtr(),  //Right
+                cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getPredOutputPtr(),  //Up
+                cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getPredOutputPtr()); //Down
+            //}
+            /*else if(connection_type == Diagonal_Connection)
+            {
 
-        if(CGRA_XDim == CGRA_YDim)
-        {
-          cgra_PEs[current_PE].SetNeighbours(
-              cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
-              cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
-              cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
-              cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down
+                if(CGRA_XDim == CGRA_YDim)
+                {
+                cgra_PEs[current_PE].SetNeighbours(
+                    cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
+                    cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
+                    cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
+                    cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down
 
-          if(current_position == topleftcorner)
-            cgra_PEs[current_PE].SetLTCornerDiagonal(
-                cgra_PEs[current_PE + (CGRA_YDim+1)].getOutputPtr(),
-                cgra_PEs[(CGRA_XDim * CGRA_YDim) -1].getOutputPtr());    
-          else if(current_position == toprightcorner)
-            cgra_PEs[current_PE].SetRTCornerDiagonal( 
-                cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr(),
-                cgra_PEs[current_PE * CGRA_XDim].getOutputPtr()); 
-          else if(current_position == toprow)
-            cgra_PEs[current_PE].SetTopRowDiagonal(
-                cgra_PEs[current_PE + (CGRA_YDim - 1)].getOutputPtr(),
-                cgra_PEs[current_PE + (CGRA_YDim + 1)].getOutputPtr());
-          else if(current_position == bottomrightcorner)  
-            cgra_PEs[current_PE].SetRBCornerDiagonal(
-                cgra_PEs[current_PE - (CGRA_YDim - 2)].getOutputPtr(),
-                cgra_PEs[0].getOutputPtr());
-          else if(current_position == rightcol)
-            cgra_PEs[current_PE].SetRightColDiagonal(
-                cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr(),
-                cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr());
-          else if(current_position == bottomleftcorner)
-            cgra_PEs[current_PE].SetLBCornerDiagonal(
-                cgra_PEs[current_PE/CGRA_XDim].getOutputPtr(),
-                cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr()); 
-          else if(current_position == bottomrow)
-            cgra_PEs[current_PE].SetBottomRowDiagonal(
-                cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
-                cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr());
-          else if(current_position == leftcol)
-            cgra_PEs[current_PE].SetLeftColDiagonal(
-                cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
-                cgra_PEs[current_PE + CGRA_YDim + 1].getOutputPtr());
-          else if(current_position == regular)
-            cgra_PEs[current_PE].SetRegularDiagonal(
-                cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
-                cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr(),
-                cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr(),
-                cgra_PEs[current_PE + CGRA_YDim + 1].getOutputPtr());
-        }
-        else
-        {
-          cgra_PEs[current_PE].SetNeighbours(
-              cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
-              cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
-              cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
-              cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down  
-        }
+                if(current_position == topleftcorner)
+                    cgra_PEs[current_PE].SetLTCornerDiagonal(
+                        cgra_PEs[current_PE + (CGRA_YDim+1)].getOutputPtr(),
+                        cgra_PEs[(CGRA_XDim * CGRA_YDim) -1].getOutputPtr());    
+                else if(current_position == toprightcorner)
+                    cgra_PEs[current_PE].SetRTCornerDiagonal( 
+                        cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr(),
+                        cgra_PEs[current_PE * CGRA_XDim].getOutputPtr()); 
+                else if(current_position == toprow)
+                    cgra_PEs[current_PE].SetTopRowDiagonal(
+                        cgra_PEs[current_PE + (CGRA_YDim - 1)].getOutputPtr(),
+                        cgra_PEs[current_PE + (CGRA_YDim + 1)].getOutputPtr());
+                else if(current_position == bottomrightcorner)  
+                    cgra_PEs[current_PE].SetRBCornerDiagonal(
+                        cgra_PEs[current_PE - (CGRA_YDim - 2)].getOutputPtr(),
+                        cgra_PEs[0].getOutputPtr());
+                else if(current_position == rightcol)
+                    cgra_PEs[current_PE].SetRightColDiagonal(
+                        cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr(),
+                        cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr());
+                else if(current_position == bottomleftcorner)
+                    cgra_PEs[current_PE].SetLBCornerDiagonal(
+                        cgra_PEs[current_PE/CGRA_XDim].getOutputPtr(),
+                        cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr()); 
+                else if(current_position == bottomrow)
+                    cgra_PEs[current_PE].SetBottomRowDiagonal(
+                        cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
+                        cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr());
+                else if(current_position == leftcol)
+                    cgra_PEs[current_PE].SetLeftColDiagonal(
+                        cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
+                        cgra_PEs[current_PE + CGRA_YDim + 1].getOutputPtr());
+                else if(current_position == regular)
+                    cgra_PEs[current_PE].SetRegularDiagonal(
+                        cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
+                        cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr(),
+                        cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr(),
+                        cgra_PEs[current_PE + CGRA_YDim + 1].getOutputPtr());
+                }
+                else
+                {
+                cgra_PEs[current_PE].SetNeighbours(
+                    cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
+                    cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
+                    cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
+                    cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down  
+                }
 
 
 
-      }
-      else if(connection_type == Hop_Connection)
-      {
-        cgra_PEs[current_PE].SetNeighbours(
-            cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
-            cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
-            cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
-            cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down
+            }
+            else if(connection_type == Hop_Connection)
+            {
+                cgra_PEs[current_PE].SetNeighbours(
+                    cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
+                    cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
+                    cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
+                    cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down
 
-        cgra_PEs[current_PE].SetHopNeighbors(
-            cgra_PEs[i * CGRA_YDim + ((jIndex - 2) % CGRA_YDim)].getOutputPtr(),
-            cgra_PEs[i * CGRA_YDim + ((jIndex + 2) % CGRA_YDim)].getOutputPtr(),
-            cgra_PEs[(((iIndex - 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),
-            cgra_PEs[(((iIndex + 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr());
+                cgra_PEs[current_PE].SetHopNeighbors(
+                    cgra_PEs[i * CGRA_YDim + ((jIndex - 2) % CGRA_YDim)].getOutputPtr(),
+                    cgra_PEs[i * CGRA_YDim + ((jIndex + 2) % CGRA_YDim)].getOutputPtr(),
+                    cgra_PEs[(((iIndex - 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),
+                    cgra_PEs[(((iIndex + 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr());
 
-      }
-      else if(connection_type == Only_Hop_Connection)
-      {
-        cgra_PEs[current_PE].SetHopNeighbors(
-            cgra_PEs[i * CGRA_YDim + ((jIndex - 2) % CGRA_YDim)].getOutputPtr(),
-            cgra_PEs[i * CGRA_YDim + ((jIndex + 2) % CGRA_YDim)].getOutputPtr(),
-            cgra_PEs[(((iIndex - 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),
-            cgra_PEs[(((iIndex + 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr());
-      }*/
-      DPRINTF(Setup_DEBUG, "Passed the setting of neighbors \n");
-      cgra_PEs[i * CGRA_YDim + j].setFDataBus((&FMemData[i]));
-      cgra_PEs[i * CGRA_YDim + j].setDataBus(&MemData[i]); 
-      cgra_PEs[i * CGRA_YDim + j].setDatatypeBus(&MemBusDatatype[i]);
-      DPRINTF(Setup_DEBUG, "Passed the settin data bus\n");
-      cgra_PEs[i * CGRA_YDim + j].setAddressBus((uint64_t *)(&MemAddress[i]));
-      DPRINTF(Setup_DEBUG, "Passed the settin addr bus\n");
-      cgra_PEs[i * CGRA_YDim + j].setRWStatusBus((int*)(&MemBusStatus[i]));
-      DPRINTF(Setup_DEBUG, "Passed the settin mem bus\n");
-      cgra_PEs[i * CGRA_YDim + j].setAlignmentBus((unsigned*)(&MemAccessAlignment[i]));
-      DPRINTF(Setup_DEBUG, "Passed the settin mem alignment bus\n");
-      cgra_PEs[i * CGRA_YDim + j].SetController_Reg();//
-      DPRINTF(Setup_DEBUG, "Passed the settin control reg\n");
-      cgra_PEs[i * CGRA_YDim + j].ClearRegfile();
-      DPRINTF(Setup_DEBUG, "Passed the setting of clear reg\n");
-    }
-  }
-  DPRINTF(Setup_DEBUG, "Leaving Setup_CGRA\n");
+            }
+            else if(connection_type == Only_Hop_Connection)
+            {
+                cgra_PEs[current_PE].SetHopNeighbors(
+                    cgra_PEs[i * CGRA_YDim + ((jIndex - 2) % CGRA_YDim)].getOutputPtr(),
+                    cgra_PEs[i * CGRA_YDim + ((jIndex + 2) % CGRA_YDim)].getOutputPtr(),
+                    cgra_PEs[(((iIndex - 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),
+                    cgra_PEs[(((iIndex + 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr());
+            }*/
+            DPRINTF(Setup_DEBUG, "Passed the setting of neighbors \n");
+
+            cgra_PEs[i * CGRA_YDim + j].setFDataBus((&FMemData[i]));
+            cgra_PEs[i * CGRA_YDim + j].setDataBus(&MemData[i]); 
+            cgra_PEs[i * CGRA_YDim + j].setDatatypeBus(&MemBusDatatype[i]);
+            DPRINTF(Setup_DEBUG, "Passed the settin data bus\n");
+
+            cgra_PEs[i * CGRA_YDim + j].setAddressBus((uint64_t *)(&MemAddress[i]));
+            DPRINTF(Setup_DEBUG, "Passed the settin addr bus\n");
+
+            cgra_PEs[i * CGRA_YDim + j].setRWStatusBus((int*)(&MemBusStatus[i]));
+            DPRINTF(Setup_DEBUG, "Passed the settin mem bus\n");
+
+            cgra_PEs[i * CGRA_YDim + j].setAlignmentBus((unsigned*)(&MemAccessAlignment[i]));
+            DPRINTF(Setup_DEBUG, "Passed the settin mem alignment bus\n");
+
+            cgra_PEs[i * CGRA_YDim + j].SetController_Reg();//
+            DPRINTF(Setup_DEBUG, "Passed the settin control reg\n");
+            
+            cgra_PEs[i * CGRA_YDim + j].ClearRegfile();
+            DPRINTF(Setup_DEBUG, "Passed the setting of clear reg\n");
+        } // end of Ydim for loop
+    } // end of Xdim for loop
+    DPRINTF(Setup_DEBUG, "Leaving Setup_CGRA\n");
 }
 
 void AtomicCGRA::Setup_CGRA_Parameters()
