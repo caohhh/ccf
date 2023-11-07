@@ -1899,64 +1899,55 @@ void AtomicCGRA::setupFetchRequest(const RequestPtr &req)
   }
 }
 
-void AtomicCGRA::CGRA_advancePC(SimpleThread* thread)
+void 
+AtomicCGRA::CGRA_advancePC(SimpleThread* thread)
 {
-  DPRINTF(CGRA_Detailed,"*******IN ADVANCE PC******\n");
-  //DPRINTF(Instruction_print,"*******IN ADVANCE PC******\n");
-  DPRINTF(CGRA_Detailed,"%s,%s,%d,PC:%x\n",
-      __FILE__,__func__,__LINE__,(unsigned int) thread->instAddr());
-  //DPRINTF(Instruction_print,"%s,%s,%d,PC:%x\n",
-   //   __FILE__,__func__,__LINE__,(unsigned int) tc->instAddr());
-  //DPRINTF(Instruction_print, "newPC before: %lx\n", (long)newPC) ;
- 
-  if(Len==0)
-  {
-    if(state==PRO)
-    {
-      if(Prolog_Branch_Cycle == 0){
-	DPRINTF(CGRA_Detailed,"\nPROLOG->KERNEL\n");
-	DPRINTF(Instruction_print,"\nPROLOG->KERNEL\n");
-	state=KERN;
-	newPC=KernelPC;
-	Len=II;
-	Conditional_Reg=1;
-      }
-      else {
-	newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim)*Prolog_Branch_Cycle);
-	DPRINTF(CGRA_Execute, "\nJumped to: %lx\n", newPC);
-	Len = Prolog_version_cycle;
-	state = EPI;
-      }
+    DPRINTF(CGRA_Detailed,"*******IN ADVANCE PC******\n");
+    //DPRINTF(Instruction_print,"*******IN ADVANCE PC******\n");
+    DPRINTF(CGRA_Detailed,"%s,%s,%d,PC:%x\n",
+        __FILE__,__func__,__LINE__,(unsigned int) thread->instAddr());
+    //DPRINTF(Instruction_print,"%s,%s,%d,PC:%x\n",
+    //   __FILE__,__func__,__LINE__,(unsigned int) tc->instAddr());
+    //DPRINTF(Instruction_print, "newPC before: %lx\n", (long)newPC) ;
+
+    if (Len == 0) {
+        if (state == PRO) {
+            if (Prolog_Branch_Cycle == 0) {
+                DPRINTF(CGRA_Detailed,"\nPROLOG->KERNEL\n");
+                DPRINTF(Instruction_print,"\nPROLOG->KERNEL\n");
+                state = KERN;
+                newPC = KernelPC;
+                Len = II;
+                Conditional_Reg = 1;
+            } else { 
+                newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim)*Prolog_Branch_Cycle);
+                DPRINTF(CGRA_Execute, "\nJumped to: %lx\n", newPC);
+                Len = Prolog_version_cycle;
+                state = EPI;
+            }
+        } else if (state == KERN) { // end of state == PRO
+            if (Conditional_Reg) {
+                Len = II;
+                newPC = KernelPC;
+            } else {
+                DPRINTF(CGRA_Detailed,"\nKERNEL->EPILOG\n");
+                DPRINTF(Instruction_print,"\nKERNEL->EPILOG\n");
+                state = EPI;
+                newPC = EPILogPC;
+                Len = EPILog;
+            }
+        } // end of state == KERN
+    } else { // end of Len == 0
+        if(Prolog_Branch_Cycle == 0)
+            newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim));
+        else {
+            newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim)*Prolog_Branch_Cycle);
+            DPRINTF(CGRA_Execute, "\nJumped to: %lx\n", newPC);
+            Len = Prolog_version_cycle;
+            state = EPI;
+        }
     }
-    else if(state==KERN)
-    {
-      if(Conditional_Reg)
-      {
-        Len=II;
-        newPC=KernelPC;
-      }
-      else
-      {
-        DPRINTF(CGRA_Detailed,"\nKERNEL->EPILOG\n");
-        DPRINTF(Instruction_print,"\nKERNEL->EPILOG\n");
-        state=EPI;
-        newPC=EPILogPC;
-        Len=EPILog;
-      }
-    }
-  }
-  else
-  {
-    if(Prolog_Branch_Cycle == 0)
-      newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim));
-    else{
-      newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim)*Prolog_Branch_Cycle);
-      DPRINTF(CGRA_Execute, "\nJumped to: %lx\n", newPC);
-      Len = Prolog_version_cycle;
-      state = EPI;
-    }
-  }
-  thread->pcState((Addr) newPC);
+    thread->pcState((Addr) newPC);
 }
 
 void
