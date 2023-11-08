@@ -117,160 +117,162 @@ bool CGRA_Instruction::getSelectDataMemoryDataBus()
 	return SelectDataMemoryDataBus;
 }
 
-void CGRA_Instruction::ENCODE_instruction()
+void 
+CGRA_Instruction::ENCODE_instruction()
 {
-  unsigned long ins_trunc= InsWord & 0x1fffffffffffffffUL;
-  /*DPRINTF(Instruction_Debug, "InsWord: %lx\n", (InsWord));
-  DPRINTF(Instruction_Debug, "InsWord: %lx\n", (InsWord & 0xffffffff));
-  DPRINTF(Instruction_Debug, "INSOPCODE: %lx\n", ((INS_OPCODE)));
-  DPRINTF(Instruction_Debug, "SHIFT Opcode: %lx\n", SHIFT_OPCODE);
-  DPRINTF(Instruction_Debug, "unsigned Opcode: %lx\n",((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
-  exit(1);
-  DPRINTF(Instruction_Debug, "long Opcode: %lx\n", (long) ((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
-  DPRINTF(Instruction_Debug, "int Opcode: %ld\n", (int) ((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
-  DPRINTF(Instruction_Debug, "Datatype: %lx\n", (unsigned long) (InsWord & INS_DATATYPE)>>SHIFT_DATATYPE);*/
-  switch(((unsigned long)(InsWord & INS_DATATYPE))>>SHIFT_DATATYPE)
-  {
-    case character:
-      DType = character;
-      break;
-    case int32:
-      DType = int32;
-      break;
-    case int16:
-      DType = int16;
-      break;
-    case float32:
-      DType = float32;
-      break;
-    case float64:
-      DType = float64;
-      break;
-    case float16:
-      DType = float16;
-      break;
-    case empty1:
-      DType = empty1;
-      break;
-    case empty2:
-      DType = empty2;
-      break;
-  }
-  switch((ins_trunc & INS_OPCODE) >> SHIFT_OPCODE){
-  case Add:
-    opCode = Add;
-    break;
-  case Sub:
-    opCode = Sub;
-    break;
-  case Mult:
-    opCode = Mult;
-    break;
-  case AND:
-    opCode = AND;
-    break;
-  case OR:
-    opCode = OR;
-    break;
-  case XOR:
-    opCode = XOR;
-    break;
-  case cgraASR:
-    opCode = cgraASR;
-    break;
-  case cgraASL:
-    opCode = cgraASL;
-    break;
-  case NOOP:
-    opCode= NOOP;
-    break;
-  case GT:
-    opCode= GT;
-    break;
-  case LT:
-    opCode= LT;
-    break;
-  case EQ:
-    opCode= EQ;
-    break;
-  case NEQ:
-    opCode= NEQ;
-    break;
-  case Div:
-    opCode= Div;
-    break;
-  case Rem:
-    opCode= Rem;
-    break;
-    //case Sqrt:
-  case LSHR:
-    opCode= LSHR;
-    break;
-  }
-  
-  Predicator= (InsWord & INS_PREDICT )>>SHIFT_PREDICT;
-  LE= (InsWord & INS_LE) >> SHIFT_LE;
-  
-  switch((InsWord & INS_LMUX ) >> SHIFT_LMUX){
-  case Register:
-    LeftMuxSelector = Register;
-    break;
-  case Left:
-    LeftMuxSelector = Left;
-    break;
-  case Right:
-    LeftMuxSelector = Right;
-    break;
-  case Up:
-    LeftMuxSelector = Up;
-    break;
-  case Down:
-    LeftMuxSelector = Down;
-    break;
-  case DataBus:
-    LeftMuxSelector = DataBus;
-    break;
-  case Immediate:
-    LeftMuxSelector = Immediate;
-    break;
-  case Self:
-    LeftMuxSelector= Self;
-    break;
-  }
-  switch((InsWord & INS_RMUX ) >> SHIFT_RMUX){
-  case Register:
-    RightMuxSelector = Register;
-    break;
-  case Left:
-    RightMuxSelector = Left;
-    break;
-  case Right:
-    RightMuxSelector = Right;
-    break;
-  case Up:
-    RightMuxSelector = Up;
-    break;
-  case Down:
-    RightMuxSelector = Down;
-    break;
-  case DataBus:
-    RightMuxSelector = DataBus;
-    break;
-  case Immediate:
-    RightMuxSelector = Immediate;
-    break;
-  case Self:
-    RightMuxSelector= Self;
-    break;
-  }
+    unsigned long ins_trunc= InsWord & 0x1fffffffffffffffUL;
+    /*DPRINTF(Instruction_Debug, "InsWord: %lx\n", (InsWord));
+    DPRINTF(Instruction_Debug, "InsWord: %lx\n", (InsWord & 0xffffffff));
+    DPRINTF(Instruction_Debug, "INSOPCODE: %lx\n", ((INS_OPCODE)));
+    DPRINTF(Instruction_Debug, "SHIFT Opcode: %lx\n", SHIFT_OPCODE);
+    DPRINTF(Instruction_Debug, "unsigned Opcode: %lx\n",((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
+    exit(1);
+    DPRINTF(Instruction_Debug, "long Opcode: %lx\n", (long) ((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
+    DPRINTF(Instruction_Debug, "int Opcode: %ld\n", (int) ((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
+    DPRINTF(Instruction_Debug, "Datatype: %lx\n", (unsigned long) (InsWord & INS_DATATYPE)>>SHIFT_DATATYPE);*/
+    switch (((unsigned long)(InsWord & INS_DATATYPE))>>SHIFT_DATATYPE) {
+        case character:
+          DType = character;
+          break;
+        case int32:
+          DType = int32;
+          break;
+        case int16:
+          DType = int16;
+          break;
+        case float32:
+          DType = float32;
+          break;
+        case float64:
+          DType = float64;
+          break;
+        case float16:
+          DType = float16;
+          break;
+        case empty1:
+          DType = empty1;
+          break;
+        case empty2:
+          DType = empty2;
+          break;
+    } // DType
 
-  ReadRegAddress1= (InsWord & INS_R1 )>>SHIFT_R1 ;
-  ReadRegAddress2= (InsWord & INS_R2 )>>SHIFT_R2 ;
-  WriteRegAddress= (InsWord & INS_RW )>>SHIFT_RW ;
-  WriteRegisterEnable= (InsWord & INS_WE )>>SHIFT_WE ;
-  ImmediateValue= ((LE)? (InsWord & INS_LE_IMMEDIATE):(InsWord & INS_IMMEDIATE)) >> SHIFT_IMMEDIATE;
-  SelectDataMemoryAddressBus= (InsWord & INS_AB )>>SHIFT_ABUS ;
-  SelectDataMemoryDataBus= (InsWord & INS_DB )>>SHIFT_DBUS ;
+    switch ((ins_trunc & INS_OPCODE) >> SHIFT_OPCODE) {
+        case Add:
+          opCode = Add;
+          break;
+        case Sub:
+          opCode = Sub;
+          break;
+        case Mult:
+          opCode = Mult;
+          break;
+        case AND:
+          opCode = AND;
+          break;
+        case OR:
+          opCode = OR;
+          break;
+        case XOR:
+          opCode = XOR;
+          break;
+        case cgraASR:
+          opCode = cgraASR;
+          break;
+        case cgraASL:
+          opCode = cgraASL;
+          break;
+        case NOOP:
+          opCode= NOOP;
+          break;
+        case GT:
+          opCode= GT;
+          break;
+        case LT:
+          opCode= LT;
+          break;
+        case EQ:
+          opCode= EQ;
+          break;
+        case NEQ:
+          opCode= NEQ;
+          break;
+        case Div:
+          opCode= Div;
+          break;
+        case Rem:
+          opCode= Rem;
+          break;
+        //case Sqrt:
+        case LSHR:
+          opCode= LSHR;
+          break;
+    } // opCode
+  
+    Predicator= (InsWord & INS_PREDICT )>>SHIFT_PREDICT;
+    LE= (InsWord & INS_LE) >> SHIFT_LE;
+  
+    switch ((InsWord & INS_LMUX ) >> SHIFT_LMUX) {
+        case Register:
+          LeftMuxSelector = Register;
+          break;
+        case Left:
+          LeftMuxSelector = Left;
+          break;
+        case Right:
+          LeftMuxSelector = Right;
+          break;
+        case Up:
+          LeftMuxSelector = Up;
+          break;
+        case Down:
+          LeftMuxSelector = Down;
+          break;
+        case DataBus:
+          LeftMuxSelector = DataBus;
+          break;
+        case Immediate:
+          LeftMuxSelector = Immediate;
+          break;
+        case Self:
+          LeftMuxSelector= Self;
+          break;
+    } // LMUX
+
+    switch ((InsWord & INS_RMUX ) >> SHIFT_RMUX) {
+        case Register:
+          RightMuxSelector = Register;
+          break;
+        case Left:
+          RightMuxSelector = Left;
+          break;
+        case Right:
+          RightMuxSelector = Right;
+          break;
+        case Up:
+          RightMuxSelector = Up;
+          break;
+        case Down:
+          RightMuxSelector = Down;
+          break;
+        case DataBus:
+          RightMuxSelector = DataBus;
+          break;
+        case Immediate:
+          RightMuxSelector = Immediate;
+          break;
+        case Self:
+          RightMuxSelector= Self;
+          break;
+    } //RMUX
+
+    ReadRegAddress1= (InsWord & INS_R1 )>>SHIFT_R1 ;
+    ReadRegAddress2= (InsWord & INS_R2 )>>SHIFT_R2 ;
+    WriteRegAddress= (InsWord & INS_RW )>>SHIFT_RW ;
+    WriteRegisterEnable= (InsWord & INS_WE )>>SHIFT_WE ;
+    ImmediateValue= ((LE)? (InsWord & INS_LE_IMMEDIATE):(InsWord & INS_IMMEDIATE)) >> SHIFT_IMMEDIATE;
+    SelectDataMemoryAddressBus= (InsWord & INS_AB )>>SHIFT_ABUS ;
+    SelectDataMemoryDataBus= (InsWord & INS_DB )>>SHIFT_DBUS ;
 }
 
 unsigned long CGRA_Instruction::getOpCode_DECODE()
