@@ -8,6 +8,10 @@
  * Author: Shail Dave
  */
 
+/**
+ * DEPRECATED!!!!!!!
+*/
+
 #include "CGRAInstruction.h"
 
 class CGRADecoder

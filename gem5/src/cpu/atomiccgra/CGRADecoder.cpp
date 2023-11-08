@@ -8,6 +8,10 @@
  * Author: Shail Dave
  */
 
+/**
+ * DEPRECATED!!!!!!!
+*/
+
 #include "CGRADecoder.h"
 
 CGRADecoder::CGRADecoder()
