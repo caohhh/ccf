@@ -79,562 +79,531 @@ bool CGRA_PE::isNOOP(){
   return ins->getOpCode() == NOOP;
 }
 
-void CGRA_PE::Decode()
+void 
+CGRA_PE::Decode()
 {
-  DPRINTF(PE_DEBUG, "Inside Decode()\n");
+    DPRINTF(PE_DEBUG, "Inside Decode()\n");
 
-  //DPRINTF(CGRA_Detailed, "ins: %lx\n", ins->getInsWord()); 
-  //cout << "predictor bit: " << ins->getPredicator() << "\topcode: " << ins->getOpCode() << endl; 
-  // we don't need to separately decode fields in HW implementation
-  //ins->decode_CGRA_Instruction();
-  dt = ins->getDatatype();
+    //DPRINTF(CGRA_Detailed, "ins: %lx\n", ins->getInsWord()); 
+    //cout << "predictor bit: " << ins->getPredicator() << "\topcode: " << ins->getOpCode() << endl; 
+    // we don't need to separately decode fields in HW implementation
+    //ins->decode_CGRA_Instruction();
+    dt = ins->getDatatype();
 
-  if(dt == character || dt == int16 || dt == int32)
-  {
-    if((ins->getOpCode()!=NOOP))
-    {
-      switch (ins->getLeftMuxSelector())
-      {
-        case Register:
-          DPRINTF(CGRA_Detailed,"\n******** DB INPUT1 ReadAddress = %d************\n",ins->getReadRegAddress1());
-          Input1 = RegFile.Read(ins->getReadRegAddress1());
-          break;
-        case Left:
-          Input1 = (*leftIn);
-          break;
-        case Right:
-          Input1 = *(rightIn);
-          break;
-        case Up:
-          Input1 = *(upIn);
-          break;
-        case Down:
-          Input1 = *(downIn);
-          break;
-        case DataBus:
-          Input1 = *(dataBs);
-          DPRINTF(CGRA_Detailed,"\n******** DB INPUT1 = %d************\n",Input1);
-          break;
-        case Immediate:
-          Input1=ins->getImmediateValue();
-          break;
-        case Self:
-          Input1=Output;
-          break;
-        default:
-          throw new CGRAException("CGRA Left Mux selector out of range");
-      }
+    if (dt == character || dt == int16 || dt == int32) {
+        if ((ins->getOpCode()!=NOOP)) {
+            switch (ins->getLeftMuxSelector()) {
+                case Register:
+                  DPRINTF(CGRA_Detailed,"\n******** DB INPUT1 ReadAddress = %d************\n",ins->getReadRegAddress1());
+                  Input1 = RegFile.Read(ins->getReadRegAddress1());
+                  break;
+                case Left:
+                  Input1 = (*leftIn);
+                  break;
+                case Right:
+                  Input1 = *(rightIn);
+                  break;
+                case Up:
+                  Input1 = *(upIn);
+                  break;
+                case Down:
+                  Input1 = *(downIn);
+                  break;
+                case DataBus:
+                  Input1 = *(dataBs);
+                  DPRINTF(CGRA_Detailed,"\n******** DB INPUT1 = %d************\n",Input1);
+                  break;
+                case Immediate:
+                  Input1=ins->getImmediateValue();
+                  break;
+                case Self:
+                  Input1=Output;
+                  break;
+                default:
+                  throw new CGRAException("CGRA Left Mux selector out of range");
+            } // end of ins->getLeftMuxSelector()
 
-      switch (ins->getRightMuxSelector())
-      {
-        case Register:
-          DPRINTF(CGRA_Detailed,"\n******** DB INPUT2 ReadAddress = %d************\n",ins->getReadRegAddress2());
-          Input2 = RegFile.Read(ins->getReadRegAddress2());
-          break;
-        case Left:
-          Input2 = (*leftIn);
-          break;
-        case Right:
-          Input2 = *(rightIn);
-          break;
-        case Up:
-          Input2 = *(upIn);
-          break;
-        case Down:
-          Input2 = *(downIn);
-          break;
-        case DataBus:
-          Input2 = *(dataBs);
-          DPRINTF(CGRA_Detailed,"\n******** DB INPUT2 = %d************\n",(int)Input2);
-          break;
-        case Immediate:
-          Input2=ins->getImmediateValue();
-          break;
-        case Self:
-          Input2=Output;
-          break;
-        default:
-          throw new CGRAException("CGRA Right Mux selector out of range");
-      }
-    }
+            switch (ins->getRightMuxSelector()) {
+                case Register:
+                  DPRINTF(CGRA_Detailed,"\n******** DB INPUT2 ReadAddress = %d************\n",ins->getReadRegAddress2());
+                  Input2 = RegFile.Read(ins->getReadRegAddress2());
+                  break;
+                case Left:
+                  Input2 = (*leftIn);
+                  break;
+                case Right:
+                  Input2 = *(rightIn);
+                  break;
+                case Up:
+                  Input2 = *(upIn);
+                  break;
+                case Down:
+                  Input2 = *(downIn);
+                  break;
+                case DataBus:
+                  Input2 = *(dataBs);
+                  DPRINTF(CGRA_Detailed,"\n******** DB INPUT2 = %d************\n",(int)Input2);
+                  break;
+                case Immediate:
+                  Input2=ins->getImmediateValue();
+                  break;
+                case Self:
+                  Input2=Output;
+                  break;
+                default:
+                  throw new CGRAException("CGRA Right Mux selector out of range");
+            } // end of ins->getRightMuxSelector()
+        } // end of ins->getOpCode()!=NOOP
 
-    if(ins->getPredicator() == 1)
-    {
-      Pred_Instruction temp(ins->DecodeInstruction(ins));
-      Pred_Instruction *predIns = &temp;
-      switch (predIns->getPredMuxSelector())
-      {
-        case Register:
-          InputP = (bool)RegFile.Read(predIns->getReadRegAddressP());
-          break;
-	  // 1.9.2022 fix: pred*In -> *In
-        case Left:
-          InputP = (*leftIn);
-          break;
-        case Right:
-          InputP = (*rightIn);
-          break;
-        case Up:
-          InputP = (*upIn);
-          break;
-        case Down:
-          InputP = (*downIn);
-          break;
-        case Immediate:
-          InputP=(ins->getImmediateValue()==1)? true : false;
-          break;
-        case Self:
-          InputP=(OutputP);
-          break;
-        default:
-          throw new CGRAException("CGRA Pred Mux selector out of range");
-      }
-    }
-  }
-  else
-  {
-    if((ins->getOpCode()!=NOOP))
-    {
-      if(ins->getOpCode() != address_generator){
-	switch (ins->getLeftMuxSelector())
-	{
-          case Register:
-	    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT1 ReadAddress%d************\n",ins->getReadRegAddress1());
-	    FPInput1 = FPRegFile.Read(ins->getReadRegAddress1());
-	    break;
-          case Left:
-	    FPInput1 = (*FPleftIn);
-	    break;
-          case Right:
-	    FPInput1 = *(FPrightIn);
-	    break;
-          case Up:
-	    FPInput1 = *(FPupIn);
-	    break;
-          case Down:
-	    FPInput1 = *(FPdownIn);
-	    break;
-          case DataBus:
-	    FPInput1 = *(FdataBs);
-	    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT1 %f************\n",Input1);
-	    break;
-          case Immediate:
-	    FPInput1=ins->getImmediateValue();
-	    break;
-          case Self:
-	    FPInput1=FPOutput;
-	    break;
-          default:
-	    throw new CGRAException("CGRA Left Mux selector out of range");
-	}
+        if (ins->getPredicator() == 1) {
+            Pred_Instruction temp(ins->DecodeInstruction(ins));
+            Pred_Instruction *predIns = &temp;
+            switch (predIns->getPredMuxSelector()) {
+                case Register:
+                  InputP = (bool)RegFile.Read(predIns->getReadRegAddressP());
+                  break;
+                // 1.9.2022 fix: pred*In -> *In
+                case Left:
+                  InputP = (*leftIn);
+                  break;
+                case Right:
+                  InputP = (*rightIn);
+                  break;
+                case Up:
+                  InputP = (*upIn);
+                  break;
+                case Down:
+                  InputP = (*downIn);
+                  break;
+                case Immediate:
+                  InputP=(ins->getImmediateValue()==1)? true : false;
+                  break;
+                case Self:
+                  InputP=(OutputP);
+                  break;
+                default:
+                  throw new CGRAException("CGRA Pred Mux selector out of range");
+            }
+        } // end of ins->getPredicator() == 1
+    } else {  // end of if data type is integer
+        if ((ins->getOpCode()!=NOOP)) {
+            if (ins->getOpCode() != address_generator) {
+                switch (ins->getLeftMuxSelector()) {
+                    case Register:
+                      DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT1 ReadAddress%d************\n",ins->getReadRegAddress1());
+                      FPInput1 = FPRegFile.Read(ins->getReadRegAddress1());
+                      break;
+                    case Left:
+                      FPInput1 = (*FPleftIn);
+                      break;
+                    case Right:
+                      FPInput1 = *(FPrightIn);
+                      break;
+                    case Up:
+                      FPInput1 = *(FPupIn);
+                      break;
+                    case Down:
+                      FPInput1 = *(FPdownIn);
+                      break;
+                    case DataBus:
+                      FPInput1 = *(FdataBs);
+                      DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT1 %f************\n",Input1);
+                      break;
+                    case Immediate:
+                      FPInput1=ins->getImmediateValue();
+                      break;
+                    case Self:
+                      FPInput1=FPOutput;
+                      break;
+                    default:
+                      throw new CGRAException("CGRA Left Mux selector out of range");
+                }
 
-	switch (ins->getRightMuxSelector())
-	{
-	  case Register:
-	    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT2 ReadAddress%d************\n",ins->getReadRegAddress2());
-	    FPInput2 = FPRegFile.Read(ins->getReadRegAddress2());
-	    break;
-	  case Left:
-	    FPInput2 = (*FPleftIn);
-	    break;
-	  case Right:
-	    FPInput2 = *(FPrightIn);
-	    break;
-	  case Up:
-	    FPInput2 = *(FPupIn);
-	    break;
-	  case Down:
-	    FPInput2 = *(FPdownIn);
-	    break;
-	  case DataBus:
-	    FPInput2 = *(FdataBs);
-	    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT2 %f************\n",FPInput2);
-	    break;
-	  case Immediate:
-	    FPInput2=(float)(ins->getImmediateValue());
-	    break;
-	  case Self:
-	    FPInput2=FPOutput;
-	    break;
-	  default:
-	    throw new CGRAException("CGRA Right Mux selector out of range");
-	}
+                switch (ins->getRightMuxSelector()) {
+                    case Register:
+                      DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT2 ReadAddress%d************\n",ins->getReadRegAddress2());
+                      FPInput2 = FPRegFile.Read(ins->getReadRegAddress2());
+                      break;
+                    case Left:
+                      FPInput2 = (*FPleftIn);
+                      break;
+                    case Right:
+                      FPInput2 = *(FPrightIn);
+                      break;
+                    case Up:
+                      FPInput2 = *(FPupIn);
+                      break;
+                    case Down:
+                      FPInput2 = *(FPdownIn);
+                      break;
+                    case DataBus:
+                      FPInput2 = *(FdataBs);
+                      DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT2 %f************\n",FPInput2);
+                      break;
+                    case Immediate:
+                      FPInput2=(float)(ins->getImmediateValue());
+                      break;
+                    case Self:
+                      FPInput2=FPOutput;
+                      break;
+                    default:
+                      throw new CGRAException("CGRA Right Mux selector out of range");
+                }
       
-      } else {
-	switch (ins->getLeftMuxSelector())
-	{
-	  case Register:
-	    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT1 ReadAddress%d************\n",ins->getReadRegAddress1());
-	    Input1 = FPRegFile.Read(ins->getReadRegAddress1()); // Inspect me: should I be RegFile or FPRegFile?
-	    break;
-          case Left:
-	    Input1 = (*leftIn);
-	    break;
-          case Right:
-	    Input1 = *(rightIn);
-	    break;
-          case Up:
-	    Input1 = *(upIn);
-	    break;
-          case Down:
-	    Input1 = *(downIn);
-	    break;
-          case DataBus:
-	    Input1 = *(dataBs);
-	    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT1 %f************\n",Input1);  // Inspect me: should I be dataBs or FdataBs?
-	    break;
-          case Immediate:
-	    Input1=ins->getImmediateValue();
-	    break;
-          case Self:
-	    Input1=Output;
-	    break;
-          default:
-	    throw new CGRAException("CGRA Left Mux selector out of range");
-	}
+            } else { // end of ins->getOpCode() != address_generator
+                switch (ins->getLeftMuxSelector()) {
+                    case Register:
+                      DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT1 ReadAddress%d************\n",ins->getReadRegAddress1());
+                      Input1 = FPRegFile.Read(ins->getReadRegAddress1()); // Inspect me: should I be RegFile or FPRegFile?
+                      break;
+                    case Left:
+                      Input1 = (*leftIn);
+                      break;
+                    case Right:
+                      Input1 = *(rightIn);
+                      break;
+                    case Up:
+                      Input1 = *(upIn);
+                      break;
+                    case Down:
+                      Input1 = *(downIn);
+                      break;
+                    case DataBus:
+                      Input1 = *(dataBs);
+                      DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT1 %f************\n",Input1);  // Inspect me: should I be dataBs or FdataBs?
+                      break;
+                    case Immediate:
+                      Input1=ins->getImmediateValue();
+                      break;
+                    case Self:
+                      Input1=Output;
+                      break;
+                    default:
+                      throw new CGRAException("CGRA Left Mux selector out of range");
+                }
 
-	switch (ins->getRightMuxSelector())
-	{
-	  case Register:
-	    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT2 ReadAddress%d************\n",ins->getReadRegAddress2());
-	    FPInput2 = FPRegFile.Read(ins->getReadRegAddress2());
-	    break;
-	  case Left:
-	    FPInput2 = (*FPleftIn);
-	    break;
-	  case Right:
-	    FPInput2 = *(FPrightIn);
-	    break;
-	  case Up:
-	    FPInput2 = *(FPupIn);
-	    break;
-	  case Down:
-	    FPInput2 = *(FPdownIn);
-	    break;
-	  case DataBus:
-	    FPInput2 = *(FdataBs);
-	    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT2 %f************\n",FPInput2);
-	    break;
-	  case Immediate:
-	    FPInput2=(float)(ins->getImmediateValue());
-	    break;
-	  case Self:
-	    FPInput2=FPOutput;
-	    break;
-	  default:
-	    throw new CGRAException("CGRA Right Mux selector out of range");
-	}
-      }
-    }
+                switch (ins->getRightMuxSelector()) {
+                  case Register:
+                    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT2 ReadAddress%d************\n",ins->getReadRegAddress2());
+                    FPInput2 = FPRegFile.Read(ins->getReadRegAddress2());
+                    break;
+                  case Left:
+                    FPInput2 = (*FPleftIn);
+                    break;
+                  case Right:
+                    FPInput2 = *(FPrightIn);
+                    break;
+                  case Up:
+                    FPInput2 = *(FPupIn);
+                    break;
+                  case Down:
+                    FPInput2 = *(FPdownIn);
+                    break;
+                  case DataBus:
+                    FPInput2 = *(FdataBs);
+                    DPRINTF(CGRA_Detailed,"\n******** DB FPINPUT2 %f************\n",FPInput2);
+                    break;
+                  case Immediate:
+                    FPInput2=(float)(ins->getImmediateValue());
+                    break;
+                  case Self:
+                    FPInput2=FPOutput;
+                    break;
+                  default:
+                    throw new CGRAException("CGRA Right Mux selector out of range");
+                }
+            }   // end of ins->getOpCode() == address_generator
+        } // end of ins->getOpCode()!=NOOP
 
-    if(ins->getPredicator() == 1)
-    {
-      Pred_Instruction temp(ins->DecodeInstruction(ins));
-      Pred_Instruction *predIns = &temp;
-      switch (predIns->getPredMuxSelector())
-      {
-        case Register:
-          InputP = (bool)(FPRegFile.Read(predIns->getReadRegAddressP()));
-          //DPRINTF(CGRA_Detailed,"\n******** INPUTP Reg %f************\n",(FPRegFile.Read(predIns->getReadRegAddressP())));
-          break;
-        case Left:
-          InputP = (*PredleftIn);
-          //DPRINTF(CGRA_Detailed,"\n******** INPUTP Left %f************\n",(*FPleftIn));
-          break;
-        case Right:
-          InputP = (*PredrightIn);
-          //DPRINTF(CGRA_Detailed,"\n******** INPUTP Right %f************\n",(*FPrightIn));
-          break;
-        case Up:
-          InputP = (*PredupIn);
-          //DPRINTF(CGRA_Detailed,"\n******** INPUTP up %f************\n",(*FPupIn));
-          break;
-        case Down:
-          InputP = (*PreddownIn);
-          //DPRINTF(CGRA_Detailed,"\n******** INPUTP down %f************\n",(*FPdownIn));
-          break;
-        case Immediate:
-          InputP=(ins->getImmediateValue()==1) ? true: false;
-          break;
-        case Self:
-          InputP=(OutputP);
-          //DPRINTF(CGRA_Detailed,"\n******** INPUTP FPOUTPUT %f************\n",(FPOutput));
-          break;
-        default:
-          throw new CGRAException("CGRA Pred Mux selector out of range");
-      }
-    }
-  }  
-  DPRINTF(PE_DEBUG, "Exiting Decode()\n");
+        if (ins->getPredicator() == 1) {
+            Pred_Instruction temp(ins->DecodeInstruction(ins));
+            Pred_Instruction *predIns = &temp;
+            switch (predIns->getPredMuxSelector()) {
+                case Register:
+                  InputP = (bool)(FPRegFile.Read(predIns->getReadRegAddressP()));
+                  //DPRINTF(CGRA_Detailed,"\n******** INPUTP Reg %f************\n",(FPRegFile.Read(predIns->getReadRegAddressP())));
+                  break;
+                case Left:
+                  InputP = (*PredleftIn);
+                  //DPRINTF(CGRA_Detailed,"\n******** INPUTP Left %f************\n",(*FPleftIn));
+                  break;
+                case Right:
+                  InputP = (*PredrightIn);
+                  //DPRINTF(CGRA_Detailed,"\n******** INPUTP Right %f************\n",(*FPrightIn));
+                  break;
+                case Up:
+                  InputP = (*PredupIn);
+                  //DPRINTF(CGRA_Detailed,"\n******** INPUTP up %f************\n",(*FPupIn));
+                  break;
+                case Down:
+                  InputP = (*PreddownIn);
+                  //DPRINTF(CGRA_Detailed,"\n******** INPUTP down %f************\n",(*FPdownIn));
+                  break;
+                case Immediate:
+                  InputP=(ins->getImmediateValue()==1) ? true: false;
+                  break;
+                case Self:
+                  InputP=(OutputP);
+                  //DPRINTF(CGRA_Detailed,"\n******** INPUTP FPOUTPUT %f************\n",(FPOutput));
+                  break;
+                default:
+                  throw new CGRAException("CGRA Pred Mux selector out of range");
+            }
+        }
+    }  
+    DPRINTF(PE_DEBUG, "Exiting Decode()\n");
 }
 
 
-unsigned CGRA_PE::IExecute()
+unsigned 
+CGRA_PE::IExecute()
 {
-  DPRINTF(PE_DEBUG, "Inside Execute()\n");
-  int ins_opcode=ins->getOpCode();
-  bool predicate_bit = ins->getPredicator();
-  bool LE_bit = ins->getLE();
-  unsigned branch_offset = 0;
+    DPRINTF(PE_DEBUG, "Inside IExecute()\n");
+    int ins_opcode=ins->getOpCode();
+    bool predicate_bit = ins->getPredicator();
+    bool LE_bit = ins->getLE();  // LE: loop exit
+    unsigned branch_offset = 0;
   
-  /*DPRINTF(CGRA_Detailed, "Predictor bit: %d\t Opcode: %d\n" , (int) predicate_bit, ins_opcode); 
-  if(ins->getLeftMuxSelector() == Register || ins->getRightMuxSelector() == Register){
-    DPRINTF(CGRA_Execute, "Register file content:\n"
-  }*/
+    /*DPRINTF(CGRA_Detailed, "Predictor bit: %d\t Opcode: %d\n" , (int) predicate_bit, ins_opcode); 
+    if(ins->getLeftMuxSelector() == Register || ins->getRightMuxSelector() == Register){
+        DPRINTF(CGRA_Execute, "Register file content:\n"
+    }*/
 
-  if(!predicate_bit)
-  {
-    switch (ins_opcode)
-    {
-      case Add:
-        Output=Input1+Input2;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** SUM IN THIS PE %d************\n",Output);
-        break;
-      case Sub:
-        Output=Input1-Input2;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** SUBTRACTION IN THIS PE %d************\n",Output);
-        break;
-      case Mult:
-        Output=Input1*Input2;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** PRODUCT IN THIS PE %d************\n",Output);
-        break;
-      case AND:
-        Output=Input1&Input2;
-        OutputP=(bool)(Input1&Input2); 
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** AND IN THIS PE %d************\n",Output);
-        break;
-      case OR:
-        Output=(Input1|Input2);
-        OutputP=(bool)(Input1|Input2); 
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** OR IN THIS PE %d************\n",Output);
-        break;
-      case XOR:
-        Output=(Input1^Input2);
-        OutputP=(bool)(Input1^Input2); 
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** XOR IN THIS PE %d************\n",Output);
-        break;
-      case cgraASR:
-        Output=(Input1>>Input2);
-        OutputP=(bool)(Input1>>Input2);
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** ASR IN THIS PE %d************\n",Output);
-        break;
-      case cgraASL:
-        Output=(Input1<<Input2);
-        OutputP=(bool)(Input1<<Input2);
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** ASL IN THIS PE %d************\n",Output);
-        break;
-      case GT:
-        Output=Input1>Input2;
-        OutputP=(bool)(Input1>Input2);
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** Greater Than IN THIS PE %d************\n",OutputP);
-        break;
-      case LT:
-        Output=Input1<Input2;
-        OutputP=(bool)(Input1<Input2); 
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** Less Than IN THIS PE %d************\n",OutputP);
-        break;
-      case EQ:
-        Output=Input1==Input2;
-        OutputP=(bool)(Input1==Input2);
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** EQUALS IN THIS PE %d************\n",OutputP);
-        break;
-      case NEQ:
-        Output=Input1!=Input2;
-        OutputP=(bool)(Input1!=Input2);
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** NOT EQUALS IN THIS PE %d************\n",OutputP);
-        break;
-      case Div:
-        Output=Input1/Input2;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** DIV IN THIS PE %d************\n",Output);
-        break;
-      case Rem:
-        Output=Input1%Input2;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** REM IN THIS PE %d************\n",Output);
-        break;
-      case LSHR:
-        {
-          unsigned unsignedInput1 = (unsigned) Input1;
-          Output = (unsigned)(unsignedInput1 >> (unsigned) Input2);
-          DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-          DPRINTF(CGRA_Detailed,"\nunsignedInput1 = %d\tInput2 = %d\n",unsignedInput1, Input2);
-          DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %d************\n",Output);
-          DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %u************\n",Output);
-          break;
+    if (!predicate_bit) {
+        switch (ins_opcode) {
+            case Add:
+              Output=Input1+Input2;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** SUM IN THIS PE %d************\n",Output);
+              break;
+            case Sub:
+              Output=Input1-Input2;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** SUBTRACTION IN THIS PE %d************\n",Output);
+              break;
+            case Mult:
+              Output=Input1*Input2;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** PRODUCT IN THIS PE %d************\n",Output);
+              break;
+            case AND:
+              Output=Input1&Input2;
+              OutputP=(bool)(Input1&Input2); 
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** AND IN THIS PE %d************\n",Output);
+              break;
+            case OR:
+              Output=(Input1|Input2);
+              OutputP=(bool)(Input1|Input2); 
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** OR IN THIS PE %d************\n",Output);
+              break;
+            case XOR:
+              Output=(Input1^Input2);
+              OutputP=(bool)(Input1^Input2); 
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** XOR IN THIS PE %d************\n",Output);
+              break;
+            case cgraASR:
+              Output=(Input1>>Input2);
+              OutputP=(bool)(Input1>>Input2);
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** ASR IN THIS PE %d************\n",Output);
+              break;
+            case cgraASL:
+              Output=(Input1<<Input2);
+              OutputP=(bool)(Input1<<Input2);
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** ASL IN THIS PE %d************\n",Output);
+              break;
+            case GT:
+              Output=Input1>Input2;
+              OutputP=(bool)(Input1>Input2);
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** Greater Than IN THIS PE %d************\n",OutputP);
+              break;
+            case LT:
+              Output=Input1<Input2;
+              OutputP=(bool)(Input1<Input2); 
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** Less Than IN THIS PE %d************\n",OutputP);
+              break;
+            case EQ:
+              Output=Input1==Input2;
+              OutputP=(bool)(Input1==Input2);
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** EQUALS IN THIS PE %d************\n",OutputP);
+              break;
+            case NEQ:
+              Output=Input1!=Input2;
+              OutputP=(bool)(Input1!=Input2);
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** NOT EQUALS IN THIS PE %d************\n",OutputP);
+              break;
+            case Div:
+              Output=Input1/Input2;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** DIV IN THIS PE %d************\n",Output);
+              break;
+            case Rem:
+              Output=Input1%Input2;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** REM IN THIS PE %d************\n",Output);
+              break;
+            case LSHR:
+              unsigned unsignedInput1 = (unsigned) Input1;
+              Output = (unsigned)(unsignedInput1 >> (unsigned) Input2);
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\nunsignedInput1 = %d\tInput2 = %d\n",unsignedInput1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %d************\n",Output);
+              DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %u************\n",Output);
+              break;
+            case NOOP:
+              DPRINTF(CGRA_Detailed,"CGRA: NOOP.Execute()\n");
+              break;
+            default:
+              DPRINTF(CGRA_Detailed," 1. Opcode is %ld\n",(unsigned) ins_opcode);
+              throw new CGRAException("Unknown CGRA Opcode");
         }
-      case NOOP:
-        DPRINTF(CGRA_Detailed,"CGRA: NOOP.Execute()\n");
-        break;
-      default:
-        DPRINTF(CGRA_Detailed," 1. Opcode is %ld\n",(unsigned) ins_opcode);
-        throw new CGRAException("Unknown CGRA Opcode");
-    }
 
-    if (ins->getWriteRegisterEnable())
-    {
-      //DPRINTF(CGRA_Detailed,"\n************** WE *****************\n");
-      int writeRegisterNumber = ins->getWriteRegAddress();
+        if (ins->getWriteRegisterEnable()) {
+            //DPRINTF(CGRA_Detailed,"\n************** WE *****************\n");
+            int writeRegisterNumber = ins->getWriteRegAddress();
 
-      RegFile.Write(writeRegisterNumber,Output);
-      FPRegFile.Write(writeRegisterNumber,(float)Output);
-      DPRINTF(CGRA_Detailed,"Writing output %d to register %d\n",Output,writeRegisterNumber);
-    }
-
-    if(LE_bit){
-      LE_Instruction temp(ins->getInsWord());
-      LE_Instruction *LE_Ins = &temp;
-
-      DPRINTF(CGRA_Execute, "LE Branch: %lx\n", LE_Ins->getBranchOffset());
-      if(LE_Ins->getBranchOffset() == 0x3ff){
-	if(ins_opcode == NEQ || ins_opcode == LT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR)
-	  (this->Controller_Reg) = Output;  // Output = 0 to exit
-	else this->Controller_Reg = !Output;  // Output = 1 to exit
-      }
-      else{
-	if(ins_opcode == NEQ || ins_opcode == LT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR) // Fix me: should NEQ be false to branch?
-	  branch_offset = (!Output)? LE_Ins->getBranchOffset():0;
-	else
-	  branch_offset = (Output == 1)? LE_Ins->getBranchOffset():0;
-	DPRINTF(CGRA_Detailed, "\n***LE Instruction - branching %d cycles***\n", branch_offset);
-      }
-    }
-
-    /*else if(ins_opcode==EQ || ins_opcode==NEQ || ins_opcode==GT || ins_opcode==LT)
-    //else if(ins_opcode == EQ) // Modified only for simple_loop benchmark!
-    {
-      //write the result to the controller bus
-      //(this->Controller_Reg) = !((Input1 == 1) && (Input2 == 0));
-      (this->Controller_Reg) = (ins_opcode == EQ)? !Output:Output;
-      }*/
-  }
-  else
-  { 
-    //Pred_Instruction temp(ins->DecodeInstruction(ins));
-    //Pred_Instruction *predIns = &temp; 
-    switch (ins_opcode) //previously predIns->getPredOpCode().
-    {
-      case setConfigBoundry:
-        RegFile.config_boundary = Input1;
-        FPRegFile.config_boundary = Input1;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** Setting Configuration as %d************\n",Input1);
-        break;
-      case LDi:
-        Output=Input1;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** LDI IN THIS PE %d************\n",Output);
-        break;
-      case LDMi:
-        Output=Input1;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** LDMI IN THIS PE %d************\n",Output);
-        break;
-      case LDUi:
-        Output=Input1;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** LDUI IN THIS PE %d************\n",Output);
-        break;
-      case sel:
-        Output = (InputP == true) ? Input1 : Input2;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\tInputP = %d\n",Input1, Input2, (int)InputP);
-        DPRINTF(CGRA_Detailed,"\n******** Selection IN THIS PE %d************\n",Output);
-        break;
-      case loopexit:
-        Output = ((Input1 == 1) && (Input2 == 0));
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** Loop Exit Control IN THIS PE %d************\n",Output);
-        break;
-      case address_generator:
-        Output=Input1;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** ADDRESS GENERATED IN THIS PE %d************\n",Output);
-        break;
-      case signExtend:
-        {
-          bool maskedBit = (Input1 & (1 << (Input2-1)));
-          int shiftAmount = ((1 << Input2)-1);
-          int signExtendMask = 0xFFFFFFFF - shiftAmount;
-          Output=Input1 & shiftAmount;
-          Output = (maskedBit == 1) ? (Output + signExtendMask) : Output;
-          DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-          DPRINTF(CGRA_Detailed,"\n******** SIGN EXTENDED IN THIS PE %d************\n",Output);
-          break;
+            RegFile.Write(writeRegisterNumber,Output);
+            FPRegFile.Write(writeRegisterNumber,(float)Output);
+            DPRINTF(CGRA_Detailed,"Writing output %d to register %d\n",Output,writeRegisterNumber);
         }
-      default:
-        DPRINTF(CGRA_Detailed,"2. Opcode is %ld\n",(unsigned) ins_opcode);
-        throw new CGRAException("Unknown CGRA Opcode");
+
+        if (LE_bit) {
+            LE_Instruction temp(ins->getInsWord());
+            LE_Instruction *LE_Ins = &temp;
+
+            DPRINTF(CGRA_Execute, "LE Branch: %lx\n", LE_Ins->getBranchOffset());
+            if (LE_Ins->getBranchOffset() == 0x3ff) {
+                if(ins_opcode == NEQ || ins_opcode == LT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR)
+                    this->Controller_Reg = Output;  // Output = 0 to exit
+                else 
+                    this->Controller_Reg = !Output;  // Output = 1 to exit
+            } else {
+                if(ins_opcode == NEQ || ins_opcode == LT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR) // Fix me: should NEQ be false to branch?
+                    branch_offset = (!Output)? LE_Ins->getBranchOffset():0;
+                else
+                    branch_offset = (Output == 1)? LE_Ins->getBranchOffset():0;
+                DPRINTF(CGRA_Detailed, "\n***LE Instruction - branching %d cycles***\n", branch_offset);
+            }
+        } // end of loop exit
+
+        /*else if(ins_opcode==EQ || ins_opcode==NEQ || ins_opcode==GT || ins_opcode==LT)
+        //else if(ins_opcode == EQ) // Modified only for simple_loop benchmark!
+        {
+        //write the result to the controller bus
+        //(this->Controller_Reg) = !((Input1 == 1) && (Input2 == 0));
+        (this->Controller_Reg) = (ins_opcode == EQ)? !Output:Output;
+        }*/
+
+    } else {  // end of !predicate_bit
+
+        //Pred_Instruction temp(ins->DecodeInstruction(ins));
+        //Pred_Instruction *predIns = &temp; 
+        switch (ins_opcode) { //previously predIns->getPredOpCode().
+            case setConfigBoundry:
+              RegFile.config_boundary = Input1;
+              FPRegFile.config_boundary = Input1;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** Setting Configuration as %d************\n",Input1);
+              break;
+            case LDi:
+              Output=Input1;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** LDI IN THIS PE %d************\n",Output);
+              break;
+            case LDMi:
+              Output=Input1;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** LDMI IN THIS PE %d************\n",Output);
+              break;
+            case LDUi:
+              Output=Input1;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** LDUI IN THIS PE %d************\n",Output);
+              break;
+            case sel:
+              Output = (InputP == true) ? Input1 : Input2;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\tInputP = %d\n",Input1, Input2, (int)InputP);
+              DPRINTF(CGRA_Detailed,"\n******** Selection IN THIS PE %d************\n",Output);
+              break;
+            case loopexit:
+              Output = ((Input1 == 1) && (Input2 == 0));
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** Loop Exit Control IN THIS PE %d************\n",Output);
+              break;
+            case address_generator:
+              Output=Input1;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** ADDRESS GENERATED IN THIS PE %d************\n",Output);
+              break;
+            case signExtend:
+                bool maskedBit = (Input1 & (1 << (Input2-1)));
+                int shiftAmount = ((1 << Input2)-1);
+                int signExtendMask = 0xFFFFFFFF - shiftAmount;
+                Output=Input1 & shiftAmount;
+                Output = (maskedBit == 1) ? (Output + signExtendMask) : Output;
+                DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+                DPRINTF(CGRA_Detailed,"\n******** SIGN EXTENDED IN THIS PE %d************\n",Output);
+                break;
+            default:
+              DPRINTF(CGRA_Detailed,"2. Opcode is %ld\n",(unsigned) ins_opcode);
+              throw new CGRAException("Unknown CGRA Opcode");
+        }
+
+        if (ins->getWriteRegisterEnable()) {
+            DPRINTF(CGRA_Detailed,"\n************** WE *****************\n");
+
+            int writeRegisterNumber = ins->getWriteRegAddress();
+            if(ins_opcode==LDMi) {
+                Output= (Output << 12) | (RegFile.Read(writeRegisterNumber));
+            } else if (ins_opcode==LDUi) {
+                Output=((int)Output<<24) | ( (int)RegFile.Read(writeRegisterNumber));
+            } else if (ins_opcode==loopexit) {
+                // If LoopExit is True then, controller reg should be false.
+                (this->Controller_Reg) = !((Input1 == 1) && (Input2 == 0));
+            }
+
+            //TODO: Fix Micro-architecture for P-type (PredMux) rather than controlling write enable.
+            if ((ins_opcode==LDi) || (ins_opcode==LDMi) || (ins_opcode==LDUi)) {
+                RegFile.Write(writeRegisterNumber,Output);
+                FPRegFile.Write(writeRegisterNumber,(float)Output);
+                DPRINTF(CGRA_Detailed,"Writing output %d to register %d\n",Output,writeRegisterNumber);
+            }
+        }
+
+        if (ins_opcode == address_generator) {
+            if (ins->getSelectDataMemoryAddressBus()) {
+                DPRINTF(CGRA_Detailed,"\n*********Setting Address %lx ******\n",(unsigned int)Output);
+                (*addressBs) = Output;
+                (*BsStatus) = CGRA_MEMORY_READ;
+                (*BsDatatype) = CGRA_MEMORY_INT; 
+                (*alignmentBs) = Input2;
+            }
+        }
+    } // end of predication_bit
+
+    if (ins->getSelectDataMemoryDataBus() && (!predicate_bit) && (!LE_bit)) {
+        DPRINTF(CGRA_Detailed,"\n******** DB Output %d************\n",Output);
+        (*dataBs) = Output;
+        (*BsDatatype) = CGRA_MEMORY_INT;
     }
+    DPRINTF(CGRA_Detailed,"Distance is: %d\n",RegFile.distance);
+    DPRINTF(PE_DEBUG, "Exiting Execute()\n");
 
-    if (ins->getWriteRegisterEnable())
-    {
-      DPRINTF(CGRA_Detailed,"\n************** WE *****************\n");
-
-      int writeRegisterNumber = ins->getWriteRegAddress();
-      if(ins_opcode==LDMi)
-      {
-        Output= (Output << 12) | (RegFile.Read(writeRegisterNumber));
-      }
-      else if(ins_opcode==LDUi)
-      {
-        Output=((int)Output<<24) | ( (int)RegFile.Read(writeRegisterNumber));
-      }
-      else if(ins_opcode==loopexit)
-      {
-        // If LoopExit is True then, controller reg should be false.
-	(this->Controller_Reg) = !((Input1 == 1) && (Input2 == 0));
-      }
-
-      //TODO: Fix Micro-architecture for P-type (PredMux) rather than controlling write enable.
-      if((ins_opcode==LDi) || (ins_opcode==LDMi) || (ins_opcode==LDUi))
-      {
-        RegFile.Write(writeRegisterNumber,Output);
-        FPRegFile.Write(writeRegisterNumber,(float)Output);
-        DPRINTF(CGRA_Detailed,"Writing output %d to register %d\n",Output,writeRegisterNumber);
-      }
-    }
-
-    if(ins_opcode == address_generator)
-    {
-      if (ins->getSelectDataMemoryAddressBus())
-      {
-        DPRINTF(CGRA_Detailed,"\n*********Setting Address %lx ******\n",(unsigned int)Output);
-        (*addressBs) = Output;
-        (*BsStatus) = CGRA_MEMORY_READ;
-        (*BsDatatype) = CGRA_MEMORY_INT; 
-        (*alignmentBs) = Input2;
-      }
-    }
-  }
-
-  if (ins->getSelectDataMemoryDataBus() && (!predicate_bit) && (!LE_bit))
-  {
-    DPRINTF(CGRA_Detailed,"\n******** DB Output %d************\n",Output);
-    (*dataBs) = Output;
-    (*BsDatatype) = CGRA_MEMORY_INT;
-  }
-  DPRINTF(CGRA_Detailed,"Distance is: %d\n",RegFile.distance);
-  DPRINTF(PE_DEBUG, "Exiting Execute()\n");
-
-  return branch_offset;
+    return branch_offset;
 }
 
 
 unsigned CGRA_PE::FExecute()
 {
-  DPRINTF(PE_DEBUG, "Inside Execute()\n");
+  DPRINTF(PE_DEBUG, "Inside FExecute()\n");
   int ins_opcode=ins->getOpCode();
   bool predicate_bit = ins->getPredicator();
   bool LE_bit = ins->getLE();
