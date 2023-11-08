@@ -362,7 +362,7 @@ CGRA_PE::IExecute()
     int ins_opcode=ins->getOpCode();
     bool predicate_bit = ins->getPredicator();
     bool LE_bit = ins->getLE();  // LE: loop exit
-    unsigned branch_offset = 0;
+    unsigned branch_offset = 0; // only used in loop_exit, otherwise 0
   
     /*DPRINTF(CGRA_Detailed, "Predictor bit: %d\t Opcode: %d\n" , (int) predicate_bit, ins_opcode); 
     if(ins->getLeftMuxSelector() == Register || ins->getRightMuxSelector() == Register){
@@ -601,278 +601,260 @@ CGRA_PE::IExecute()
 }
 
 
-unsigned CGRA_PE::FExecute()
+unsigned 
+CGRA_PE::FExecute()
 {
-  DPRINTF(PE_DEBUG, "Inside FExecute()\n");
-  int ins_opcode=ins->getOpCode();
-  bool predicate_bit = ins->getPredicator();
-  bool LE_bit = ins->getLE();
-  unsigned branch_offset = 0;
-  //DPRINTF(CGRA_Detailed, "Predictor bit: %d\n", (int) predicate_bit); 
+    DPRINTF(PE_DEBUG, "Inside FExecute()\n");
+    int ins_opcode=ins->getOpCode();
+    bool predicate_bit = ins->getPredicator();
+    bool LE_bit = ins->getLE();
+    unsigned branch_offset = 0; // only used in loop_exit, otherwise 0
+    //DPRINTF(CGRA_Detailed, "Predictor bit: %d\n", (int) predicate_bit); 
 
-  if(!predicate_bit)
-  {
-    switch (ins_opcode)
-    {
-      case Add:
-        FPOutput=FPInput1+FPInput2;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** SUM IN THIS PE %f************\n",FPOutput);
-        break;
-      case Sub:
-        FPOutput=FPInput1-FPInput2;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** SUBTRACTION IN THIS PE %f************\n",FPOutput);
-        break;
-      case Mult:
-        FPOutput=FPInput1*FPInput2;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** PRODUCT IN THIS PE %f************\n",FPOutput);
-        break;
-      case AND:
-        FPOutput=((int)FPInput1&(int)FPInput2);
-        OutputP=(bool)((int)FPInput1&(int)FPInput2);
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** AND IN THIS PE %f************\n",FPOutput);
-        break;
-      case OR:
-        FPOutput=((int)FPInput1|(int)FPInput2);
-        OutputP=(bool)((int)FPInput1|(int)FPInput2);
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** OR IN THIS PE %f************\n",FPOutput);
-        break;
-      case XOR:
-        FPOutput=((int)FPInput1^(int)FPInput2);
-        OutputP=(bool)((int)FPInput1^(int)FPInput2);
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** XOR IN THIS PE %f************\n",FPOutput);
-        break;
-      case cgraASR:
-        FPOutput=((int)FPInput1>>(int)FPInput2);
-        OutputP=(bool)((int)FPInput1>>(int)FPInput2);
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** ASR IN THIS PE %f************\n",FPOutput);
-        break;
-      case cgraASL:
-        FPOutput=((int)FPInput1<<(int)FPInput2);
-        OutputP=(bool)((int)FPInput1<<(int)FPInput2);
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** ASL IN THIS PE %f************\n",FPOutput);
-        break;
-      case GT:
-        FPOutput=(float)FPInput1>(float)FPInput2;
-        OutputP=(bool)((float)FPInput1>(float)FPInput2);
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** Greater Than IN THIS PE %f************\n",OutputP);
-        break;
-      case LT:
-        FPOutput=FPInput1<FPInput2;
-        OutputP=(bool)(FPInput1<FPInput2);
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** Less Than IN THIS PE %f************\n",OutputP);
-        break;
-      case EQ:
-        FPOutput=FPInput1==FPInput2;
-        OutputP=(bool)(FPInput1==FPInput2); 
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** EQUALS IN THIS PE %f************\n",OutputP);
-        break;
-      case NEQ:
-        FPOutput=FPInput1!=FPInput2;
-        OutputP=(bool)(FPInput1!=FPInput2); 
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** NOT EQUALS IN THIS PE %f************\n",OutputP);
-        break;
-      case Div:
-        FPOutput=FPInput1/FPInput2;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** DIV IN THIS PE %f************\n",FPOutput);
-        break;
-      case Rem:
-        FPOutput=(int)FPInput1%(int)FPInput2;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** REM IN THIS PE %f************\n",FPOutput);
-        break;
-      case LSHR:
-        {
-          unsigned unsignedFPInput1 = (unsigned) FPInput1;
-          FPOutput = (unsigned)(unsignedFPInput1 >> (unsigned) FPInput2);
-          DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-          DPRINTF(CGRA_Detailed,"\nunsignedFPInput1 = %f\tFPInput2 = %f\n",unsignedFPInput1, FPInput2);
-          DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %f************\n",FPOutput);
-          DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %u************\n",FPOutput);
-          break;
+    if (!predicate_bit) {
+        switch (ins_opcode) {
+            case Add:
+              FPOutput=FPInput1+FPInput2;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** SUM IN THIS PE %f************\n",FPOutput);
+              break;
+            case Sub:
+              FPOutput=FPInput1-FPInput2;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** SUBTRACTION IN THIS PE %f************\n",FPOutput);
+              break;
+            case Mult:
+              FPOutput=FPInput1*FPInput2;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** PRODUCT IN THIS PE %f************\n",FPOutput);
+              break;
+            case AND:
+              FPOutput=((int)FPInput1&(int)FPInput2);
+              OutputP=(bool)((int)FPInput1&(int)FPInput2);
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** AND IN THIS PE %f************\n",FPOutput);
+              break;
+            case OR:
+              FPOutput=((int)FPInput1|(int)FPInput2);
+              OutputP=(bool)((int)FPInput1|(int)FPInput2);
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** OR IN THIS PE %f************\n",FPOutput);
+              break;
+            case XOR:
+              FPOutput=((int)FPInput1^(int)FPInput2);
+              OutputP=(bool)((int)FPInput1^(int)FPInput2);
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** XOR IN THIS PE %f************\n",FPOutput);
+              break;
+            case cgraASR:
+              FPOutput=((int)FPInput1>>(int)FPInput2);
+              OutputP=(bool)((int)FPInput1>>(int)FPInput2);
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** ASR IN THIS PE %f************\n",FPOutput);
+              break;
+            case cgraASL:
+              FPOutput=((int)FPInput1<<(int)FPInput2);
+              OutputP=(bool)((int)FPInput1<<(int)FPInput2);
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** ASL IN THIS PE %f************\n",FPOutput);
+              break;
+            case GT:
+              FPOutput=(float)FPInput1>(float)FPInput2;
+              OutputP=(bool)((float)FPInput1>(float)FPInput2);
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** Greater Than IN THIS PE %f************\n",OutputP);
+              break;
+            case LT:
+              FPOutput=FPInput1<FPInput2;
+              OutputP=(bool)(FPInput1<FPInput2);
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** Less Than IN THIS PE %f************\n",OutputP);
+              break;
+            case EQ:
+              FPOutput=FPInput1==FPInput2;
+              OutputP=(bool)(FPInput1==FPInput2); 
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** EQUALS IN THIS PE %f************\n",OutputP);
+              break;
+            case NEQ:
+              FPOutput=FPInput1!=FPInput2;
+              OutputP=(bool)(FPInput1!=FPInput2); 
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** NOT EQUALS IN THIS PE %f************\n",OutputP);
+              break;
+            case Div:
+              FPOutput=FPInput1/FPInput2;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** DIV IN THIS PE %f************\n",FPOutput);
+              break;
+            case Rem:
+              FPOutput=(int)FPInput1%(int)FPInput2;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** REM IN THIS PE %f************\n",FPOutput);
+              break;
+            case LSHR:
+                unsigned unsignedFPInput1 = (unsigned) FPInput1;
+                FPOutput = (unsigned)(unsignedFPInput1 >> (unsigned) FPInput2);
+                DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+                DPRINTF(CGRA_Detailed,"\nunsignedFPInput1 = %f\tFPInput2 = %f\n",unsignedFPInput1, FPInput2);
+                DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %f************\n",FPOutput);
+                DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %u************\n",FPOutput);
+                break;
+            case NOOP:
+              DPRINTF(CGRA_Detailed,"CGRA: NOOP.Execute()\n");
+              break;
+            default:
+              DPRINTF(CGRA_Detailed," 1. Opcode is %ld\n",(unsigned) ins_opcode);
+              throw new CGRAException("Unknown CGRA Opcode");
         }
-      case NOOP:
-        DPRINTF(CGRA_Detailed,"CGRA: NOOP.Execute()\n");
-        break;
-      default:
-        DPRINTF(CGRA_Detailed," 1. Opcode is %ld\n",(unsigned) ins_opcode);
-        throw new CGRAException("Unknown CGRA Opcode");
-    }
 
-    if (ins->getWriteRegisterEnable())
-    {
-      //DPRINTF(CGRA_Detailed,"\n************** WE *****************\n");
-      int writeRegisterNumber = ins->getWriteRegAddress();
+        if (ins->getWriteRegisterEnable()) {
+            //DPRINTF(CGRA_Detailed,"\n************** WE *****************\n");
+            int writeRegisterNumber = ins->getWriteRegAddress();
 
-      RegFile.Write(writeRegisterNumber,(int)FPOutput);
-      FPRegFile.Write(writeRegisterNumber,FPOutput);
-      DPRINTF(CGRA_Detailed,"Writing output %f to register %d\n",FPOutput,writeRegisterNumber);
-    }
+            RegFile.Write(writeRegisterNumber,(int)FPOutput);
+            FPRegFile.Write(writeRegisterNumber,FPOutput);
+            DPRINTF(CGRA_Detailed,"Writing output %f to register %d\n",FPOutput,writeRegisterNumber);
+        }
 
-    if(LE_bit){
-      LE_Instruction temp(ins->DecodeInstruction(ins));
-      LE_Instruction *LE_Ins = &temp;
+        if (LE_bit) {
+            LE_Instruction temp(ins->DecodeInstruction(ins));
+            LE_Instruction *LE_Ins = &temp;
 
-      if(LE_Ins->getBranchOffset() == 0x3ff){
-	if(ins_opcode == NEQ || ins_opcode == LT || ins_opcode == GT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR)
-	  (this->Controller_Reg) = (Output != 0)? 1:0;
-	else this->Controller_Reg = (Output == 0)? 1:0;
-      }
-      else{
-	if(ins_opcode == NEQ || ins_opcode == LT || ins_opcode == GT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR) // Fix me: should NEQ be false to branch?
-	  branch_offset = (Output == 0)? LE_Ins->getBranchOffset():0;
-	else
-	  branch_offset = (Output != 0)? LE_Ins->getBranchOffset():0;
-	DPRINTF(CGRA_Detailed, "\n***LE Instruction - branching %d cycles***\n", branch_offset);
-      }
-    }
+            if (LE_Ins->getBranchOffset() == 0x3ff) {
+                if (ins_opcode == NEQ || ins_opcode == LT || ins_opcode == GT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR)
+                    (this->Controller_Reg) = (Output != 0)? 1:0;
+                else 
+                    this->Controller_Reg = (Output == 0)? 1:0;
+            } else {
+                if (ins_opcode == NEQ || ins_opcode == LT || ins_opcode == GT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR) // Fix me: should NEQ be false to branch?
+                    branch_offset = (Output == 0)? LE_Ins->getBranchOffset():0;
+                else
+                    branch_offset = (Output != 0)? LE_Ins->getBranchOffset():0;
+                DPRINTF(CGRA_Detailed, "\n***LE Instruction - branching %d cycles***\n", branch_offset);
+            }
+        }
 
     
-    /*if(LE_bit){
-      LE_Instruction temp(ins->DecodeInstruction(ins));
-      LE_Instruction *LE_Ins = &temp;
-      branch_offset = (FPOutput != 0)? LE_Ins->getBranchOffset():0;
-      DPRINTF(CGRA_Detailed, "\nLE Instruction - branching %d cycles\n", branch_offset);
-    }
-    else if(ins_opcode==EQ || ins_opcode==NEQ || ins_opcode==GT || ins_opcode==LT)
-    {
-      //write the result to the controller bus
-      DPRINTF(CGRA_Detailed,"\nCOMPARE INSTRUCTION OUTPUT = %f\n",FPOutput);
-      }*/
-  }
-  else
-  {
-    //Pred_Instruction temp(ins->DecodeInstruction(ins));
-    //Pred_Instruction *predIns = &temp; 
-    switch (ins_opcode) //previously predIns->getPredOpCode().
-    {
-      case setConfigBoundry:
-        RegFile.config_boundary = (int)FPInput1;
-        FPRegFile.config_boundary = (int)FPInput1;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %f\tInput2 = %f\n",Input1, Input2);
-        DPRINTF(CGRA_Detailed,"\n******** Setting Configuration as %f************\n",Input1);
-        break;
-      case LDi:
-        FPOutput=FPInput1;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** LDI IN THIS PE %f************\n",FPOutput);
-        break;
-      case LDMi:
-        FPOutput=FPInput1;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** LDMI IN THIS PE %f************\n",FPOutput);
-        break;
-      case LDUi:
-        FPOutput=FPInput1;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** LDUI IN THIS PE %f************\n",FPOutput);
-        break;
-      case sel:
-        FPOutput = (InputP == true) ? FPInput2 : FPInput1;
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\tInputP = %d\n",FPInput1, FPInput2, (int)InputP);
-        DPRINTF(CGRA_Detailed,"\n******** Selection IN THIS PE %f************\n",FPOutput);
-        break;
-      case loopexit:
-        FPOutput = ((FPInput1 == 1) && (FPInput2 == 0));
-        DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\tInputP = %f\n",FPInput1, FPInput2, InputP);
-        DPRINTF(CGRA_Detailed,"\n******** Loop Exit Control IN THIS PE %f************\n",FPOutput);
-        break;
-      case address_generator:
-        Output=(int)Input1;
-        DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
-	DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-        DPRINTF(CGRA_Detailed,"\n******** ADDRESS GENERATED IN THIS PE %d************\n",Output);
-        break;
-      case signExtend:
-        {
-          bool maskedBit = ((int)FPInput1 & (1 << ((int)FPInput2-1)));
-          int shiftAmount = ((1 << (int)FPInput2)-1);
-          int signExtendMask = 0xFFFFFFFF - shiftAmount;
-          FPOutput=(int)FPInput1 & shiftAmount;
-          FPOutput = (maskedBit == 1) ? ((int)FPOutput + signExtendMask) :(int) FPOutput;
-          DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
-          DPRINTF(CGRA_Detailed,"\n******** SIGN EXTENDED IN THIS PE %f************\n",FPOutput);
-          break;
+        /*if(LE_bit){
+        LE_Instruction temp(ins->DecodeInstruction(ins));
+        LE_Instruction *LE_Ins = &temp;
+        branch_offset = (FPOutput != 0)? LE_Ins->getBranchOffset():0;
+        DPRINTF(CGRA_Detailed, "\nLE Instruction - branching %d cycles\n", branch_offset);
         }
-      default:
-        DPRINTF(CGRA_Detailed,"2. Opcode is %ld\n",(unsigned) ins_opcode);
-        throw new CGRAException("Unknown CGRA Opcode");
-    }
+        else if(ins_opcode==EQ || ins_opcode==NEQ || ins_opcode==GT || ins_opcode==LT)
+        {
+        //write the result to the controller bus
+        DPRINTF(CGRA_Detailed,"\nCOMPARE INSTRUCTION OUTPUT = %f\n",FPOutput);
+        }*/
 
-    if (ins->getWriteRegisterEnable())
-    {
-      DPRINTF(CGRA_Detailed,"\n************** WE FP*****************\n");
+    } else { //end of !predicate_bit
 
-      int writeRegisterNumber = ins->getWriteRegAddress();
-      if(ins_opcode==LDMi)
-      {
-        FPOutput= ((int)FPOutput << 12) | ((int)FPRegFile.Read(writeRegisterNumber));
-      }
-      else if(ins_opcode==LDUi)
-      {
-        FPOutput=((int)FPOutput<<24) | ( (int)FPRegFile.Read(writeRegisterNumber));
-      }
-      else if(ins_opcode==loopexit)
-      {
-        //This should not happen as loopexit dt is int32.
-        // If LoopExit is True then, controller reg should be false.
-        (this->Controller_Reg) = !((Input1 == 1) && (Input2 == 0));
-      }
+        //Pred_Instruction temp(ins->DecodeInstruction(ins));
+        //Pred_Instruction *predIns = &temp; 
+        switch (ins_opcode) { //previously predIns->getPredOpCode().
+            case setConfigBoundry:
+              RegFile.config_boundary = (int)FPInput1;
+              FPRegFile.config_boundary = (int)FPInput1;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %f\tInput2 = %f\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\n******** Setting Configuration as %f************\n",Input1);
+              break;
+            case LDi:
+              FPOutput=FPInput1;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** LDI IN THIS PE %f************\n",FPOutput);
+              break;
+            case LDMi:
+              FPOutput=FPInput1;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** LDMI IN THIS PE %f************\n",FPOutput);
+              break;
+            case LDUi:
+              FPOutput=FPInput1;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** LDUI IN THIS PE %f************\n",FPOutput);
+              break;
+            case sel:
+              FPOutput = (InputP == true) ? FPInput2 : FPInput1;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\tInputP = %d\n",FPInput1, FPInput2, (int)InputP);
+              DPRINTF(CGRA_Detailed,"\n******** Selection IN THIS PE %f************\n",FPOutput);
+              break;
+            case loopexit:
+              FPOutput = ((FPInput1 == 1) && (FPInput2 == 0));
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\tInputP = %f\n",FPInput1, FPInput2, InputP);
+              DPRINTF(CGRA_Detailed,"\n******** Loop Exit Control IN THIS PE %f************\n",FPOutput);
+              break;
+            case address_generator:
+              Output=(int)Input1;
+              DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** ADDRESS GENERATED IN THIS PE %d************\n",Output);
+              break;
+            case signExtend:
+              bool maskedBit = ((int)FPInput1 & (1 << ((int)FPInput2-1)));
+              int shiftAmount = ((1 << (int)FPInput2)-1);
+              int signExtendMask = 0xFFFFFFFF - shiftAmount;
+              FPOutput=(int)FPInput1 & shiftAmount;
+              FPOutput = (maskedBit == 1) ? ((int)FPOutput + signExtendMask) :(int) FPOutput;
+              DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
+              DPRINTF(CGRA_Detailed,"\n******** SIGN EXTENDED IN THIS PE %f************\n",FPOutput);
+              break;
+            default:
+              DPRINTF(CGRA_Detailed,"2. Opcode is %ld\n",(unsigned) ins_opcode);
+              throw new CGRAException("Unknown CGRA Opcode");
+        }
 
-      //TODO: Fix Micro-architecture for P-type (PredMux) rather than controlling write enable.
-      if((ins_opcode==LDi) || (ins_opcode==LDMi))
-      {
-        RegFile.Write(writeRegisterNumber,(int)FPOutput);
-        FPRegFile.Write(writeRegisterNumber,FPOutput);
-        DPRINTF(CGRA_Detailed,"Writing output %f to register %d\n",FPOutput,writeRegisterNumber);
-      }
-      if((ins_opcode==LDUi))
-      {
-        FLOAT Output1; 
-        Output1.raw.mantissa = ((unsigned int)FPOutput & INS_MANTISSA)>>SHIFT_MANTISSA;
-        Output1.raw.exponent = ((unsigned int)FPOutput & INS_EXPONENT)>>SHIFT_EXPONENT;
-        Output1.raw.sign = ((unsigned int)FPOutput & INS_SIGN)>>SHIFT_SIGN; 
-        FPRegFile.Write(writeRegisterNumber,(Output1.f)); 
-        RegFile.Write(writeRegisterNumber,(int)(Output1.f));
-        DPRINTF(CGRA_Detailed,"LDUI Writing output value %f to FPregister %d\n",Output1.f,writeRegisterNumber);
-      }
-    }
+        if (ins->getWriteRegisterEnable()) {
+            DPRINTF(CGRA_Detailed,"\n************** WE FP*****************\n");
 
-    if(ins_opcode == address_generator)
-    {
-      if (ins->getSelectDataMemoryAddressBus())
-      {
-        DPRINTF(CGRA_Detailed,"\n*********Setting Address %lx ******\n",(unsigned int)Output);
-        (*addressBs) = (unsigned int)Output;
-        (*BsStatus) = CGRA_MEMORY_READ;
+            int writeRegisterNumber = ins->getWriteRegAddress();
+            if(ins_opcode==LDMi) {
+                FPOutput= ((int)FPOutput << 12) | ((int)FPRegFile.Read(writeRegisterNumber));
+            } else if (ins_opcode==LDUi) {
+                FPOutput=((int)FPOutput<<24) | ( (int)FPRegFile.Read(writeRegisterNumber));
+            } else if (ins_opcode==loopexit) {
+                //This should not happen as loopexit dt is int32.
+                // If LoopExit is True then, controller reg should be false.
+                (this->Controller_Reg) = !((Input1 == 1) && (Input2 == 0));
+            }
+
+            //TODO: Fix Micro-architecture for P-type (PredMux) rather than controlling write enable.
+            if ((ins_opcode==LDi) || (ins_opcode==LDMi)) {
+                RegFile.Write(writeRegisterNumber,(int)FPOutput);
+                FPRegFile.Write(writeRegisterNumber,FPOutput);
+                DPRINTF(CGRA_Detailed,"Writing output %f to register %d\n",FPOutput,writeRegisterNumber);
+            }
+            if ((ins_opcode==LDUi)) {
+                FLOAT Output1; 
+                Output1.raw.mantissa = ((unsigned int)FPOutput & INS_MANTISSA)>>SHIFT_MANTISSA;
+                Output1.raw.exponent = ((unsigned int)FPOutput & INS_EXPONENT)>>SHIFT_EXPONENT;
+                Output1.raw.sign = ((unsigned int)FPOutput & INS_SIGN)>>SHIFT_SIGN; 
+                FPRegFile.Write(writeRegisterNumber,(Output1.f)); 
+                RegFile.Write(writeRegisterNumber,(int)(Output1.f));
+                DPRINTF(CGRA_Detailed,"LDUI Writing output value %f to FPregister %d\n",Output1.f,writeRegisterNumber);
+            }
+        }
+
+        if (ins_opcode == address_generator) {
+            if (ins->getSelectDataMemoryAddressBus()) {
+                DPRINTF(CGRA_Detailed,"\n*********Setting Address %lx ******\n",(unsigned int)Output);
+                (*addressBs) = (unsigned int)Output;
+                (*BsStatus) = CGRA_MEMORY_READ;
+                (*BsDatatype) = CGRA_MEMORY_FP;
+                (*alignmentBs) = (int) FPInput2;
+            }
+        }
+    } // end of predication_bit
+
+    if (ins->getSelectDataMemoryDataBus() && (!predicate_bit)) {
+        DPRINTF(CGRA_Detailed,"\n******** DB FPOutput %f************\n",FPOutput);
+        (*FdataBs) = FPOutput;
         (*BsDatatype) = CGRA_MEMORY_FP;
-        (*alignmentBs) = (int) FPInput2;
-      }
     }
-  }
+    DPRINTF(CGRA_Detailed,"Distance is: %d\n",RegFile.distance);
+    DPRINTF(PE_DEBUG, "Exiting Execute()\n");
 
-  if (ins->getSelectDataMemoryDataBus() && (!predicate_bit))
-  {
-    DPRINTF(CGRA_Detailed,"\n******** DB FPOutput %f************\n",FPOutput);
-    (*FdataBs) = FPOutput;
-    (*BsDatatype) = CGRA_MEMORY_FP;
-  }
-  DPRINTF(CGRA_Detailed,"Distance is: %d\n",RegFile.distance);
-  DPRINTF(PE_DEBUG, "Exiting Execute()\n");
-
-  return branch_offset;
+    return branch_offset;
 }
 
 
@@ -1116,26 +1098,25 @@ unsigned CGRA_PE::FExecute()
 }*/
 
 
-void CGRA_PE::WriteBack()
+void 
+CGRA_PE::WriteBack()
 {
-  DPRINTF(PE_DEBUG, "Inside WB()\n");
-  bool ins_predicate = ins->getPredicator();
-  bool LE_bit = ins->getLE();
-  if(!ins_predicate && !LE_bit) {
-
-    if (ins->getSelectDataMemoryDataBus())
-      {
-	(*BsStatus) = CGRA_MEMORY_WRITE;
-	dt = ins->getDatatype();
+    DPRINTF(PE_DEBUG, "Inside WB()\n");
+    bool ins_predicate = ins->getPredicator();
+    bool LE_bit = ins->getLE();
+    if (!ins_predicate && !LE_bit) {
+        if (ins->getSelectDataMemoryDataBus()) {
+            (*BsStatus) = CGRA_MEMORY_WRITE;
+            dt = ins->getDatatype();
 	
-	if(dt == character || dt == int16 || dt == int32)
-	  (*BsDatatype) = CGRA_MEMORY_INT;
-	else
-	  (*BsDatatype) = CGRA_MEMORY_FP; 
-      }
-    DPRINTF(PE_DEBUG, "Exiting WB()\n");
-  }
-  delete ins;
+            if (dt == character || dt == int16 || dt == int32)
+                (*BsDatatype) = CGRA_MEMORY_INT;
+            else
+                (*BsDatatype) = CGRA_MEMORY_FP; 
+        }
+        DPRINTF(PE_DEBUG, "Exiting WB()\n");
+    }
+    delete ins;
 }
 
 void CGRA_PE::SetNeighbours(int* Left,int* Right,int* Up,int* Down)
