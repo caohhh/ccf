@@ -983,183 +983,178 @@ AtomicCGRA::amoMem(Addr addr, uint8_t* data, unsigned size,
     return fault;
 }
 
-void AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
+void 
+AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
 {
-  Prolog_Branch_Cycle = 0;
-  //SimpleExecContext& t_info = *threadInfo[curThread];
-  SimpleThread* thread = t_info.thread;
+    Prolog_Branch_Cycle = 0;
+    //SimpleExecContext& t_info = *threadInfo[curThread];
+    SimpleThread* thread = t_info.thread;
 
-  DPRINTF(SimpleCPU, "CGRA Pipeline\n");
-  Fault fault = NoFault;
-  DPRINTF(CGRA_Execute, "\n\n ~~~~~~ CGRA_Execution @ numCycles = %d ~~~~~~~\n", cgraCycles);
-  // received a response from the icache: execute the received instruction
-  //DPRINTF(CGRA, "Length %d\n", Len);
-  //DPRINTF(Instruction_print, "Fault print number: %d\n", (int)fault);
-  //DPRINTF(Instruction_print, "stayAtPC: %d\n", (int)stayAtPC); 
-  Len--;
-  {
+    DPRINTF(SimpleCPU, "CGRA Pipeline\n");
+    Fault fault = NoFault;
+    DPRINTF(CGRA_Execute, "\n\n ~~~~~~ CGRA_Execution @ numCycles = %d ~~~~~~~\n", cgraCycles);
+    // received a response from the icache: execute the received instruction
+    //DPRINTF(CGRA, "Length %d\n", Len);
+    //DPRINTF(Instruction_print, "Fault print number: %d\n", (int)fault);
+    //DPRINTF(Instruction_print, "stayAtPC: %d\n", (int)stayAtPC); 
+    Len--;
+
     _status = BaseCGRA::Running;
     //numCycles++;
     //cgraCycles++;
     // DPRINTF(CGRA_Execute, "CGRA.CGRA_Exec(): numCycles = %d\n", numCycles);
     //DPRINTF(CGRA_Detailed, "CGRA.Exec(): numCycles = %d\n", numCycles);
     //printf("CGRA.Exec(): numCycles = %d\n", numCycles);
-  }
 
-  if (drainState() == DrainState::Draining)
-  {
-    completeDrain();
-    return;
-  }
 
-  //*********FETCH********************
-  for (unsigned i = 0; i < CGRA_XDim; i++)
-  {
-    for (unsigned j = 0; j < CGRA_YDim; j++)
-    {
-      // little modification compared to hardware implementation
-      CGRA_Instruction *currentIns = new CGRA_Instruction(CGRA_instructions[i*CGRA_YDim + j]);
-      cgra_PEs[i * CGRA_YDim + j].Fetch(currentIns);
-  //    DPRINTF(Instruction_print,"Ins: %lx\t @ PE: %d\n",currentIns->getInsWord(), i * CGRA_YDim + j); 
+    if (drainState() == DrainState::Draining) {
+        completeDrain();
+        return;
     }
-  }
 
-  //*************PRINT INSTRUCTIONS AFTER FETCH*********
-  //for(int i=0; i < CGRA_XDim; i++)
-    //for(int j =0; j<CGRA_YDim; j++)
-      //DPRINTF(Instruction_print, "Ins: %ld, %lx\n", CGRA_instructions[i*CGRA_YDim + j], CGRA_instructions[i*CGRA_YDim + j]);
-
-  //*********DECODE********************
-  for (unsigned i = 0; i < CGRA_XDim; i++)
-    for (unsigned j = 0; j < CGRA_YDim; j++)
-      cgra_PEs[i * CGRA_YDim + j].Decode();
-  
-  if(!isTCdynamic)
-  {
-    if((Len == 0) & (state == KERN))
-      KernelCounter--;
-  }
-
-  //*********EXECUTE********************
-  // Support for multiple datatypes added in exec unit.
-  for (int i = 0; i < CGRA_XDim; i++)
-  {
-    for (int j = 0; j < CGRA_YDim; j++)
-    {      
-      DPRINTF(CGRA_Detailed, "Ins: %lx @ %lx \t@ PE %d\n", CGRA_instructions[i*CGRA_YDim + j], thread->instAddr() + ((i*CGRA_XDim)+j)*(sizeof(unsigned long)), (i*CGRA_YDim)+j);
-      if(cgra_PEs[i * CGRA_YDim + j].GetDatatype() == character || cgra_PEs[i * CGRA_YDim + j].GetDatatype() == int32 || cgra_PEs[i * CGRA_YDim + j].GetDatatype() == int16)
-        Prolog_Branch_Cycle += cgra_PEs[i * CGRA_YDim + j].IExecute();
-      else if(cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float32)
-        Prolog_Branch_Cycle += cgra_PEs[i * CGRA_YDim + j].FExecute();
-      //else if(cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float64)
-      //  cgra_PEs[i * CGRA_YDim + j].DExecute();
-
-      if(!cgra_PEs[i * CGRA_YDim + j].isNOOP())
-	Conditional_Reg = (Conditional_Reg & cgra_PEs[i * CGRA_YDim + j].getController_Reg());
-      DPRINTF(CGRA_Detailed, "Conditional reg is %d : Len = %d\n", Conditional_Reg, Len);
+    //*********FETCH********************
+    for (unsigned i = 0; i < CGRA_XDim; i++) {
+        for (unsigned j = 0; j < CGRA_YDim; j++) {
+            // little modification compared to hardware implementation
+            CGRA_Instruction *currentIns = new CGRA_Instruction(CGRA_instructions[i*CGRA_YDim + j]);
+            cgra_PEs[i * CGRA_YDim + j].Fetch(currentIns);
+            //DPRINTF(Instruction_print,"Ins: %lx\t @ PE: %d\n",currentIns->getInsWord(), i * CGRA_YDim + j); 
+        }
     }
-  }
 
-  /*
-     If TC is statically known then, decrement KernelCounter till 0.
-     Set Conditional_Reg as 0 to exit the kernel, moving to epilogue.
-     If TC is not known statically,
-     CGRA PE evaluating exit operation would set Conditional_Reg to 0.
-   */
- if(!isTCdynamic)
-  {
-    if(KernelCounter < 1)
-      Conditional_Reg = 0;
-    else
-      Conditional_Reg = 1;
-    DPRINTF(CGRA_Detailed, "Conditional reg is %d : Len = %d\n", Conditional_Reg, Len);
-  }
+    //*************PRINT INSTRUCTIONS AFTER FETCH*********
+    //for(int i=0; i < CGRA_XDim; i++)
+        //for(int j =0; j<CGRA_YDim; j++)
+        //DPRINTF(Instruction_print, "Ins: %ld, %lx\n", CGRA_instructions[i*CGRA_YDim + j], CGRA_instructions[i*CGRA_YDim + j]);
+
+    //*********DECODE********************
+    for (unsigned i = 0; i < CGRA_XDim; i++)
+        for (unsigned j = 0; j < CGRA_YDim; j++)
+            cgra_PEs[i * CGRA_YDim + j].Decode();
+    
+    // Finished executing an iteration of kernal (if TC statically known)
+    if(!isTCdynamic) {
+        if((Len == 0) & (state == KERN))
+            KernelCounter--;
+    }
+
+    //*********EXECUTE********************
+    // Support for multiple datatypes added in exec unit.
+    for (int i = 0; i < CGRA_XDim; i++) {
+        for (int j = 0; j < CGRA_YDim; j++) {
+            DPRINTF(CGRA_Detailed, "Ins: %lx @ %lx \t@ PE %d\n", 
+                    CGRA_instructions[i*CGRA_YDim + j], 
+                    thread->instAddr() + ((i*CGRA_XDim)+j)*(sizeof(unsigned long)), 
+                    (i*CGRA_YDim)+j);
+
+            if (cgra_PEs[i * CGRA_YDim + j].GetDatatype() == character || 
+                cgra_PEs[i * CGRA_YDim + j].GetDatatype() == int32 || 
+                cgra_PEs[i * CGRA_YDim + j].GetDatatype() == int16) {
+                Prolog_Branch_Cycle += cgra_PEs[i * CGRA_YDim + j].IExecute();
+            } else if (cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float32)
+                Prolog_Branch_Cycle += cgra_PEs[i * CGRA_YDim + j].FExecute();
+            //else if(cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float64)
+            //  cgra_PEs[i * CGRA_YDim + j].DExecute();
+
+            if(!cgra_PEs[i * CGRA_YDim + j].isNOOP())
+                Conditional_Reg = (Conditional_Reg & cgra_PEs[i * CGRA_YDim + j].getController_Reg());
+            DPRINTF(CGRA_Detailed, "Conditional reg is %d : Len = %d\n", Conditional_Reg, Len);
+        }
+    }
+
+    /*
+        If TC is statically known then, decrement KernelCounter till 0.
+        Set Conditional_Reg as 0 to exit the kernel, moving to epilogue.
+        If TC is not known statically,
+        CGRA PE evaluating exit operation would set Conditional_Reg to 0.
+    */
+    if (!isTCdynamic) {
+        if(KernelCounter < 1)
+            Conditional_Reg = 0;
+        else
+            Conditional_Reg = 1;
+        DPRINTF(CGRA_Detailed, "Conditional reg is %d : Len = %d\n", Conditional_Reg, Len);
+    }
  
-  //*********WRITE BACK********************
-  for (int i = 0; i < CGRA_XDim; i++)
-    for (int j = 0; j < CGRA_YDim; j++)
-      cgra_PEs[i * CGRA_YDim + j].WriteBack();
+    //*********WRITE BACK********************
+    for (int i = 0; i < CGRA_XDim; i++)
+        for (int j = 0; j < CGRA_YDim; j++)
+            cgra_PEs[i * CGRA_YDim + j].WriteBack();
 
-  const std::vector<bool> be;
-  //*********PERFORM MEMORY OPERATIONS********************
-  for (int i = 0; i < CGRA_XDim; i++)
-  {
-    if (MemBusStatus[i] == CGRA_MEMORY_READ)
-    {
-      //read int of fp memdata based on the datatype of the membus.
-      DPRINTF(CGRA_Execute, "\n************* MEM READ *************\n");
-      DPRINTF(CGRA_Execute, "Row: %d - Address: %lx\n", i, MemAddress[i]);
-      //int content;
-      if(MemBusDatatype[i] == CGRA_MEMORY_INT){
-	readMem((Addr) MemAddress[i], (uint8_t *) &mem_content, (unsigned)MemAccessAlignment[i], (unsigned) 163, be, i);
-	MemData[i] = mem_content;
-	mem_content = 0;
-	DPRINTF(CGRA_Execute, "Read data: %d\n", MemData[i]);
-      }
-      else {
-	readMem((Addr) MemAddress[i], (uint8_t *) &FMemData[i], (unsigned)MemAccessAlignment[i], (unsigned) 163, be, i);
-	DPRINTF(CGRA_Execute, "Read data: %d\n", FMemData[i]);
-      }
-      MemAccessCount++;
-      MemBusStatus[i] = CGRA_MEMORY_RESET;
-    }
-    else if (MemBusStatus[i] == CGRA_MEMORY_WRITE)
-    {
-      
-      // write int of fp memdata based on the datatype of the membus.
-      DPRINTF(CGRA_Memory, "i in the MemBus loop %d\n", i);
-      //DPRINTF(CGRA_Detailed, "In Memwrite with membus: %d\n", i);
-      if(MemBusDatatype[i] == CGRA_MEMORY_INT)
-      {
-        DPRINTF(CGRA||CGRA_Detailed, "In writing INT %d\t to address:%lx\t -- row: %d\n" , MemData[i], (Addr) (MemAddress[i] & 0xffffffff), i);
-	const std::vector<bool> be1;
-	writeMem((uint8_t *) &MemData[i], (unsigned) MemAccessAlignment[i], (Addr) (MemAddress[i] & 0xffffffff), (unsigned) 0b10110111, unknownRes, be1, i);
-	/*****************************/
-      }
-      else
-      {
-        DPRINTF(CGRA||CGRA_Detailed, "In writing %f\t to address:%lx\t -- row: %d\n" , FMemData[i], MemAddress[i], i);
-	const std::vector<bool> be1;
-        writeMem((uint8_t *) &FMemData[i], (unsigned) MemAccessAlignment[i], (Addr) MemAddress[i], (unsigned) 0b10110111, unknownRes, be1, i);
-      }
-      MemAccessCount++;
-      //x_dim=0;
-      MemBusStatus[i] = CGRA_MEMORY_RESET;
-    }
-    MemBusStatus[i] = CGRA_MEMORY_RESET;
-  }
+    
+    //*********PERFORM MEMORY OPERATIONS********************
+    const std::vector<bool> be; // byte_enable placeholder, not used in function
 
-  CGRA_advanceTime();
+    for (int i = 0; i < CGRA_XDim; i++) {
+        if (MemBusStatus[i] == CGRA_MEMORY_READ) {
+            //read int of fp memdata based on the datatype of the membus.
+            DPRINTF(CGRA_Execute, "\n************* MEM READ *************\n");
+            DPRINTF(CGRA_Execute, "Row: %d - Address: %lx\n", i, MemAddress[i]);
+            //int content;
+            if (MemBusDatatype[i] == CGRA_MEMORY_INT) {
+                // int memory read
+                readMem((Addr) MemAddress[i], (uint8_t *) &mem_content, (unsigned)MemAccessAlignment[i], (unsigned) 163, be, i);
+                MemData[i] = mem_content;
+                mem_content = 0;
+                DPRINTF(CGRA_Execute, "Read data: %d\n", MemData[i]);
+            } else {
+                // float memory read
+                readMem((Addr) MemAddress[i], (uint8_t *) &FMemData[i], (unsigned)MemAccessAlignment[i], (unsigned) 163, be, i);
+                DPRINTF(CGRA_Execute, "Read data: %d\n", FMemData[i]);
+            }
+            MemAccessCount++;
+            MemBusStatus[i] = CGRA_MEMORY_RESET;
+        } else if (MemBusStatus[i] == CGRA_MEMORY_WRITE) { // end of MemBusStatus[i] == CGRA_MEMORY_READ
+            // write int of fp memdata based on the datatype of the membus.
+            DPRINTF(CGRA_Memory, "i in the MemBus loop %d\n", i);
+            //DPRINTF(CGRA_Detailed, "In Memwrite with membus: %d\n", i);
+            if (MemBusDatatype[i] == CGRA_MEMORY_INT) {
+                DPRINTF(CGRA||CGRA_Detailed, 
+                        "In writing INT %d\t to address:%lx\t -- row: %d\n", 
+                        MemData[i], (Addr) (MemAddress[i] & 0xffffffff), i);
+                const std::vector<bool> be1; // byte_enable placeholder, not used in function
+                writeMem((uint8_t *) &MemData[i], (unsigned) MemAccessAlignment[i], 
+                            (Addr) (MemAddress[i] & 0xffffffff), (unsigned) 0b10110111, unknownRes, be1, i);
+                /*****************************/
+            } else {
+                DPRINTF(CGRA||CGRA_Detailed, "In writing %f\t to address:%lx\t -- row: %d\n" , FMemData[i], MemAddress[i], i);
+                const std::vector<bool> be1; // byte_enable placeholder, not used in function
+                writeMem((uint8_t *) &FMemData[i], (unsigned) MemAccessAlignment[i], 
+                            (Addr) MemAddress[i], (unsigned) 0b10110111, unknownRes, be1, i);
+            }
+            MemAccessCount++;
+            //x_dim=0;
+            MemBusStatus[i] = CGRA_MEMORY_RESET;
+        }  // end of MemBusStatus[i] == CGRA_MEMORY_WRITE
+        MemBusStatus[i] = CGRA_MEMORY_RESET;
+    } // end of for loop
 
-  DPRINTF(CGRA_Execute, "CGRA advanceTime complete.\n"); 
-  
-  //DPRINTF(Instruction_print, "Fault after exe: %d\n",(int)fault);
+    CGRA_advanceTime();
+    DPRINTF(CGRA_Execute, "CGRA advanceTime complete.\n"); 
+    
+    //DPRINTF(Instruction_print, "Fault after exe: %d\n",(int)fault);
 
  
-  if(fault != NoFault || !t_info.stayAtPC) 
-    CGRA_advancePC(t_info.thread);
+    if(fault != NoFault || !t_info.stayAtPC) 
+        CGRA_advancePC(t_info.thread);
 
   
-  if (tryCompleteDrain())
-  {
-    DPRINTF(CGRA_Execute, "Inside tryCompleteDrain().\n"); 
-    return;
-  }
+    if (tryCompleteDrain()) {
+        DPRINTF(CGRA_Execute, "Inside tryCompleteDrain().\n"); 
+        return;
+    }
+    DPRINTF(CGRA_Execute, "Passed Complete Drain().\n"); 
 
-  DPRINTF(CGRA_Execute, "Passed Complete Drain().\n"); 
-  // instruction takes at least one cycle
-  if (latency < clockPeriod())
-    latency = clockPeriod();
-
-  DPRINTF(CGRA_Execute, "Make latency status=%d.\n", _status); 
+    // instruction takes at least one cycle
+    if (latency < clockPeriod())
+        latency = clockPeriod();
+    DPRINTF(CGRA_Execute, "Make latency status=%d.\n", _status); 
   
-  if (_status != Idle)
-  {
-    DPRINTF(CGRA_Execute, "Inside status idle.\n"); 
-    schedule(tickEvent, curTick() + latency);
-  }
-  
-  DPRINTF(CGRA_Execute, "Exiting schedule events\n"); 
+    if (_status != Idle) {
+        DPRINTF(CGRA_Execute, "Inside status idle.\n"); 
+        schedule(tickEvent, curTick() + latency);
+    }
+    DPRINTF(CGRA_Execute, "Exiting schedule events\n"); 
 } //CGRA_Execution
 
 void AtomicCGRA::CGRA_advanceTime()
