@@ -1,5 +1,5 @@
 /*
- * Instruction.h
+ * CGRAInstruction.h
  *
  * Created on: May 24, 2011
  * Author: mahdi
@@ -44,6 +44,9 @@ public:
 	bool getSelectDataMemoryAddressBus();
 	bool getSelectDataMemoryDataBus();
 
+	/**
+	 * instruction word -> attributes
+	*/
 	void ENCODE_instruction();
 
 	unsigned long getOpCode_DECODE();
@@ -59,6 +62,9 @@ public:
 	unsigned long getSelectDataMemoryDataBus_DECODE();
         unsigned long getLE_DECODE();
 
+	/**
+	 * attributes of instruction -> instruction word
+	*/
 	unsigned long DecodeInstruction(CGRA_Instruction* Ins);
 
 private:
@@ -99,6 +105,9 @@ public:
 	int getReadRegAddressP();
 	int getImmediateValue();
 
+	/**
+	 * instruction word -> attributes
+	*/
 	void ENCODE_Pred_instruction();
 
 	unsigned long getPredOpCode_DECODE();
@@ -112,6 +121,9 @@ public:
 	unsigned long getReadRegAddressP_DECODE();
 	unsigned long getImmediateValue_DECODE();
 
+	/**
+	 * instruction attributes -> instruction word
+	*/
 	unsigned long DecodePredInstruction(Pred_Instruction* Ins);
 
 private:
@@ -149,6 +161,9 @@ public:
   unsigned getBranchOffset();
   int getImmediateValue();
 
+  /**
+   * instruction word -> attributes
+  */
   void ENCODE_LE_instruction();
 
   unsigned long getOpCode_DECODE();
@@ -163,6 +178,9 @@ public:
   unsigned long getBranchOffset_DECODE();
   unsigned long getImmediateValue_DECODE();
 
+  /**
+   * instruction attributes -> instruction word
+  */
   unsigned long DecodeLEInstruction(LE_Instruction* Ins);
 
 private:
