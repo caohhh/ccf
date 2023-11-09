@@ -11,3 +11,12 @@
 /FalconCrimson/Release/FalconCrimson
 /SimulatedAnnealing/Release/SimulatedAnnealing
 /GraphMinor/Release/GraphMinor
+
+/FalconCrimson/Release/FalconCrimson_debug.txt
+/FalconIMS/Release/debugfile
+/RAMP/Release/debugfile/REGIMap/Release/debugfile
+/RAMP/Release/debugfile
+/FalconCrimson/Release/debugfile
+/SimulatedAnnealing/Release/debugfile
+/GraphMinor/Release/debugfile
+/REGIMap/Release/debugfile
