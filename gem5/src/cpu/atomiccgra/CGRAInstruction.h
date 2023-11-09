@@ -192,6 +192,8 @@ private:
   int ReadRegAddress2;
   int WriteRegAddress;
   bool WriteRegisterEnable;
+
+  // 0x3ff for loop exiting, else for the cycles the jump
   unsigned branchOffset;
   long ImmediateValue;
 

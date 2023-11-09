@@ -1061,6 +1061,14 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
             DPRINTF(CGRA_Detailed, "Conditional reg is %d : Len = %d\n", Conditional_Reg, Len);
         }
     }
+    /**
+     * If loop exit condition is dynamic, will be using the LE instruction
+     * On meeting loop exit condition, either
+     * branch_offset == 1023 (all 1), Controller_Reg == 0 => Conditional_Reg == 0
+     * Execute returns branch_offset, Prolog_Branch_Cycle += branch_offset
+    */
+
+
 
     /*
         If TC is statically known then, decrement KernelCounter till 0.
@@ -1077,6 +1085,7 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
     }
  
     //*********WRITE BACK********************
+    // setup MemBusStatus and MemBusDataType
     for (int i = 0; i < CGRA_XDim; i++)
         for (int j = 0; j < CGRA_YDim; j++)
             cgra_PEs[i * CGRA_YDim + j].WriteBack();
@@ -1279,6 +1288,7 @@ AtomicCGRA::tick()
                         int addr = PC_index_map[thread->instAddr()] + i;
                         if((CGRA_instructions[i] != fetched_instructions[addr])) { // & (INS_DATATYPE<<SHIFT_DATATYPE)) < int32){
                             DPRINTF(ExecFaulting||CGRA_Detailed, "Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
+                            hack("Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
                             //int addr = PC_index_map[thread->instAddr()] + i;
                             CGRA_instructions[i] = fetched_instructions[addr];
                             DPRINTF(ExecFaulting, "Refetched Instructions: %lx\n", CGRA_instructions[i]); 
@@ -1505,7 +1515,7 @@ AtomicCGRA::tick()
                 DPRINTF(CGRA_Execute, "We are here after Execution\n");
             }
         } // end of !isCPU()
-    } //end of for loop
+    } //end of cpu issue width for loop
 } // end of tick()
 
 /*int AtomicCGRA::Position(int current, int i, int j)

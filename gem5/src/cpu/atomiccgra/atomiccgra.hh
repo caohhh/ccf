@@ -183,13 +183,21 @@ class AtomicCGRA: public BaseCGRA
     int writeValue;
     int operand1;
 
+    /**
+     * False: CGRA should leave KERN stage
+     *        either from KernelCounter == 0 (static)
+     *        or meeting loop exit condition (dynamic)
+    */
     bool Conditional_Reg;
+    // branch_offset, relate to loop exit
     unsigned Prolog_Branch_Cycle;
     //bool * PE_Conditional_Reg[CGRA_XDim*CGRA_YDim];
     bool ** PE_Conditional_Reg;
     bool isTCdynamic = false;
     //std::vector<CGRA_PE> cgra_PEs;    
     CGRA_PE* cgra_PEs;
+
+    // for backup instruction fetch straight from bin (maybe a hack?)
     uint64_t fetched_instructions[MAX_INSTRUCTION_SIZE];
 
     TheISA::PCState backPC;
