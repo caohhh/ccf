@@ -20,7 +20,7 @@ CGRA_Instruction::CGRA_Instruction(unsigned long Instructionword)
   ENCODE_instruction();
 }
 
-CGRA_Instruction::CGRA_Instruction(Datatype dt, OPCode opc,int predic,PEInputMux LMuxSel,  PEInputMux RMuxSel, int RRegAdd1,int RRegAdd2, int WAdd, bool WE, int ImmVal, bool EDMAdd, bool DMData)
+CGRA_Instruction::CGRA_Instruction(Datatype dt, OPCode opc,int predic,PEInputMux LMuxSel,  PEInputMux RMuxSel, int RRegAdd1,int RRegAdd2, int WAdd, bool WE, long ImmVal, bool EDMAdd, bool DMData)
 {
 
   DType=dt; 
@@ -387,7 +387,7 @@ Pred_Instruction::Pred_Instruction(unsigned long Instructionword)
   ENCODE_Pred_instruction();
 }
 
-Pred_Instruction::Pred_Instruction(Datatype dt, PredOPCode popc,PEInputMux LMuxSel, PEInputMux RMuxSel, PEInputMux PMuxSel, int RRegAdd1,int RRegAdd2, int RRegAddP, int ImmVal)
+Pred_Instruction::Pred_Instruction(Datatype dt, PredOPCode popc,PEInputMux LMuxSel, PEInputMux RMuxSel, PEInputMux PMuxSel, int RRegAdd1,int RRegAdd2, int RRegAddP, long ImmVal)
 {
   DType = dt; 
   popCode=popc;
