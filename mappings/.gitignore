@@ -1,0 +1,13 @@
+/*/Release/src/*.o
+/*/Release/src/*.d
+
+/*/DFGFiles/edgefile
+/*/DFGFiles/nodefile
+
+
+/REGIMap/Release/REGIMap
+/FalconIMS/Release/FalconIMS
+/RAMP/Release/RAMP
+/FalconCrimson/Release/FalconCrimson
+/SimulatedAnnealing/Release/SimulatedAnnealing
+/GraphMinor/Release/GraphMinor
