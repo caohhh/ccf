@@ -450,7 +450,7 @@ CGRA_PE::IExecute()
               DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
               DPRINTF(CGRA_Detailed,"\n******** REM IN THIS PE %d************\n",Output);
               break;
-            case LSHR:
+            case LSHR: {
               unsigned unsignedInput1 = (unsigned) Input1;
               Output = (unsigned)(unsignedInput1 >> (unsigned) Input2);
               DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
@@ -458,6 +458,7 @@ CGRA_PE::IExecute()
               DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %d************\n",Output);
               DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %u************\n",Output);
               break;
+            }
             case NOOP:
               DPRINTF(CGRA_Detailed,"CGRA: NOOP.Execute()\n");
               break;
@@ -543,7 +544,7 @@ CGRA_PE::IExecute()
               DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
               DPRINTF(CGRA_Detailed,"\n******** ADDRESS GENERATED IN THIS PE %d************\n",Output);
               break;
-            case signExtend:
+            case signExtend: {
                 bool maskedBit = (Input1 & (1 << (Input2-1)));
                 int shiftAmount = ((1 << Input2)-1);
                 int signExtendMask = 0xFFFFFFFF - shiftAmount;
@@ -552,6 +553,7 @@ CGRA_PE::IExecute()
                 DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
                 DPRINTF(CGRA_Detailed,"\n******** SIGN EXTENDED IN THIS PE %d************\n",Output);
                 break;
+            }
             default:
               DPRINTF(CGRA_Detailed,"2. Opcode is %ld\n",(unsigned) ins_opcode);
               throw new CGRAException("Unknown CGRA Opcode");
@@ -692,7 +694,7 @@ CGRA_PE::FExecute()
               DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
               DPRINTF(CGRA_Detailed,"\n******** REM IN THIS PE %f************\n",FPOutput);
               break;
-            case LSHR:
+            case LSHR: {
                 unsigned unsignedFPInput1 = (unsigned) FPInput1;
                 FPOutput = (unsigned)(unsignedFPInput1 >> (unsigned) FPInput2);
                 DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
@@ -700,6 +702,7 @@ CGRA_PE::FExecute()
                 DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %f************\n",FPOutput);
                 DPRINTF(CGRA_Detailed,"\n******** LSHR IN THIS PE %u************\n",FPOutput);
                 break;
+            }
             case NOOP:
               DPRINTF(CGRA_Detailed,"CGRA: NOOP.Execute()\n");
               break;
@@ -790,7 +793,7 @@ CGRA_PE::FExecute()
               DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
               DPRINTF(CGRA_Detailed,"\n******** ADDRESS GENERATED IN THIS PE %d************\n",Output);
               break;
-            case signExtend:
+            case signExtend: {
               bool maskedBit = ((int)FPInput1 & (1 << ((int)FPInput2-1)));
               int shiftAmount = ((1 << (int)FPInput2)-1);
               int signExtendMask = 0xFFFFFFFF - shiftAmount;
@@ -799,6 +802,7 @@ CGRA_PE::FExecute()
               DPRINTF(CGRA_Detailed,"\nFPInput1 = %f\tFPInput2 = %f\n",FPInput1, FPInput2);
               DPRINTF(CGRA_Detailed,"\n******** SIGN EXTENDED IN THIS PE %f************\n",FPOutput);
               break;
+            }
             default:
               DPRINTF(CGRA_Detailed,"2. Opcode is %ld\n",(unsigned) ins_opcode);
               throw new CGRAException("Unknown CGRA Opcode");
