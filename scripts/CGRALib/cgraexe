@@ -6,7 +6,7 @@ R=0
 IC=0
 CGRAclock=0
 CPUClock=0
-ccf_root=""
+ccf_root="/home/caohhh/ccf/ccf"
 
 pwd
 
