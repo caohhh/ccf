@@ -165,9 +165,9 @@ else
     done	
 fi
 
-if [[ $target_arm == 1 ]]; then
+#if [[ $target_arm == 1 ]]; then
   $ccf_root/scripts/opt.sh combinedIR.ll ${install_path} ${ccf_root}
-fi
+#fi
 
 if [[ $target_arm == 1 ]] || ([[ ! -f "CGRAGen.bc" ]] && [[ ! -d "CGRAExec" ]]); then
     echo "Accelerating loop not found! Compiling for CPU"
