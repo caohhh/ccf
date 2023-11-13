@@ -8,4 +8,4 @@ LIB = -lm
 fib: ${FILE1} Makefile
 	$(CC) -static -O3 ${FILE1} -o fibonacci
 clean:
-	rm -rf fibonacci CGRAExec m5out
+	rm -rf fibonacci CGRAExec m5out *.ll
