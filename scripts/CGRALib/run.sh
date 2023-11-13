@@ -81,6 +81,7 @@ find ${ccf_root}/mappings -maxdepth 1 -mindepth 1 -type d | while read dir; do
     if [[ $dir == *"$ALGO" ]]; then
         map="$dir/Release"
         nodefile="$dir/DFGFiles"
+        echo "mapping with $ALGO"
         $map/$ALGO -EDGE $llvmedge -NODE $llvmnode -X $X -Y $Y -R $R -MSA $MSA -MAPII $MAPII -MAX_MAP $MAX_MAP -MAX_II $MAX_II -LAMBDA $LAMBDA #> $schfile
         $nodefile/nodefile $llvmnode DUMP_node.txt > final_node.txt
     fi
