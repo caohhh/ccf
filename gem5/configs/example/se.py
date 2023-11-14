@@ -90,7 +90,7 @@ def get_processes(options):
     for wrkld in workloads:
         process = Process(pid = 100 + idx)
         process.executable = wrkld
-        process.cwd = os.getcwd()
+        process.cwd = os.path.dirname(wrkld)
 
         if options.env:
             with open(options.env, 'r') as f:
