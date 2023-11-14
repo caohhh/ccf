@@ -194,7 +194,7 @@ llc -march="arm" CGRAGen.ll
 clang -w -O3 -mllvm -force-vector-width=1 -Wpadded -static --target=armv7a-none-linux-eabi CGRAGen.s -o $obj -lm 
 
 #Delete temporary files
-rm *.bc *.s #*.ll
+rm *.bc #*.s #*.ll
 
 # Check if CGRAExec exists.
 if [ -d "CGRAExec" ]; then
