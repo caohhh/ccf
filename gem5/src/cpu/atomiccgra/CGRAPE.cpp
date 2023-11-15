@@ -92,6 +92,7 @@ CGRA_PE::Decode()
 
     if (dt == character || dt == int16 || dt == int32) {
         if ((ins->getOpCode()!=NOOP)) {
+            DPRINTF(CGRA_Detailed,"LMUX: %u, RMUX: %u\n",ins->getLeftMuxSelector(),ins->getRightMuxSelector());
             switch (ins->getLeftMuxSelector()) {
                 case Register:
                   DPRINTF(CGRA_Detailed,"\n******** DB INPUT1 ReadAddress = %d************\n",ins->getReadRegAddress1());
