@@ -6,8 +6,8 @@ int main(int argc, char *argv[])
 
   int iterations = atoi(argv[1]); 
 
-  int a=30, b=3, result = 0; 
-  int c = 0;
+  int a=30, b=3, c=0;
+  int result = 0;
   
   //char d = 'W', e;
   int i; 
