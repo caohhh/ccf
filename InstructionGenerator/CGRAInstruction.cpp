@@ -487,7 +487,7 @@ void Pred_Instruction::ENCODE_Pred_instruction()
       DType = empty2;
       break;
   } 
-  switch((ins_pred & INS_POPCODE) >> SHIFT_POPCODE){
+  switch((PredInsWord & INS_POPCODE) >> SHIFT_POPCODE){
     case setConfigBoundry:
       popCode = setConfigBoundry;
       break;
