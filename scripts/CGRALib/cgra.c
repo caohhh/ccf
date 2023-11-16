@@ -209,10 +209,17 @@ int initializeParameters(unsigned int loopID)
   fclose(kern);
   fclose(count);
   fclose(config);
-
-  //printf("Printing prolog:\n");
-  //for(i=0; i<prosize; i++)
-  //printf("%d: %lx - %llx\n", i, &prolog[i], prolog[i]);
+#ifdef DEBUG
+  printf("Printing prolog:\n");
+  for(i=0; i<final_prolog_size; i++)
+    printf("%d: %lx - %llx\n", i, &prolog[i], prolog[i]);
+  printf("Printing kernel:\n");
+  for(i=0; i<kernelsize; i++)
+    printf("%d: %lx - %llx\n", i, &kernel[i], kernel[i]);
+  printf("Printing epilog:\n");
+  for(i=0; i<episize; i++)
+    printf("%d: %lx - %llx\n", i, &epilog[i], epilog[i]);
+#endif
 
   char loopitfile[40] = "";
   strcat(loopitfile,directoryPath);

@@ -66,6 +66,7 @@
 #include "debug/SimpleCPU.hh"
 #include "debug/Instruction_print.hh"
 #include "debug/Cycles.hh"
+#include "debug/Instruction_Fetch.hh"
 
 #include "params/AtomicCGRA.hh"
 using namespace std;
@@ -1275,21 +1276,26 @@ AtomicCGRA::tick()
                 if(is_CPU()) {
                     ifetch_pkt.dataStatic(&inst);
                     //DPRINTF(CGRA_Execute, "CPU::Fetched inst %lx @ PC: %lx\n", inst, thread->instAddr());
-                } else
-		            ifetch_pkt.dataStatic(CGRA_instructions);
+                } else {
+                    DPRINTF(Instruction_Fetch,"ifetch_pkt info: addr: %lx, size: %u\n", ifetch_pkt.getAddr(),ifetch_pkt.getSize());
+                    ifetch_pkt.dataStatic(CGRA_instructions);
+                }
 
                 icache_latency = sendPacket(icachePort, &ifetch_pkt);		
                 assert(!ifetch_pkt.isError());
 
                 /* Added by Vinh TA */
+                /* maybe problem is with physical address*/
                 if(!is_CPU()) {
                     DPRINTF(CGRA_Execute, "Fetching PC: %lx - Index: %d\n", thread->instAddr(), PC_index_map[thread->instAddr()]);
                     for(int i=0; i<CGRA_XDim*CGRA_YDim; i++) {
+                        DPRINTF(Instruction_Fetch, "Initial Instruction Fetched: %lx @ PE %d\n", CGRA_instructions[i], i);
                         int addr = PC_index_map[thread->instAddr()] + i;
                         if((CGRA_instructions[i] != fetched_instructions[addr])) { // & (INS_DATATYPE<<SHIFT_DATATYPE)) < int32){
                             DPRINTF(ExecFaulting||CGRA_Detailed, "Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
                             hack("Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
                             //int addr = PC_index_map[thread->instAddr()] + i;
+                            DPRINTF(ExecFaulting, "Fetched Wrong Instructions: %lx\n", CGRA_instructions[i]); 
                             CGRA_instructions[i] = fetched_instructions[addr];
                             DPRINTF(ExecFaulting, "Refetched Instructions: %lx\n", CGRA_instructions[i]); 
                         }
