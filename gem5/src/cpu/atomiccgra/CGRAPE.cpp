@@ -584,7 +584,7 @@ CGRA_PE::IExecute()
         if (ins_opcode == address_generator) {
             if (ins->getSelectDataMemoryAddressBus()) {
                 DPRINTF(CGRA_Detailed,"\n*********Setting Address %lx ******\n",(unsigned int)Output);
-                (*addressBs) = Output;
+                (*addressBs) = (unsigned int)Output;
                 (*BsStatus) = CGRA_MEMORY_READ;
                 (*BsDatatype) = CGRA_MEMORY_INT; 
                 (*alignmentBs) = Input2;
