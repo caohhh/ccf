@@ -108,7 +108,7 @@ class AtomicCGRA: public BaseCGRA
     //uint32_t *CGRA_instructions;
     uint64_t *CGRA_instructions;
     int loopID;
-    void fetchInstructions(unsigned int *InstMem);
+    //void fetchInstructions(unsigned int *InstMem);
   //void fetch_CGRA_inst(long, uint64_t*);
 
     /*AtomicCGRA related CGRA functions. This is replaced by tick() in atomic mode
@@ -154,6 +154,8 @@ class AtomicCGRA: public BaseCGRA
     uint64_t* unknownRes;
 
     void completeDrain();
+
+    //setup virtual address for instruction fetch
     void setupFetchRequest(const RequestPtr &req);
     
   protected:
@@ -198,7 +200,7 @@ class AtomicCGRA: public BaseCGRA
     CGRA_PE* cgra_PEs;
 
     // for backup instruction fetch straight from bin (maybe a hack?)
-    uint64_t fetched_instructions[MAX_INSTRUCTION_SIZE];
+    //uint64_t fetched_instructions[MAX_INSTRUCTION_SIZE];
 
     TheISA::PCState backPC;
     /*CGRA DEFINITIONS END*/

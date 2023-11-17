@@ -75,7 +75,7 @@ using namespace TheISA;
 volatile unsigned long cgraCycles = 0;
 unsigned long debugCycles = 0;
 //uint64_t *fetched_instructions;
-std::map<unsigned long, int> PC_index_map;
+//std::map<unsigned long, int> PC_index_map;
 int mem_content;
 
 void
@@ -1251,41 +1251,84 @@ AtomicCGRA::tick()
             MemAccessCount = 0;
             AccessCount = 0;
         }
-        if (needToFetch) {
-            ifetch_req->taskId(taskId());
-            setupFetchRequest(ifetch_req);
-            fault = thread->itb->translateAtomic(ifetch_req, thread->getTC(),
-                                                 BaseTLB::Execute);
-        }
 
-        if (fault == NoFault) {
-            icache_latency = 0;
-            icache_access = false;
-            dcache_access = false; // assume no dcache access
 
+        if (is_CPU()) {
             if (needToFetch) {
-                // This is commented out because the decoder would act like
-                // a tiny cache otherwise. It wouldn't be flushed when needed
-                // like the I cache. It should be flushed, and when that works
-                // this code should be uncommented.
-                //Fetch more instruction memory if necessary
-                //if (decoder.needMoreBytes())
-                icache_access = true;
-                Packet ifetch_pkt = Packet(ifetch_req, MemCmd::ReadReq);
+                ifetch_req->taskId(taskId());
+                setupFetchRequest(ifetch_req);
+                fault = thread->itb->translateAtomic(ifetch_req, thread->getTC(),
+                                                    BaseTLB::Execute);
+            }
+            if (fault == NoFault) {
+                icache_latency = 0;
+                icache_access = false;
+                dcache_access = false; // assume no dcache access
 
-                if(is_CPU()) {
+                if (needToFetch) {
+                    // This is commented out because the decoder would act like
+                    // a tiny cache otherwise. It wouldn't be flushed when needed
+                    // like the I cache. It should be flushed, and when that works
+                    // this code should be uncommented.
+                    //Fetch more instruction memory if necessary
+                    //if (decoder.needMoreBytes())
+                    icache_access = true;
+                    Packet ifetch_pkt = Packet(ifetch_req, MemCmd::ReadReq);
+
                     ifetch_pkt.dataStatic(&inst);
                     //DPRINTF(CGRA_Execute, "CPU::Fetched inst %lx @ PC: %lx\n", inst, thread->instAddr());
-                } else {
-                    DPRINTF(Instruction_Fetch,"ifetch_pkt info: addr: %lx, size: %u\n", ifetch_pkt.getAddr(),ifetch_pkt.getSize());
-                    ifetch_pkt.dataStatic(CGRA_instructions);
+        
+                    icache_latency = sendPacket(icachePort, &ifetch_pkt);		
+                    assert(!ifetch_pkt.isError());
+                } // end of needToFetch
+            } // end of fault == NoFault
+        } else { // end of is_CPU()
+
+            if (needToFetch) {
+                ifetch_req->taskId(taskId());
+                // get PC and size to fetch
+                setupFetchRequest(ifetch_req);
+
+
+                Addr frag_addr = ifetch_req->getVaddr();
+                int frag_size = 0;
+                int size_left = ifetch_req->getSize();
+                uint64_t * instruction = CGRA_instructions;
+                
+                // for multiple cache line access
+                while (size_left > 0) {
+                    frag_size = std::min(cacheLineSize() - addrBlockOffset(frag_addr, cacheLineSize()),(Addr) size_left);
+                    Addr inst_addr = threadInfo[curThread]->thread->pcState().instAddr();
+                    ifetch_req->setVirt(frag_addr, frag_size, Request::INST_FETCH, dataRequestorId(), inst_addr);
+                    size_left -= frag_size;
+                    // to physical address
+                    fault = thread->itb->translateAtomic(ifetch_req, thread->getTC(),
+                                                    BaseTLB::Execute);
+                    DPRINTF(Instruction_Fetch,"vaddr: %#x, paddr: %#x, size: %d, left: %d\n",
+                                                frag_addr, ifetch_req->getPaddr(), frag_size, size_left);
+                    if (fault == NoFault) {
+                        icache_latency = 0;
+                        icache_access = false;
+                        dcache_access = false; // assume no dcache access
+
+                        if (needToFetch) {
+                            icache_access = true;
+                            Packet ifetch_pkt = Packet(ifetch_req, MemCmd::ReadReq);
+                            ifetch_pkt.dataStatic(instruction);
+                            icache_latency += sendPacket(icachePort, &ifetch_pkt);
+                            assert(!ifetch_pkt.isError());
+                        }
+                    } else {
+                        break;
+                    }
+                    frag_addr += frag_size;
+                    instruction += frag_size/sizeof(CGRA_instructions);
                 }
-
-                icache_latency = sendPacket(icachePort, &ifetch_pkt);		
-                assert(!ifetch_pkt.isError());
-
                 /* Added by Vinh TA */
-                /* maybe problem is with physical address*/
+                /** 
+                 * most likely useless now, kept in just in case
+                */
+               /*
                 if(!is_CPU()) {
                     DPRINTF(CGRA_Execute, "Fetching PC: %lx - Index: %d\n", thread->instAddr(), PC_index_map[thread->instAddr()]);
                     for(int i=0; i<CGRA_XDim*CGRA_YDim; i++) {
@@ -1293,7 +1336,7 @@ AtomicCGRA::tick()
                         int addr = PC_index_map[thread->instAddr()] + i;
                         if((CGRA_instructions[i] != fetched_instructions[addr])) { // & (INS_DATATYPE<<SHIFT_DATATYPE)) < int32){
                             DPRINTF(ExecFaulting||CGRA_Detailed, "Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
-                            hack("Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
+                            warn("Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
                             //int addr = PC_index_map[thread->instAddr()] + i;
                             DPRINTF(ExecFaulting, "Fetched Wrong Instructions: %lx\n", CGRA_instructions[i]); 
                             CGRA_instructions[i] = fetched_instructions[addr];
@@ -1301,9 +1344,9 @@ AtomicCGRA::tick()
                         }
                     }
                 }
-
-            } // end of needToFetch
-	    } // end of fault == NoFault
+                */
+            }
+        }
 
         if (is_CPU()) {
 	        //DPRINTF(SimpleCPU, "CGRA is_CPU().\n"); 
@@ -1792,6 +1835,8 @@ void AtomicCGRA::Setup_CGRA_Parameters()
   // Added by Vinh TA
   // Update: instruction fetch backup for fetch errors (read directly from bin file
   //delete[] fetched_instructions;
+  // should be useless by now
+  /*
   DPRINTF(CGRA_Detailed, "Instruction size: %d - backup size: %d\n", (Prolog + Prolog_extension_cycle + II + EPILog)*CGRA_XDim*CGRA_YDim, sizeof(fetched_instructions)/sizeof(uint64_t));
   if((Prolog + Prolog_extension_cycle + II + EPILog)*CGRA_XDim*CGRA_YDim > MAX_INSTRUCTION_SIZE)
     fatal("FATAL: Instructions exceeded MAX_INSTRUCTION_SIZE!\n");
@@ -1824,9 +1869,9 @@ void AtomicCGRA::Setup_CGRA_Parameters()
   fclose(instruction_stream);
 
 
-  /* Manually adjust insword for patricia bench!
-  for(int i=0; i<(Prolog + Prolog_extension_cycle + II + EPILog)*CGRA_XDim*CGRA_YDim; i++)
-  if(fetched_instructions[i] == 0x4d1c000800000002UL && (i % 64 == 36)) fetched_instructions[i] -= 1; */
+  // Manually adjust insword for patricia bench!
+  //for(int i=0; i<(Prolog + Prolog_extension_cycle + II + EPILog)*CGRA_XDim*CGRA_YDim; i++)
+  //if(fetched_instructions[i] == 0x4d1c000800000002UL && (i % 64 == 36)) fetched_instructions[i] -= 1; 
   
 
   DPRINTF(ExecFaulting, "Fetched prolog:\n");
@@ -1846,6 +1891,8 @@ void AtomicCGRA::Setup_CGRA_Parameters()
     DPRINTF(ExecFaulting, "%d: %lx\n", i, fetched_instructions[((Prolog+II)*CGRA_XDim*CGRA_YDim)+i]);
   for(int i=Prolog+Prolog_extension_cycle+II, j=0; i<Prolog+Prolog_extension_cycle+II+EPILog; i++)
     PC_index_map.insert(std::make_pair(EPILogPC + ((j++)*CGRA_XDim*CGRA_YDim*sizeof(uint64_t)),(i*CGRA_XDim*CGRA_YDim)));
+
+    */
   
 }
 
