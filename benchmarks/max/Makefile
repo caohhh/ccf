@@ -7,4 +7,4 @@ LIB = -lm
 max: ${FILE1} Makefile
 	$(CC) -static -O3 ${FILE1} -o max
 clean:
-	rm -rf max CGRAExec m5out
+	rm -rf max CGRAExec m5out *.ll *.s *.log
