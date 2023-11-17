@@ -330,9 +330,10 @@ unsigned long CGRA_Instruction::getWriteRegisterEnable_DECODE()
 unsigned long CGRA_Instruction::getImmediateValue_DECODE()
 {
   unsigned long InsWord = 0;
-  if(ImmediateValue > INS_IMMEDIATE){
-    printf("ERROR: CAN'T HOLD IMMEDIATE VALUE, SETTING VALUE = INS_IMMEDIATE\n");
-    ImmediateValue = INS_IMMEDIATE;
+  // causes way more problem than it may fix
+  // so changed to basically not do anything
+  if((unsigned int)ImmediateValue > INS_IMMEDIATE){
+    printf("ERROR: CAN'T HOLD IMMEDIATE VALUE:%ld, SETTING VALUE = INS_IMMEDIATE\n", ImmediateValue);
   }
   InsWord |= ImmediateValue;
   InsWord <<= SHIFT_IMMEDIATE;
@@ -678,8 +679,10 @@ unsigned long Pred_Instruction::getReadRegAddressP_DECODE()
 unsigned long Pred_Instruction::getImmediateValue_DECODE()
 {
   unsigned long PredInsWord = 0;
-  if(ImmediateValue > INS_IMMEDIATE){
-    ImmediateValue = INS_IMMEDIATE;
+  // causes way more problem than it may fix
+  // so changed to basically not do anything
+  if((unsigned int)ImmediateValue > INS_IMMEDIATE){
+    printf("ERROR: CAN'T HOLD IMMEDIATE VALUE:%ld, SETTING VALUE = INS_IMMEDIATE\n", ImmediateValue);
   }
   PredInsWord |= ImmediateValue;
   PredInsWord <<= SHIFT_IMMEDIATE;
