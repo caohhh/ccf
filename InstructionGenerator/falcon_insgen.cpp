@@ -1219,7 +1219,7 @@ OPCode getOpCode(int nodeID)
       opcode = Add;
       break;
     case route:
-      opcode = Add;
+      opcode = (OPCode) OR;
       break;
     case cgra_select:
       opcode = (OPCode) LDi;
