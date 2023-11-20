@@ -3653,12 +3653,12 @@ Default:
         if (node->is_Load_Address_Generator())
           node = node->get_Related_Node();  
         arc1 = myDFG->get_Arc(node, node1);
-        arc1->SetOperandOrder(1);
+        arc1->SetOperandOrder(0);
         node = myDFG->get_Node((dyn_cast<SelectInst>(BI))->getFalseValue());
         if (node->is_Load_Address_Generator())
           node = node->get_Related_Node();
         arc1 = myDFG->get_Arc(node, node1);
-        arc1->SetOperandOrder(0);
+        arc1->SetOperandOrder(1);
       }
 
       
@@ -4398,11 +4398,15 @@ Default:
                 if(node2->is_Load_Address_Generator()) 
                   node2 = node2->get_Related_Node();
               } else {         
-                if (operandList[ii] != NULL)
+                if (operandList[ii] != NULL) {
+                  if(DEBUG) 
+                    errs() << "   node 4 in operand list: " << myDFG->get_Node(operandList[ii])->get_ID() << "\tInstruction: " << myDFG->get_Node(operandList[ii])->get_Instruction() << "\n";
                   node4 = myDFG->get_Node(operandList[ii]);
-                else
+                } else {
+                  if(DEBUG) 
+                    errs() << "   node 4 NOT in operand list: " << myDFG->get_Node(BI->getOperand(ii))->get_ID() << "\n";
                   node4 = myDFG->get_Node(BI->getOperand(ii));
-
+                }
                 if(node4->is_Load_Address_Generator()) 
                   node4 = node4->get_Related_Node();
               }
@@ -4421,7 +4425,8 @@ Default:
             }
 
             // Mahesh: Make arcs. If one of the inputs is a select node, then the operand order changes.
-            if (node2->get_Instruction() == cond_select || node4->get_Instruction() == cond_select) {
+            // order needs debugging, use if op is in bb
+            /*if (node2->get_Instruction() == cond_select || node4->get_Instruction() == cond_select) {
               if(node2->get_Instruction() == cond_select) {
                 myDFG->make_Arc(node2, node3, EdgeID++, 0, TrueDep, 0);
                 myDFG->make_Arc(node4, node3, EdgeID++, 0, TrueDep, 1);
@@ -4432,7 +4437,10 @@ Default:
             } else {
               myDFG->make_Arc(node2, node3, EdgeID++, 0, TrueDep, 1);
               myDFG->make_Arc(node4, node3, EdgeID++, 0, TrueDep, 0);
-            }    
+            }*/
+            myDFG->make_Arc(node2, node3, EdgeID++, 0, TrueDep, 0);
+            myDFG->make_Arc(node4, node3, EdgeID++, 0, TrueDep, 1);
+
 
             //BasicBlock *commonParent = 
             // update condInst
