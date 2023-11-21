@@ -4115,20 +4115,22 @@ void epilog_adjustment(std::map<int,std::vector<std::pair<int,int>>> iteration_m
   if(epilog_size < 0) epilog_size = 0;
 }
 
-std::tuple<int**,std::map<int,std::map<int,int>>> generate_prolog_versions(std::map<int,std::vector<std::pair<int,int>>> iteration_map, int loopCtrl_node, int* num_versions, int* version_cycle){
-  
+std::tuple<int**,std::map<int,std::map<int,int>>> generate_prolog_versions(std::map<int,std::vector<std::pair<int,int>>> iteration_map, int loopCtrl_node, int* num_versions, int* version_cycle)
+{
   int loopCtrl_cycle = node_time_map_prolog[loopCtrl_node];
   cout << "Loop control cycle: " << loopCtrl_cycle << endl;
   (*num_versions) = 0;
-  for(int i=loopCtrl_cycle; i < (prolog_size/(X*Y)); i+=kernel_II)
+  for (int i=loopCtrl_cycle; i < (prolog_size/(X*Y)); i+=kernel_II)
     (*num_versions)++;
   cout << "Number of prolog versions: " << (*num_versions) << endl;
   int iteration_cycle = -1;
   int loopCtrl_iter_cycle = -1;
-  for(auto iter_it = iteration_map.begin(); iter_it != iteration_map.end(); ++iter_it){
-    if(iter_it->first > iteration_cycle) iteration_cycle = iter_it->first;
-    for(auto cycle_it = iter_it->second.begin(); cycle_it != iter_it->second.end() && loopCtrl_iter_cycle == -1; ++cycle_it)
-      if(cycle_it->first == loopCtrl_node) loopCtrl_iter_cycle = iter_it->first;
+  for (auto iter_it = iteration_map.begin(); iter_it != iteration_map.end(); ++iter_it) {
+    if (iter_it->first > iteration_cycle) 
+      iteration_cycle = iter_it->first;
+    for (auto cycle_it = iter_it->second.begin(); cycle_it != iter_it->second.end() && loopCtrl_iter_cycle == -1; ++cycle_it)
+      if (cycle_it->first == loopCtrl_node) 
+        loopCtrl_iter_cycle = iter_it->first;
   }
   FATAL(iteration_cycle == -1 || loopCtrl_iter_cycle == -1, "Fatal: Cannot find iteration cycle or loopCtrl_iter_cycle.");
 
@@ -4136,24 +4138,24 @@ std::tuple<int**,std::map<int,std::map<int,int>>> generate_prolog_versions(std::
   cout << "Iteration cycle: " << iteration_cycle << " - loopCtrl_iter_cycle: " << loopCtrl_iter_cycle << endl;
   (*version_cycle) = iteration_cycle - loopCtrl_iter_cycle;
   int** ret = new int*[(*num_versions)];
-  for(int version_i = 0; version_i < (*num_versions); version_i++){
+  for (int version_i = 0; version_i < (*num_versions); version_i++) {
     ret[version_i] = new int[(iteration_cycle - loopCtrl_iter_cycle)*X*Y + final_livevar_store_size];
-    for(int j = 0; j < (iteration_cycle - loopCtrl_iter_cycle)*X*Y; j++)
+    for (int j = 0; j < (iteration_cycle - loopCtrl_iter_cycle)*X*Y; j++)
       ret[version_i][j] = -1;
     
-    for(int prolog_cycle_i = loopCtrl_iter_cycle+1; prolog_cycle_i <= iteration_cycle; prolog_cycle_i++){
+    for (int prolog_cycle_i = loopCtrl_iter_cycle+1; prolog_cycle_i <= iteration_cycle; prolog_cycle_i++) {
       std::vector<std::vector<std::pair<int,int>>> cycle_node_pe;
-      for(int stage_i = prolog_cycle_i, version_j = 0; stage_i <= iteration_cycle && version_j <= version_i; stage_i+=kernel_II){
-	cycle_node_pe.push_back(iteration_map[stage_i]);
-	version_j++;
+      for (int stage_i = prolog_cycle_i, version_j = 0; stage_i <= iteration_cycle && version_j <= version_i; stage_i+=kernel_II) {
+        cycle_node_pe.push_back(iteration_map[stage_i]);
+        version_j++;
       }
       
-      for(auto cycle_it = cycle_node_pe.begin(); cycle_it != cycle_node_pe.end(); ++cycle_it)
-	for(auto node_it = (*cycle_it).begin(); node_it != (*cycle_it).end(); ++node_it){
-	  int pe = node_it->second;
-	  int index = (prolog_cycle_i - loopCtrl_iter_cycle -1)*X*Y + pe;
-	  ret[version_i][index] = node_it->first;
-	}
+      for (auto cycle_it = cycle_node_pe.begin(); cycle_it != cycle_node_pe.end(); ++cycle_it)
+        for (auto node_it = (*cycle_it).begin(); node_it != (*cycle_it).end(); ++node_it) {
+          int pe = node_it->second;
+          int index = (prolog_cycle_i - loopCtrl_iter_cycle -1)*X*Y + pe;
+          ret[version_i][index] = node_it->first;
+        }
     }
   }
 
@@ -4162,20 +4164,20 @@ std::tuple<int**,std::map<int,std::map<int,int>>> generate_prolog_versions(std::
   // Then go down II cycles and iterate up to count again for next version
   // Repeat for (*num_versions) times
   std::map<int,std::map<int,int>> prolog_version_phi_counter_map; // prolog version to phi node_id to counter
-  for(int version_i = 0; version_i < (*num_versions); version_i++){
-    for(int cycle_i = loopCtrl_cycle + (kernel_II * version_i); cycle_i >= 0; cycle_i--){
-      for(int x=X-1; x>=0; x--)
-	for(int y=Y-1; y>=0; y--){
-	  int node_id = prolog[cycle_i*X*Y + x*X + y];
-	  if(node_id != -1 && getNodeType(node_id) == cgra_select){
-	    int counter = prolog_version_phi_counter_map[version_i][node_id];
-	    counter++;
-	    prolog_version_phi_counter_map[version_i][node_id] = counter;
-	  }
-	}
+  for (int version_i = 0; version_i < (*num_versions); version_i++) {
+    for (int cycle_i = loopCtrl_cycle + (kernel_II * version_i); cycle_i >= 0; cycle_i--) {
+      for (int x=X-1; x>=0; x--)
+        for (int y=Y-1; y>=0; y--) {
+          int node_id = prolog[cycle_i*X*Y + x*X + y];
+          if (node_id != -1 && getNodeType(node_id) == cgra_select) {
+            int counter = prolog_version_phi_counter_map[version_i][node_id];
+            counter++;
+            prolog_version_phi_counter_map[version_i][node_id] = counter;
+          }
+        }
     }
   }
-  
+   
   return std::make_tuple(ret,prolog_version_phi_counter_map);
 }
 
