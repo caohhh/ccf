@@ -5071,7 +5071,7 @@ Default:
         return false;
 
       bool HasPragma = HasCGRAEnablePragma(L);
-      if(!HasPragma)
+      if (!HasPragma)
         return false;
 
       // We can only remove the loop if there is a preheader that we can
@@ -5080,10 +5080,9 @@ Default:
 
       if (!Preheader) {
         return false;
-      }
-      else {
-	if(DEBUG)
-		errs() << "preheader function name: " << Preheader->getParent()->getName() << "\n";
+      } else {
+        if(DEBUG)
+          errs() << "preheader function name: " << Preheader->getParent()->getName() << "\n";
       }
 
       // If LoopSimplify form is not available, stay out of trouble.
@@ -5108,8 +5107,7 @@ Default:
 
       //std::cout << "Loop has \tDepth=" << L->getLoopDepth() << "\tNumber of BBs=" << bbs.size() << " With one exiting branch\n";
 
-      if(!canExecuteOnCGRA(L,bbs,Preheader,ExitBlk))
-      {
+      if(!canExecuteOnCGRA(L,bbs,Preheader,ExitBlk)) {
         SetLoopAlreadyIterated(L);
         return false;
       }
@@ -5134,52 +5132,43 @@ Default:
       newPath = "./CGRAExec/L" + osLoopID.str() + "/livein_edge.txt";
       liveInEdgefile.open(newPath.c_str());
 
-      for (int i = 0; i < (int) bbs.size(); i++)
-      {
-	errs() << "runOnLoop::4041: instructions @ bbs[" << i << "]:\n";
-        for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI)
-        {
+      for (int i = 0; i < (int) bbs.size(); i++) {
+        errs() << "runOnLoop::4041: instructions @ bbs[" << i << "]:\n";
+        for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI) {
           errs() << "\tAdding " << *BI << "\n";
           if (!Add_Node(&(*BI), myDFG, L->getHeader()))
             return false;
         }
       }
 
-      if(DEBUG){
-	errs() << "Done adding node\nAdded structs:\n";
-	for(auto struct_it = map_struct_size.begin(); struct_it != map_struct_size.end(); ++struct_it){
-	  errs() << "Name: " << struct_it->first << " - size: " << struct_it->second << " - member sizes: {";
-	  for(auto member_it = map_struct_member_size[struct_it->first].begin(); member_it != map_struct_member_size[struct_it->first].end(); ++member_it)
-	    errs() << *member_it << ", ";
-	  errs() << "}\n";
-	}
+      if (DEBUG) {
+        errs() << "Done adding node\nAdded structs:\n";
+        for (auto struct_it = map_struct_size.begin(); struct_it != map_struct_size.end(); ++struct_it) {
+          errs() << "Name: " << struct_it->first << " - size: " << struct_it->second << " - member sizes: {";
+          for (auto member_it = map_struct_member_size[struct_it->first].begin(); member_it != map_struct_member_size[struct_it->first].end(); ++member_it)
+            errs() << *member_it << ", ";
+          errs() << "}\n";
+        }
       }
 
-      if(DEBUG) 
-      {
+      if (DEBUG) {
         errs() << "Add nodes complete\n";
         for (int i = 0; i < (int) bbs.size(); i++) 
-          for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI)
-          {
-            if (myDFG->get_Node(&(*BI)) != NULL)
-            {
+          for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI) {
+            if (myDFG->get_Node(&(*BI)) != NULL) {
               errs() << "Ins: " << *BI << "\n";
               errs() << "node: " << myDFG->get_Node(&(*BI))->get_ID() << "\n\n";
             }
           }
       }
 
-      for (int i = 0; i < (int) bbs.size(); i++)
-      {
-        for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI)
-        {
-          if (myDFG->get_Node(&(*BI)) != NULL)
-          {
+      for (int i = 0; i < (int) bbs.size(); i++) {
+        for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI) {
+          if (myDFG->get_Node(&(*BI)) != NULL) {
             SmallVector<BasicBlock *, 10> ExitBlks;
             std::vector<BasicBlock *> LoopExitBlks;
             L->getExitBlocks(ExitBlks);
-            for(unsigned int itt = 0; itt < ExitBlks.size(); itt++)
-            {
+            for(unsigned int itt = 0; itt < ExitBlks.size(); itt++) {
               LoopExitBlks.push_back(ExitBlks[itt]);
             }
             M = L->getLoopPreheader()->getParent()->getParent();
@@ -5188,12 +5177,9 @@ Default:
         }
       }  
       errs() << "Update livein complete\n";
-      for (int i = 0; i < (int) bbs.size(); i++)
-      {
-        for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI)
-        {
-          if (myDFG->get_Node(&(*BI)) != NULL)
-          {
+      for (int i = 0; i < (int) bbs.size(); i++) {
+        for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI) {
+          if (myDFG->get_Node(&(*BI)) != NULL) {
             if (!Update_Data_Dependencies(&(*BI), myDFG, bbs,L->getLoopLatch(), L->getHeader() ))
               return false;
           }
@@ -5213,8 +5199,9 @@ Default:
       liveoutEdgefile.open(newPath.c_str());
 
       unsigned TripCount = calculateLoopTC(L, SE);
-      if(DEBUG) errs() << "Calculated trip count: " << TripCount << "\n";
-      if(TripCount != 0)
+      if (DEBUG) 
+        errs() << "Calculated trip count: " << TripCount << "\n";
+      if (TripCount != 0)
         dynamicTC = false;
 
       //Write TripCount in file
@@ -5224,52 +5211,46 @@ Default:
       lpTCfile << TripCount;
       lpTCfile.close();
 
-      if(DEBUG) {
-	errs() << "closed all files\n";
-	errs() << "updated TC: " << TripCount << "\n";
-	errs() << "dynamicTC: " << dynamicTC << "\n";
+      if (DEBUG) {
+        errs() << "closed all files\n";
+        errs() << "updated TC: " << TripCount << "\n";
+        errs() << "dynamicTC: " << dynamicTC << "\n";
       }
-      if(dynamicTC)
-      {
+      if (dynamicTC) {
         // TODO: If there are multiple exiting blocks, how to find the condition variable for dynamic TC loops
         // May be a hierarchy of select operations can help
         // In such case, need to exit even if a single condition is true, ensuring we exit from loop
-	if(DEBUG)
-	  errs() << "before getLoopExitBranch\n";
+        if (DEBUG)
+          errs() << "before getLoopExitBranch\n";
         getLoopExitBranch(ExitBlocks[0]);
 
         // Need to determine if trip-count is known at run-time
         // If yes, generate corresponding variables and calculate TC
         // If not, pad unsafe operations with selection instructions
-        if(isTCknownAtLoopEntry(bbs))  // New version does not need to predicate result for dynamicTC
-        {
+        if (isTCknownAtLoopEntry(bbs)) { // New version does not need to predicate result for dynamicTC
           PHINode *indsvar = getInductionVariable(L,SE,DT);
           //calculateTCDynamically(indsvar, bbs, Preheader);
           dynamicTC = false;
         }
-	dynamicTC = false;
+        dynamicTC = false;
       }  
 
       // NOTE: Comparison and testing for dynamicTCVal. Debug calculateTCDynamically.
       // What happens if TCVal was not able to execute? 
 
       errs() << "completed dynamic TC\n"; 
-      for (int i = 0; i < (int) bbs.size(); i++)
-      {
-        for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI)
-        {
-          if (myDFG->get_Node(&(*BI)) != NULL)
-          {
+      for (int i = 0; i < (int) bbs.size(); i++) {
+        for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI) {
+          if (myDFG->get_Node(&(*BI)) != NULL) {
             SmallVector<BasicBlock *, 10> ExitBlks;
             std::vector<BasicBlock *> LoopExitBlks;
             L->getExitBlocks(ExitBlks);
-            for(unsigned int itt = 0; itt < ExitBlks.size(); itt++)
-            {
+            for(unsigned int itt = 0; itt < ExitBlks.size(); itt++) {
               LoopExitBlks.push_back(ExitBlks[itt]);
             } 
             retVal |= Update_LiveOut_Variables(&(*BI), myDFG, bbs, LoopExitBlks);
-          }
-	  else errs() << "Node for " << (*BI) << " not found!\n";
+          } else 
+            errs() << "Node for " << (*BI) << " not found!\n";
         }
       } 
 
@@ -5344,7 +5325,8 @@ Default:
 
       // Rewrite phis in the exit block to get their inputs from
       // the newBB instead of the exiting block.
-      if(DEBUG) errs() << "Attempting to rewrite PHI nodes in exit block\n";
+      if(DEBUG) 
+        errs() << "Attempting to rewrite PHI nodes in exit block\n";
       BasicBlock *ExitingBlock = ExitingBlocks[0];
       BasicBlock::iterator BI = ExitBlk->begin();
       while (PHINode *P = dyn_cast<PHINode>(BI)) {
@@ -5358,7 +5340,8 @@ Default:
 
       // Update the dominator tree and remove the instructions and blocks that will
       // be deleted from the reference counting scheme.
-      if(DEBUG) errs() << "Updating dominator tree and removing instructions\n";
+      if(DEBUG) 
+        errs() << "Updating dominator tree and removing instructions\n";
       SmallVector<DomTreeNode*, 8> ChildNodes;
       for (Loop::block_iterator LI1 = L->block_begin(), LE = L->block_end();
            LI1 != LE; ++LI1) {
@@ -5370,8 +5353,9 @@ Default:
         }
 
         BasicBlock * bb = *LI1;
-        for(BasicBlock::iterator II = bb->begin(); II != bb->end(); ++II) {
-           if(DEBUG) errs() << "Dropping references\n";
+        for (BasicBlock::iterator II = bb->begin(); II != bb->end(); ++II) {
+           if (DEBUG) 
+            errs() << "Dropping references\n";
            Instruction * insII = &(*II);
            insII->dropAllReferences();
         }
@@ -5388,7 +5372,8 @@ Default:
       // about ordering because we already dropped the references.
       // NOTE: This iteration is safe because erasing the block does not remove its
       // entry from the loop's block list.  We do that in the next section.
-      if(DEBUG) errs() << "Erasing instructions without caring about references\n";
+      if(DEBUG) 
+        errs() << "Erasing instructions without caring about references\n";
       for (Loop::block_iterator LI1 = L->block_begin(), LE = L->block_end();
            LI1 != LE; ++LI1)
         (*LI1)->eraseFromParent();
@@ -5396,7 +5381,8 @@ Default:
       // Finally, erase the blocks from loopinfo.
       // This has to happen late because
       // otherwise our loop iterators won't work.
-      if(DEBUG) errs() << "Erasing loopinfo\n";
+      if(DEBUG) 
+        errs() << "Erasing loopinfo\n";
       SmallPtrSet<BasicBlock *, 8> blocks;
       blocks.insert(L->block_begin(), L->block_end());
       for (BasicBlock *BB : blocks)
@@ -5409,13 +5395,17 @@ Default:
       //Let's insert function call in place of the loop
       Constant *hookFunc;
       hookFunc = M->getFunction("accelerateOnCGRA");
-      if(DEBUG) errs() << "hookFunc is " << hookFunc << "\n";
+      if(DEBUG) 
+        errs() << "hookFunc is " << hookFunc << "\n";
       hook= cast<Function>(hookFunc);
       Value *LoopNumber = ConstantInt::get(Type::getInt32Ty(M->getContext()), TotalLoops);
-      if(DEBUG) errs() << "Loop Number is " << *LoopNumber << "\n";
+      if(DEBUG) 
+        errs() << "Loop Number is " << *LoopNumber << "\n";
       Instruction *newInst = CallInst::Create(hook, LoopNumber, "");
-      if(DEBUG) errs() << "newInst = " << newInst << "\n";
-      if(DEBUG) errs() << "the BB = " << &newBB->getInstList() << "\n";
+      if(DEBUG) 
+        errs() << "newInst = " << newInst << "\n";
+      if(DEBUG) 
+        errs() << "the BB = " << &newBB->getInstList() << "\n";
       newBB->getInstList().push_front(newInst);
 
       // Update total Number of Loops
@@ -5425,7 +5415,8 @@ Default:
       totalLoopsfile << TotalLoops;
       totalLoopsfile.close();
 
-      if(DEBUG) errs() << "runOnLoop went well\n"; 
+      if(DEBUG) 
+        errs() << "runOnLoop went well\n"; 
 
       delete myDFG;return true; //retVal;
     }
