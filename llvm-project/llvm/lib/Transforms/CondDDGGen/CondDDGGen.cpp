@@ -827,9 +827,8 @@ Default:
 
 
       bool usedOutside = false;
-      for(auto U : BI->users()){  // U is of type User*
-
-        if(auto Inst = dyn_cast<Instruction>(U)){
+      for (auto U : BI->users()) {  // U is of type User*
+        if (auto Inst = dyn_cast<Instruction>(U)) {
           // an instruction uses Value
           // Ensure that the use is outside of the BBs of loop
           if ( std::find(bbs.begin(), bbs.end(), Inst->getParent()) == bbs.end() )
@@ -837,16 +836,15 @@ Default:
         }
       }
 
-      if (!usedOutside) return IRChanged; 
+      if (!usedOutside) 
+        return IRChanged; 
       std::map<Instruction *, std::string>::iterator it;
       it = map_instn_defn_liveout_to_load.find(BI);
-      if (it != map_instn_defn_liveout_to_load.end() )
-      {
+      if (it != map_instn_defn_liveout_to_load.end() ) {
         return IRChanged;
       }
 
-      if(DEBUG)
-      {
+      if (DEBUG) {
         errs() << "we are in liveout update\n";
         errs() << "Ins: " << *BI << "\n";
       }
@@ -855,8 +853,7 @@ Default:
       //errs() << "before new store\n";
       newStore = getLiveOutToBeStored(BI, bbs, LoopLatchExitBlks);
       //errs() << "after get liveout store\n"; 
-      if(newStore == NULL)
-      {
+      if (newStore == NULL) {
         std::string gPtrName;
         Value *v = dyn_cast<Value>(BI);
         Type* T = v->getType();
@@ -864,14 +861,13 @@ Default:
         alignment = 4;
         llvm::Datatype dt; 
 
-        if(T->isIntegerTy() || T->isFloatingPointTy())
-        {
+        if (T->isIntegerTy() || T->isFloatingPointTy()) {
           gPtrName = "gVar" + std::to_string(++gVarNo);
           // Create new global pointer
           gPtr = new GlobalVariable(*M, T, false, GlobalValue::CommonLinkage, 0, gPtrName);
           Constant *constVal = Constant::getNullValue(T);
           gPtr->setInitializer(constVal);
-          if(T->getPrimitiveSizeInBits() % 8 == 0)
+          if (T->getPrimitiveSizeInBits() % 8 == 0)
             alignment = (T->getPrimitiveSizeInBits())/8;
           else
             alignment = T->getPrimitiveSizeInBits() %8;
@@ -882,50 +878,42 @@ Default:
           // so if the Integer type is divisble by 8 then we can classify them as int or floats
           // This else statement says use char as Primitive size. Change this if you face any errors.
           // Char should be 1-byte aligned and short should be 2-byte aligned.
-        }
-        else if(T->isPointerTy())
-        { 
+        } else if (T->isPointerTy()) { 
           gPtrName = "gPtr" + std::to_string(++gPtrNo);
           //PointerType* PointerTy_0 = dyn_cast<PointerType>(T);// PointerType::get(T, 0);
           // find the element type
           PointerType* PT = dyn_cast<PointerType>(T);
 	  
           int bit_width;
-          if(PT != nullptr)
-          { 
-            if(PT->getPrimitiveSizeInBits() % 8 == 0)
+          if (PT != nullptr) { 
+            if (PT->getPrimitiveSizeInBits() % 8 == 0)
               bit_width = (PT->getElementType()->getPrimitiveSizeInBits())/8;
             else
               bit_width = PT->getElementType()->getPrimitiveSizeInBits() %8;
 
-	    if(bit_width == 4)
-            {
-              if(PT->getElementType()->isFloatingPointTy())
+            if (bit_width == 4) {
+              if (PT->getElementType()->isFloatingPointTy())
                 dt = float32;
               else
                 dt = int32;  
-            }
-            else if(bit_width == 8)
+            } else if (bit_width == 8)
               dt = float64;
-            else if(bit_width < 4)
+            else if (bit_width < 4)
               dt = character;
-          }
-          else
-          {
-            if(T->getPrimitiveSizeInBits() % 8 == 0)
+          } else {
+            if (T->getPrimitiveSizeInBits() % 8 == 0)
               bit_width = (T->getPrimitiveSizeInBits())/8;
             else
               bit_width = T->getPrimitiveSizeInBits() %8;
-            if(bit_width == 4)
-            {
+            if (bit_width == 4) {
               if(T->isIntegerTy())
                 dt = int32;
               else
                 dt = float32;
             }
-            else if(bit_width == 8)
+            else if (bit_width == 8)
               dt = float64;
-            else if(bit_width < 4)
+            else if (bit_width < 4)
               dt = character;
           }
 
@@ -933,11 +921,13 @@ Default:
           ConstantPointerNull* const_ptr_2 = ConstantPointerNull::get(PT);
           gPtr->setInitializer(const_ptr_2);
           alignment = T->getPointerAddressSpace();
-          if(alignment < 4) alignment = 4;
+          if (alignment < 4) 
+            alignment = 4;
         }
-        if(alignment == 0)
+        if (alignment == 0)
           errs() << "WARNING: Update_LiveOut_Variable: Cannot find size of the memory access for live-out variable\n";
-	if(DEBUG) errs() << "  Aligment: " << alignment << "\n";
+        if(DEBUG) 
+          errs() << "  Aligment: " << alignment << "\n";
         gPtr->setUnnamedAddr(GlobalValue::UnnamedAddr::Local);
         node = new NODE(constant, 1, ((NodeID++)+100), gPtrName, gPtr);
         node->setAlignment(alignment);
@@ -945,29 +935,27 @@ Default:
         myDFG->insert_Node(node);
         ptr = gPtr;
         storeVariable = gPtrName;
-      }
-      // Find the store node, if not found track it using successors in the next block
-      else
-      {
-        if(DEBUG)
+      } else {
+        // Find the store node, if not found track it using successors in the next block
+        if (DEBUG)
           errs() << "else store in not null\n";
         ptr = newStore->getPointerOperand();
         Value *v = dyn_cast<Value>(BI);
         Type* T = v->getType();
-        if(ptr == NULL) return false;
+        if (ptr == NULL) 
+          return false;
         IRChanged = true;
         storeVariable = ptr->getName().str();
         node = myDFG->get_Node(ptr);
         std::vector<NODE*> setofNodes = myDFG->getSetOfVertices();
-        for(unsigned int i=0; i < setofNodes.size(); i++)
-        {
+        for (unsigned int i=0; i < setofNodes.size(); i++) {
           if(setofNodes[i]->get_Name() == storeVariable)
             node = setofNodes[i];
         }
-        if(node == NULL) {
+        if (node == NULL) {
           node = new NODE(constant, 1, ((NodeID++)+100), storeVariable, ptr);
           llvm::Datatype dt;  
-          if(T->getPrimitiveSizeInBits() % 8 == 0)
+          if (T->getPrimitiveSizeInBits() % 8 == 0)
             alignment = (T->getPrimitiveSizeInBits())/8;
           else
             alignment = T->getPrimitiveSizeInBits() %8;
@@ -975,7 +963,6 @@ Default:
           dt = get_Datatype(T, alignment);
           node->setDatatype(dt);
           myDFG->insert_Node(node);
-
         }
       }
 
@@ -983,20 +970,21 @@ Default:
       map_instn_defn_liveout_to_load[BI] = storeVariable;
       map_liveout_to_alignment[storeVariable] = alignment;
       NODE *outputNode = myDFG->get_Node(BI);
-      if(outputNode->get_Instruction() == ld_add) outputNode = outputNode->get_Related_Node();
+      if (outputNode->get_Instruction() == ld_add) 
+        outputNode = outputNode->get_Related_Node();
 
       // Hardware model does not support pred insts (cond_select nodes) to store data to register and hence cannot be used for liveout, following statements add a routing node from such nodes to support liveout data
-      if(outputNode->get_Instruction() == cond_select){ 
-	NODE* route_node = new NODE(add, 1, NodeID++, "route", NULL);
-	route_node->setDatatype(outputNode->getDatatype());
-	myDFG->insert_Node(route_node);
-	myDFG->make_Arc(outputNode, route_node, EdgeID++, 0, TrueDep, 0);
-	outputNode = route_node;
+      if (outputNode->get_Instruction() == cond_select) { 
+        NODE* route_node = new NODE(add, 1, NodeID++, "route", NULL);
+        route_node->setDatatype(outputNode->getDatatype());
+        myDFG->insert_Node(route_node);
+        myDFG->make_Arc(outputNode, route_node, EdgeID++, 0, TrueDep, 0);
+        outputNode = route_node;
       }
       
-      if(DEBUG) errs() << "  outputNode: " << outputNode->get_Name() << "\n";
-      if(dynamicTC)
-      {
+      if (DEBUG) 
+        errs() << "  outputNode: " << outputNode->get_Name() << "\n";
+      if (dynamicTC) {
         NODE *exitCond = myDFG->get_Node(dyn_cast<Instruction>(loopExitBranch->getCondition()));
 
         //TODO: If loop exit condition is at top of loop BBs, avoid phi below
@@ -1010,7 +998,8 @@ Default:
         outputNode = padUnsafeLiveOutOperationsWithSelects(myDFG, outputNode, exitCond, bbs);
       }
 
-      if(DEBUG) errs() << "  Make_arc: outputNode: " << outputNode->get_Name() << " -> node: " <<  node->get_Name() << "\n";
+      if(DEBUG) 
+        errs() << "  Make_arc: outputNode: " << outputNode->get_Name() << " -> node: " <<  node->get_Name() << "\n";
       myDFG->make_Arc(outputNode, node, EdgeID++, 0, LiveOutDataDep, 0);
 
       unsigned int CGRA_ConstantID = node->get_ID();
@@ -1044,9 +1033,8 @@ Default:
 
       BasicBlock* LoadInsertedBB, *currentBB;
       // See if need to load and modify the operands of the successors
-      for(auto U : BI->users()){  // U is  f type User*
-        if(auto Inst = dyn_cast<Instruction>(U))
-        {
+      for (auto U : BI->users()) {  // U is  f type User*
+        if(auto Inst = dyn_cast<Instruction>(U)) {
           currentBB = Inst->getParent();
 
           //this ensures that the load instructions are added to the 
@@ -1064,18 +1052,12 @@ Default:
 
           //delete instance of the store
           if((Inst->getOpcode() == Instruction::Store) &&
-              (dyn_cast<llvm::GlobalValue>(Inst)))
-          {
-
+              (dyn_cast<llvm::GlobalValue>(Inst))) {
             //errs() << "gVarNo: " << gVarNo << "\t erase from Parent\n";
             Inst->eraseFromParent();
             break;
-          }
-          else
-          {
-
-            if(Inst->getOpcode() == Instruction::PHI)
-            { 
+          } else {
+            if (Inst->getOpcode() == Instruction::PHI) { 
               // Create new BB between LoopLatchExit and the block where PHI is located
               // Insert load instruction in newly created BB
 
@@ -1089,23 +1071,18 @@ Default:
 
               std::map<BasicBlock *, BasicBlock *>::iterator it;
               it = map_liveout_destnBB_newBB.find(destinationBB);
-              if (it != map_liveout_destnBB_newBB.end() )
-              {
+              if (it != map_liveout_destnBB_newBB.end() ) {
                 newBB = it->second;
-              }
-              else
-              {
-                if(DEBUG)
+              } else {
+                if (DEBUG)
                   errs() << "New BB create else\n";
                 newBB = newBB->Create(destinationBB->getContext(), "", destinationBB->getParent(), nullptr);
 
                 BasicBlock *sourceBB = BI->getParent();
                 // Find out the BB from which the live-out value is coming from
                 PHINode *phiInst = dyn_cast<PHINode>(Inst);
-                for(unsigned i=0; i < phiInst->getNumIncomingValues(); i++)
-                {
-                  if(dyn_cast<Instruction>(phiInst->getIncomingValue(i)) == BI)
-                  {
+                for (unsigned i=0; i < phiInst->getNumIncomingValues(); i++) {
+                  if (dyn_cast<Instruction>(phiInst->getIncomingValue(i)) == BI) {
                     sourceBB = phiInst->getIncomingBlock(i);
                     break;
                   }
@@ -1116,14 +1093,12 @@ Default:
                 sourceBB->replaceSuccessorsPhiUsesWith(newBB);
 
                 //update newBB as successor of sourceBB
-                for(BasicBlock::iterator BI_temp = sourceBB->begin(); BI_temp !=sourceBB->end(); ++BI_temp)
-                {
-                  if(BI_temp->getOpcode() != Instruction::Br)
+                for (BasicBlock::iterator BI_temp = sourceBB->begin(); BI_temp !=sourceBB->end(); ++BI_temp) {
+                  if (BI_temp->getOpcode() != Instruction::Br)
                     continue;
 
                   BranchInst* tempBrInst = dyn_cast<llvm::BranchInst>(BI_temp);
-                  for(unsigned ii=0; ii < tempBrInst->getNumSuccessors(); ii++)
-                  {
+                  for (unsigned ii=0; ii < tempBrInst->getNumSuccessors(); ii++) {
                     if(tempBrInst->getSuccessor(ii) == destinationBB)
                       tempBrInst->setSuccessor(ii, newBB);
                   }
@@ -1141,7 +1116,7 @@ Default:
               }
 
               //TerminatorInst *TI = newBB->getTerminator();
-	      auto *TI = newBB->getTerminator();
+              auto *TI = newBB->getTerminator();
               //errs() << "term instr: " << *TI << "\n";
               loadGlobal = new LoadInst(Inst->getType(),ptr, "", TI);
               map_replace_liveout_use[Inst] = loadGlobal;
@@ -1154,32 +1129,28 @@ Default:
               //errs() << "sourceBB: \n";
               //for(BasicBlock::iterator mitt = sourceBB->begin(); mitt!=sourceBB->end(); ++mitt)
               // errs() << *mitt << "\n";
-            }
-            else
-            { 
+            } else { 
               // Make all instructions that referred to BI now refer to loadGlobal as their source.
               // if load not inserted add load node in the destination BB. 
               // Usually the we add the load instruction of the loadGlobal just before the Inst.
               // But this causes the "Instruction Does not Dominate all uses!" error.
               // So we find the top first non phi node of the BB and insert the load. 
-              if(!loadInserted)
-              {
-                if(DEBUG)
+              if (!loadInserted) {
+                if (DEBUG)
                   errs() << "if load not inserted!\n";
                 BasicBlock *destinationBB = Inst->getParent();
                 Instruction *FirstNonPhi = destinationBB->getFirstNonPHI();
-		Type *T = ptr->getType();
+                Type *T = ptr->getType();
 
-		if(T->isPointerTy())
-		{
-		   //PointerType* PointerTy_0 = dyn_cast<PointerType>(T);// PointerType::get(T, 0);
-                   // find the element type
-                   PointerType* PT = dyn_cast<PointerType>(T);
-                   if(DEBUG) errs() << "found array type\n";
+                if (T->isPointerTy()) {
+                  //PointerType* PointerTy_0 = dyn_cast<PointerType>(T);// PointerType::get(T, 0);
+                  // find the element type
+                  PointerType* PT = dyn_cast<PointerType>(T);
+                  if (DEBUG) 
+                    errs() << "found array type\n";
                   loadGlobalNonPhi = new LoadInst(PT->getElementType(), ptr, storeVariable, FirstNonPhi);
-		}
-		else
-                 loadGlobalNonPhi = new LoadInst(ptr->getType(),ptr, storeVariable, FirstNonPhi);
+                } else
+                  loadGlobalNonPhi = new LoadInst(ptr->getType(),ptr, storeVariable, FirstNonPhi);
                 loadInserted = true;
                 LoadInsertedBB = destinationBB;  
               }
@@ -1195,9 +1166,8 @@ Default:
       // replace use with load instruction
 
       std::map<Instruction*, Instruction*>::iterator itt;
-      for(itt = map_replace_liveout_use.begin(); itt != map_replace_liveout_use.end(); itt++)
-      { 
-        if(DEBUG)
+      for (itt = map_replace_liveout_use.begin(); itt != map_replace_liveout_use.end(); itt++) { 
+        if (DEBUG)
           errs() << "inside updating load instructions\t" << *(itt->first) << "\t" << *(itt->second) << "\n";
         (itt->first)->replaceUsesOfWith(BI,dyn_cast<Value>(itt->second));
       }
@@ -4756,6 +4726,8 @@ Default:
           if(loopCtrlNode->is_Connected_To(temp))
             continue;
         }*/
+        if(DEBUG) 
+          errs() << "  Currently on node: " << myDFG->get_Node(it->first)->get_Name() << "\n";
         if (temp->get_Instruction() == ld_data) 
           temp = temp->get_Related_Node();
         std::vector<NODE*> temp_prev = temp->Get_Prev_Nodes();
