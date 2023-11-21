@@ -3,6 +3,10 @@
 *.ll
 
 /fibonacci/fibonacci
+/primality/prime
+/simple_loop/loop
+/max/max
+
 
 /*/out
 
