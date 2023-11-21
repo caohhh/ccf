@@ -4723,60 +4723,71 @@ Default:
     /* Added by Vinh TA
        This function makes edges from a unique loop control node to liveOut nodes to be later used by mapping algos to enforce mapping constraints
      */
-    NODE* Update_Loop_Control(std::vector<BasicBlock *> bbs, BasicBlock* ExitBlock, DFG* myDFG){
-      if(DEBUG)	errs() << "Inside update_loop_control\n";
-      
-      
+    NODE* Update_Loop_Control (std::vector<BasicBlock *> bbs, BasicBlock* ExitBlock, DFG* myDFG)
+    {
+      if (DEBUG)	
+        errs() << "Inside update_loop_control\n";
+
       BasicBlock::reverse_iterator branchinst = bbs[(int)bbs.size()-1]->rbegin();
-      if(DEBUG) errs() << " loop_branch_inst: " << *branchinst << "\n";
+      if (DEBUG) 
+        errs() << " loop_branch_inst: " << *branchinst << "\n";
       
       Instruction* op0_inst = cast<Instruction>(branchinst->getOperand(0));
-      if(op0_inst == NULL) return NULL;
+      if (op0_inst == NULL) 
+        return NULL;
       
-      if(DEBUG) errs() << " branch_inst_pred: " << *op0_inst << "\n";
+      if (DEBUG) 
+        errs() << " branch_inst_pred: " << *op0_inst << "\n";
       NODE* loopCtrlNode;
-      if(myDFG->get_Node(op0_inst) != NULL){
-	loopCtrlNode = myDFG->get_Node(op0_inst);
-	if(DEBUG) errs() << "  branch_inst_pred node found: " << loopCtrlNode->get_Name() << "\n";
-      }else{
-	if(DEBUG) errs() << "  branch_inst_pred node not found!\n";
-	return NULL;
+      if (myDFG->get_Node(op0_inst) != NULL) {
+        loopCtrlNode = myDFG->get_Node(op0_inst);
+        if (DEBUG) 
+          errs() << "  branch_inst_pred node found: " << loopCtrlNode->get_Name() << "\n";
+      } else {
+        if (DEBUG) 
+          errs() << "  branch_inst_pred node not found!\n";
+        return NULL;
       }
 
       std::vector<llvm::NODE*> LiveOutNodes;
-      for(std::map<Instruction*, std::string>::iterator it = map_instn_defn_liveout_to_load.begin(); it != map_instn_defn_liveout_to_load.end(); ++it){
-	NODE* temp = myDFG->get_Node(it->first);
-	/*if(temp->get_Instruction() == cond_select){
-	  if(loopCtrlNode->is_Connected_To(temp))
-	    continue;
-	}*/
-	if(temp->get_Instruction() == ld_data) temp = temp->get_Related_Node();
-	std::vector<NODE*> temp_prev = temp->Get_Prev_Nodes();
+      for (std::map<Instruction*, std::string>::iterator it = map_instn_defn_liveout_to_load.begin(); it != map_instn_defn_liveout_to_load.end(); ++it) {
+        NODE* temp = myDFG->get_Node(it->first);
+        /*if(temp->get_Instruction() == cond_select){
+          if(loopCtrlNode->is_Connected_To(temp))
+            continue;
+        }*/
+        if (temp->get_Instruction() == ld_data) 
+          temp = temp->get_Related_Node();
+        std::vector<NODE*> temp_prev = temp->Get_Prev_Nodes();
 	
-	if(temp_prev.size() > 0 && temp_prev[0]->get_Instruction() == cond_select) continue;
-	if(temp_prev.size() > 1 && temp_prev[1]->get_Instruction() == cond_select) continue;
-	if(temp_prev.size() > 2 && temp_prev[2]->get_Instruction() == cond_select) continue;
+        if (temp_prev.size() > 0 && temp_prev[0]->get_Instruction() == cond_select) 
+          continue;
+        if (temp_prev.size() > 1 && temp_prev[1]->get_Instruction() == cond_select) 
+          continue;
+        if (temp_prev.size() > 2 && temp_prev[2]->get_Instruction() == cond_select) 
+          continue;
 	
-	LiveOutNodes.push_back(myDFG->get_Node(it->first));
-	if(DEBUG) errs() << "  Added: " << myDFG->get_Node(it->first)->get_Name() << "\n";
+        LiveOutNodes.push_back(myDFG->get_Node(it->first));
+        if(DEBUG) 
+          errs() << "  Added: " << myDFG->get_Node(it->first)->get_Name() << "\n";
       }
       
       std::vector<NODE*> allNodes = myDFG->getSetOfVertices();
-      for(std::vector<NODE*>::iterator it = allNodes.begin(); it != allNodes.end(); ++it)
-	if((*it)->is_Store_Data_Bus_Write()){
-	  // Filter out predicated stores
-	  //std::vector<NODE*> liveout_prev = (*it)->Get_Prev_Nodes();
-	  //if(liveout_prev[0]->is_Store_Address_Generator() && liveout_prev[1]->get_Instruction() == cond_select) continue;
-	  //if(liveout_prev[1]->is_Store_Address_Generator() && liveout_prev[0]->get_Instruction() == cond_select) continue;
+      for (std::vector<NODE*>::iterator it = allNodes.begin(); it != allNodes.end(); ++it)
+        if ((*it)->is_Store_Data_Bus_Write()) {
+          // Filter out predicated stores
+          //std::vector<NODE*> liveout_prev = (*it)->Get_Prev_Nodes();
+          //if(liveout_prev[0]->is_Store_Address_Generator() && liveout_prev[1]->get_Instruction() == cond_select) continue;
+          //if(liveout_prev[1]->is_Store_Address_Generator() && liveout_prev[0]->get_Instruction() == cond_select) continue;
+          LiveOutNodes.push_back(*it);
+          if(DEBUG) 
+            errs() << "  Added from stores: " << (*it)->get_Name() << "\n";
+        }
 
-	  LiveOutNodes.push_back(*it);
-	  if(DEBUG) errs() << "  Added from stores: " << (*it)->get_Name() << "\n";
-	}
-
-      if(DEBUG){
-	errs() << " Collected LiveOut nodes:\n";
-	for(std::vector<NODE*>::iterator it = LiveOutNodes.begin(); it != LiveOutNodes.end(); ++it)
-	  errs() << "  " << (*it)->get_Name() << " - #pred: "  << (*it)->get_Number_of_Pred() << "\n";
+      if (DEBUG) {
+        errs() << " Collected LiveOut nodes:\n";
+        for (std::vector<NODE*>::iterator it = LiveOutNodes.begin(); it != LiveOutNodes.end(); ++it)
+          errs() << "  " << (*it)->get_Name() << " - #pred: "  << (*it)->get_Number_of_Pred() << "\n";
       }
 
       // Detect circular graph when adding LCE
@@ -4793,68 +4804,68 @@ Default:
       //std::vector<NODE*> out2 = node2->Get_Next_Nodes();
 
       for(auto it = out1.begin(); it != out1.end(); ++it)
-	if((*it)->get_Name()[0] == 'g'){
-	  route1->setDatatype((*it)->getDatatype());
-	  ARC* arc_old = myDFG->get_Arc(node1, *it);
-	  myDFG->Remove_Arc(arc_old);
-	  myDFG->make_Arc(node1, route1, EdgeID++, 0, TrueDep, 0);
-	  myDFG->make_Arc(route1, *it, EdgeID++, 0, TrueDep, 0);
-	  LiveOutNodes[0] = route1;
-	}
+        if((*it)->get_Name()[0] == 'g'){
+          route1->setDatatype((*it)->getDatatype());
+          ARC* arc_old = myDFG->get_Arc(node1, *it);
+          myDFG->Remove_Arc(arc_old);
+          myDFG->make_Arc(node1, route1, EdgeID++, 0, TrueDep, 0);
+          myDFG->make_Arc(route1, *it, EdgeID++, 0, TrueDep, 0);
+          LiveOutNodes[0] = route1;
+        }
 
       for(auto it = out2.begin(); it != out2.end(); ++it)
-	if((*it)->get_Name()[0] == 'g'){
-	  ARC* arc_old = myDFG->get_Arc(node2, *it);
-	  myDFG->Remove_Arc(arc_old);
-	  myDFG->make_Arc(node2, route2, EdgeID++, 0, TrueDep, 0);
-	  myDFG->make_Arc(route2, *it, EdgeID++, 0, TrueDep, 0);
-	  LiveOutNodes[1] = route2;
-	}
+        if((*it)->get_Name()[0] == 'g'){
+          ARC* arc_old = myDFG->get_Arc(node2, *it);
+          myDFG->Remove_Arc(arc_old);
+          myDFG->make_Arc(node2, route2, EdgeID++, 0, TrueDep, 0);
+          myDFG->make_Arc(route2, *it, EdgeID++, 0, TrueDep, 0);
+          LiveOutNodes[1] = route2;
+        }
       
       std::vector<NODE*> loopCtrl_pred = loopCtrlNode->Get_Prev_Nodes();
       for(std::vector<NODE*>::iterator it = LiveOutNodes.begin(); it != LiveOutNodes.end(); ++it){
-	std::vector<NODE*> succ_nodes = (*it)->Get_Next_Nodes();
-	bool circular = false;
-	for(auto succ_it = succ_nodes.begin(); succ_it != succ_nodes.end(); ++succ_it){
-	  if((*succ_it)->get_ID() == loopCtrlNode->get_ID()){
-	    circular = true;
-	    break;
-	  }
-	  else{
-	    for(auto pred_it = loopCtrl_pred.begin(); pred_it != loopCtrl_pred.end(); ++pred_it){
-	      if((*succ_it)->get_ID() == (*pred_it)->get_ID()){
-		circular = true;
-		break;
-	      }
-	    }
-	  }
-	}
-	if(circular){
-	  if(DEBUG) errs() << "  ! Circular graph detected for loop control edge !\n";
-	  NODE* const0 = NULL;
-	  for(auto node_it = allNodes.begin(); node_it != allNodes.end(); ++node_it){
-	    if((*node_it)->get_Name().find("ConstInt0") != std::string::npos){
-	      const0 = *node_it;
-	      break;
-	    }
-	  }
+      std::vector<NODE*> succ_nodes = (*it)->Get_Next_Nodes();
+      bool circular = false;
+      for(auto succ_it = succ_nodes.begin(); succ_it != succ_nodes.end(); ++succ_it){
+        if((*succ_it)->get_ID() == loopCtrlNode->get_ID()){
+          circular = true;
+          break;
+        }
+        else{
+          for(auto pred_it = loopCtrl_pred.begin(); pred_it != loopCtrl_pred.end(); ++pred_it){
+            if((*succ_it)->get_ID() == (*pred_it)->get_ID()){
+        circular = true;
+        break;
+            }
+          }
+        }
+      }
+      if(circular){
+        if(DEBUG) errs() << "  ! Circular graph detected for loop control edge !\n";
+        NODE* const0 = NULL;
+        for(auto node_it = allNodes.begin(); node_it != allNodes.end(); ++node_it){
+          if((*node_it)->get_Name().find("ConstInt0") != std::string::npos){
+            const0 = *node_it;
+            break;
+          }
+        }
 
-	  if(const0 == NULL){
-	    const0 = new NODE(constant, 1, NodeID++, "ConstInt0", NULL);
-	    myDFG->insert_Node(const0);
-	  }
-	  
-	  NODE* temp = new NODE(add, 1, NodeID++, "DE_CIRCULAR" , NULL);
-	  myDFG->insert_Node(temp);
-	  myDFG->make_Arc((*it), temp, EdgeID++, 0, TrueDep, 0);
-	  myDFG->make_Arc(const0, temp, EdgeID++, 0, TrueDep, 1);
-	  LiveOutNodes.erase(it);
-	  LiveOutNodes.push_back(temp);
-	}
-	}*/
+        if(const0 == NULL){
+          const0 = new NODE(constant, 1, NodeID++, "ConstInt0", NULL);
+          myDFG->insert_Node(const0);
+        }
+        
+        NODE* temp = new NODE(add, 1, NodeID++, "DE_CIRCULAR" , NULL);
+        myDFG->insert_Node(temp);
+        myDFG->make_Arc((*it), temp, EdgeID++, 0, TrueDep, 0);
+        myDFG->make_Arc(const0, temp, EdgeID++, 0, TrueDep, 1);
+        LiveOutNodes.erase(it);
+        LiveOutNodes.push_back(temp);
+      }
+      }*/
 
-      for(std::vector<NODE*>::iterator it = LiveOutNodes.begin(); it != LiveOutNodes.end(); ++it){
-	myDFG->make_Arc(loopCtrlNode, (*it), EdgeID++, 0, LoopControlDep, (*it)->get_Number_of_Pred());
+      for (std::vector<NODE*>::iterator it = LiveOutNodes.begin(); it != LiveOutNodes.end(); ++it) {
+        myDFG->make_Arc(loopCtrlNode, (*it), EdgeID++, 0, LoopControlDep, (*it)->get_Number_of_Pred());
       }
     
       return loopCtrlNode;
@@ -5199,6 +5210,8 @@ Default:
       liveoutEdgefile.open(newPath.c_str());
 
       unsigned TripCount = calculateLoopTC(L, SE);
+
+      //with new 64 bit instruction, TripCount is set to 1
       if (DEBUG) 
         errs() << "Calculated trip count: " << TripCount << "\n";
       if (TripCount != 0)
