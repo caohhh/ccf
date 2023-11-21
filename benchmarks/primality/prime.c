@@ -1,6 +1,8 @@
 #include <stdio.h>
 
-int prime_check(int num){
+// static can inform llvm this function code can be 
+// removed if not called in this file
+static prime_check(int num){
   int ret=1;
 
   #pragma CGRA
