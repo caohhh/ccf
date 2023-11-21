@@ -81,7 +81,7 @@ int main(int32_t argc, char* argv[]){
     // if clang turns the vector into a constant --> can't pass
     // the pointer to CGRA, maybe needs a fix at some end (either LLVM passes, or CLang optimization)
     // currently this problem is ignored
-    printf("%p",vector);
+    printf("%p\n",vector);
 
     #pragma CGRA
     for(unsigned i=1; i<count; i++) {
