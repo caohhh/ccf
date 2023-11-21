@@ -3988,7 +3988,8 @@ void generateKernelCounter(int max_schedule_time)
   myfile.close();
 }
 
-std::map<int,std::vector<std::pair<int,int>>> construct_iteration_map(){
+std::map<int,std::vector<std::pair<int,int>>> construct_iteration_map()
+{
   // Start from the 1st cycle of prolog and trace nodes
   // For the first II cycles, add every nodes
   // From the II cycles on, compare with already added nodes and only add new nodes
@@ -3996,20 +3997,21 @@ std::map<int,std::vector<std::pair<int,int>>> construct_iteration_map(){
 
   std::map<int,std::vector<std::pair<int,int>>> ret;
   std::vector<int> added_nodes;
-  for(int i=0; i<prolog_size; i++){
-    if(prolog[i] == -1) continue;
-    
+  for (int i=0; i<prolog_size; i++) {
+    if (prolog[i] == -1) 
+      continue;
+
     int cycle = getTime(i);
     int node_id = prolog[i];
     int pe_num = prolog_map[node_id];
     
-    if(added_nodes.size() != 0){
+    if (added_nodes.size() != 0) {
       std::vector<int>::iterator it;
-      for(it = added_nodes.begin(); it != added_nodes.end(); ++it)
-	if((*it) == node_id) break;
-    
-      if(it != added_nodes.end())
-	continue;
+      for (it = added_nodes.begin(); it != added_nodes.end(); ++it)
+        if ((*it) == node_id) 
+          break;
+      if (it != added_nodes.end())
+        continue;
     }
     ret[cycle].push_back(std::make_pair(node_id,pe_num));
     added_nodes.push_back(node_id);
@@ -4017,7 +4019,8 @@ std::map<int,std::vector<std::pair<int,int>>> construct_iteration_map(){
   return ret;
 }
 
-std::tuple<std::map<int,int>,std::map<int,std::set<int>>> construct_stage_map(std::map<int,std::vector<std::pair<int,int>>> iteration_map){
+std::tuple<std::map<int,int>,std::map<int,std::set<int>>> construct_stage_map(std::map<int,std::vector<std::pair<int,int>>> iteration_map)
+{
   // Find stages for each node in kernel
   // Use schedule_time_node and iterate over cycles of kernel to analyze each node
   // For each kernel cycle, map its nodes to corresponding iteration cycle (populate cycle_node)
@@ -4034,41 +4037,49 @@ std::tuple<std::map<int,int>,std::map<int,std::set<int>>> construct_stage_map(st
   std::set<int> kernel_nodes = schedule_time_nodes[0];
   // From the set of the first kernel cycle, find nodes with highest cycle and their corresponding cycle
   int iter_cycle_kernel_start = -1;
-  for(auto node_it : kernel_nodes){
+  for (auto node_it : kernel_nodes) {
     auto iteration_it = iteration_map.begin();
-    for(; iteration_it != iteration_map.end(); ++iteration_it){
+    for (; iteration_it != iteration_map.end(); ++iteration_it) {
       bool node_found = false;
-      for(auto cycle_it = iteration_it->second.begin(); cycle_it != iteration_it->second.end(); ++cycle_it)
-	if((*cycle_it).first == node_it) {node_found=true; break;}
-      if(node_found) break;
+      for (auto cycle_it = iteration_it->second.begin(); cycle_it != iteration_it->second.end(); ++cycle_it)
+        if ((*cycle_it).first == node_it) {
+          node_found=true; 
+          break;
+        }
+      if (node_found) 
+        break;
     }
     int node_cycle = iteration_it->first;
-    if(node_cycle > iter_cycle_kernel_start) iter_cycle_kernel_start = node_cycle;
+    if (node_cycle > iter_cycle_kernel_start) 
+      iter_cycle_kernel_start = node_cycle;
   }
 
   // Since iter_cycle_kernel_start is found from the first kernel cycle and is highest among other iteration cycycles, it is the start cycle of the final stage in the iteration
   // First assign nodes from this cycle down II-1 cycles to stage 0
   //  Before this, find the number of cycles scheduled for an iteration
-  if(iter_cycle_kernel_start < 0) _FATAL("Cannot find iter_cycle_kernel_start! Inspect me."); // This shouldn't happen
+  if (iter_cycle_kernel_start < 0) 
+    _FATAL("Cannot find iter_cycle_kernel_start! Inspect me."); // This shouldn't happen
 
   int max_cycle = 0;
-  for(auto iteration_it = iteration_map.begin(); iteration_it != iteration_map.end(); ++iteration_it)
-    if(iteration_it->first > max_cycle) max_cycle = iteration_it->first;
+  for (auto iteration_it = iteration_map.begin(); iteration_it != iteration_map.end(); ++iteration_it)
+    if (iteration_it->first > max_cycle) 
+      max_cycle = iteration_it->first;
 
-  if(max_cycle < iter_cycle_kernel_start) _FATAL("Cannot find iteration max cycle! Inspect me.");
+  if (max_cycle < iter_cycle_kernel_start) 
+    _FATAL("Cannot find iteration max cycle! Inspect me.");
   
-  for(int i = iter_cycle_kernel_start; i <= max_cycle; i++){
+  for (int i = iter_cycle_kernel_start; i <= max_cycle; i++) {
     std::vector<std::pair<int,int>> cycle_node_pe = iteration_map[i];
-    for(auto node_it = cycle_node_pe.begin(); node_it != cycle_node_pe.end(); ++node_it)
+    for (auto node_it = cycle_node_pe.begin(); node_it != cycle_node_pe.end(); ++node_it)
       node_stage_map[(*node_it).first] = 0;
     stage_cycle_map[0].insert(i);
   }
 
   // Stage 0 nodes have been constructed, next construct nodes for stages up the iteration, each stage takes II cycles, repeat until reaching start of iteration
-  for(int i = iter_cycle_kernel_start-1; i >= 0; i--){
+  for (int i = iter_cycle_kernel_start-1; i >= 0; i--) {
     int stage_offset = (int)((iter_cycle_kernel_start - i - 1)/kernel_II) +1;
     std::vector<std::pair<int,int>> cycle_node_pe = iteration_map[i];
-    for(auto node_it = cycle_node_pe.begin(); node_it != cycle_node_pe.end(); ++node_it)
+    for (auto node_it = cycle_node_pe.begin(); node_it != cycle_node_pe.end(); ++node_it)
       node_stage_map[(*node_it).first] = stage_offset;
     stage_cycle_map[stage_offset].insert(i);
   }
