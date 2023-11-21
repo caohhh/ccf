@@ -4255,10 +4255,9 @@ void modifyProlog(int loopCtrl_node, int n_version, int version_cycle){
 }
 
 //driver function
-int main(int argc, char* argv[])
+int main (int argc, char* argv[])
 {
-  if(argc<14)
-  {
+  if (argc<14) {
     cout << "Usage: opcodegen FINALNODEFILE EDGEFILE LLVMNODEFILE LLVMEDGEFILE OBJFILE PrologFile KernelFile EpilogFile X Y R LIVEOUTNODEFILE LIVEOUTEDGEFILE"; // LIVEINNODEFILE LIVEINEDGEFILE";
     return -1;
   }
@@ -4274,16 +4273,14 @@ int main(int argc, char* argv[])
 
   //Read the final node file
   ifstream finalnodefile (argv[1]);
-  if(finalnodefile.is_open())
-  {
-    while ( getline(finalnodefile,line) )
-    {
+  if(finalnodefile.is_open()) {
+    while ( getline(finalnodefile,line) ) {
       istringstream strout(line);
       strout >> nodeID >> node_type >> node_datatype;
       std::pair<int,int> e2(nodeID,node_type);
       nodeid_type.insert(std::pair<std::pair<int, int>,int>(e2, node_datatype));
       if(node_type == route)
-	  routingNodes.insert(nodeID);    
+        routingNodes.insert(nodeID);    
         //routingNodes.push_back(nodeID);
     }
   }
@@ -4294,10 +4291,8 @@ int main(int argc, char* argv[])
   int operandOrder,distance;
   std::string dependencyType;
 
-  if(regiEdgeFile.is_open())
-  {
-    while ( getline(regiEdgeFile,line) )
-    {
+  if(regiEdgeFile.is_open()) {
+    while ( getline(regiEdgeFile,line) ) {
       istringstream strout(line);
       strout >> nodeID >> other_nodeID >> distance >> dependencyType >> operandOrder;
       cout<<"\nUPDATING EDGES " << nodeID<<":"<< other_nodeID<<endl;
@@ -4307,11 +4302,9 @@ int main(int argc, char* argv[])
       std::pair<int,int> outGoingEdge(nodeID,other_nodeID);
       operand_order_map.insert(std::pair< std::pair<int,int>,int >(outGoingEdge,operandOrder));
 
-      if((getNodeType(other_nodeID) == cgra_select) 	//In case of Phi or Select Node
-          || (getNodeType(other_nodeID) == cond_select)) // Added for Selects
-      {
-        if(distance > 0)
-        {
+      if ((getNodeType(other_nodeID) == cgra_select) 	//In case of Phi or Select Node
+          || (getNodeType(other_nodeID) == cond_select)) { // Added for Selects
+        if(distance > 0) {
           cout<<"\nUPDATING DEPENDENCY EDGES FOR NODE  " << other_nodeID <<":"<< distance << endl;
           to_node_dependency_distance.insert(std::pair<int,int>(other_nodeID,distance));
           select_phi_node_result.insert(std::pair<int,int>(other_nodeID,nodeID));
@@ -4329,27 +4322,21 @@ int main(int argc, char* argv[])
   //(used for constant nodes) datatypes are not dumped because this file is
   // required only for the name of the nodes.
   ifstream llvmNodeFile (argv[3]);
-  if(llvmNodeFile.is_open())
-  {
-    while ( getline(llvmNodeFile,line) )
-    {
+  if (llvmNodeFile.is_open()) {
+    while ( getline(llvmNodeFile,line) ) {
       istringstream strout(line);
       strout >> nodeID >> node_type >> nodename >> alignment;
 
       nodeid_names.insert(std::pair<int,string>(nodeID,nodename));
       dfgnodes++;
 
-      if(node_type == constant)
-      {
+      if (node_type == constant) {
         constantnodes++;
-        if(isLargeConstant(nodeID))
+        if (isLargeConstant(nodeID))
           largeConstants.insert(nodeID);
-      }
-      else if((node_type == ld_add) || (node_type == st_add))
-      {
+      } else if ((node_type == ld_add) || (node_type == st_add)) {
         memory_access_alignment.insert(std::pair<int, unsigned>(nodeID,alignment));
-      }
-      else if(alignment > 0)
+      } else if (alignment > 0)
         memory_access_alignment.insert(std::pair<int, unsigned>(nodeID,alignment));
     }
   }
@@ -4365,66 +4352,59 @@ int main(int argc, char* argv[])
   //IMPORTANT: The out_edge and in_edge map contain the edges genrated by the mapping technique
   //and the edges from the constant nodes to the other nodes.
   ifstream llvmEdgeFile (argv[4]);
-  if(llvmEdgeFile.is_open())
-  {
-    while ( getline(llvmEdgeFile,line) )
-    {
+  if (llvmEdgeFile.is_open()) {
+    while ( getline(llvmEdgeFile,line) ) {
       istringstream strout(line);
       strout >> nodeID >> other_nodeID >> distance >> dependencyType >> operandOrder;
 
-      if(dependencyType.compare("LCE") == 0){
-	if(loopCtrl_node != -1 && loopCtrl_node != nodeID) _FATAL("Multiple loopCtrl nodes detected! Further works required to handle this case.\n");
-	loopCtrl_node = nodeID;
-	LCE_found = true;
-	continue;
+      if (dependencyType.compare("LCE") == 0) {
+        if (loopCtrl_node != -1 && loopCtrl_node != nodeID) 
+          _FATAL("Multiple loopCtrl nodes detected! Further works required to handle this case.\n");
+        loopCtrl_node = nodeID;
+        LCE_found = true;
+        continue;
       }
 
-      if(getNodeType(nodeID) == constant)
-      {
+      if (getNodeType(nodeID) == constant) {
         cout<<"\nUPDATING EDGES " <<nodeID<<":"<<other_nodeID<<endl;
         out_edge.insert(std::pair<int,int>(nodeID,other_nodeID));
         in_edge.insert(std::pair<int,int>(other_nodeID,nodeID));
         std::pair<int,int> outGoingEdge(nodeID,other_nodeID);
         operand_order_map.insert(std::pair< std::pair<int,int>,int >(outGoingEdge,operandOrder));
 
-        if(isLargeConstant(nodeID))
-	  const_node_map[nodeID].push_back(other_nodeID);
+        if (isLargeConstant(nodeID))
+          const_node_map[nodeID].push_back(other_nodeID);
           //const_node_map.insert(std::pair<int,int>(nodeID,other_nodeID));
 
-        if(dependencyType.find("LIE") != string::npos)
+        if (dependencyType.find("LIE") != string::npos)
           liveInoperand_node_list.insert(std::pair<int,int>(nodeID,other_nodeID)); 
-      }
-      else if(getNodeType(other_nodeID) == constant)
-      {
+      } else if (getNodeType(other_nodeID) == constant) {
         //Delete duplicated entry for reserving register for
         // storing address of the liveout variable
-        if(isLargeConstant(other_nodeID))
-        {
+        if(isLargeConstant(other_nodeID)) {
           largeConstants.erase(other_nodeID);
           constantnodes--;
         }
       }
 
-      if(getNodeType(other_nodeID) == cond_select && dependencyType.find("PRE") != string::npos)
+      if (getNodeType(other_nodeID) == cond_select && dependencyType.find("PRE") != string::npos)
         pred_pairs.insert(std::pair<int,int>(nodeID,other_nodeID));
 
       // Check for similar edge with different operandOrder. If so, add it
       // This can be case for the operation such as square
       std::multimap<int,int>::iterator it;
-      for(it = out_edge.begin(); it != out_edge.end(); it++)
-      {
+      for (it = out_edge.begin(); it != out_edge.end(); it++) {
         int fromNode = it->first;
         int toNode = it->second;
-        if((fromNode != nodeID) || (toNode != other_nodeID))
+        if ((fromNode != nodeID) || (toNode != other_nodeID))
           continue;
         std::pair<int,int> edge(fromNode,toNode);
         std::multimap<std::pair<int,int>,int>::iterator itt;
-        for(itt = operand_order_map.begin(); itt != operand_order_map.end(); itt++)
-        {
-          if((itt->first.first != fromNode) || (itt->first.second != toNode))
+        for (itt = operand_order_map.begin(); itt != operand_order_map.end(); itt++) {
+          if ((itt->first.first != fromNode) || (itt->first.second != toNode))
             continue;
           int oporder = itt->second;
-          if(oporder == operandOrder)
+          if (oporder == operandOrder)
             continue;
           cout<<"\nUPDATING EDGES " <<nodeID <<":"<<other_nodeID << "\t" << operandOrder << endl;
           std::pair<int,int> outGoingEdge(nodeID,other_nodeID);
@@ -4434,30 +4414,26 @@ int main(int argc, char* argv[])
     }
   }
   llvmEdgeFile.close(); 
+
   //read the live-out node file dumped by llvm (dfg generator) to get the information about live nodes and corresponding store nodes
   //(used for live-out operations only, to store data back into the memory, which can be used later by processor core)
   ifstream LiveNodeFile (argv[12]);
-  if(LiveNodeFile.is_open())
-  {
-    while ( getline(LiveNodeFile,line) )
-    {
+  if (LiveNodeFile.is_open()) {
+    while ( getline(LiveNodeFile,line) ) {
       istringstream strout(line);
       strout >> nodeID >> node_type >> nodename >> alignment >> node_datatype;
 
       //Add Only If It Is Not Available Previously - Applicable to store_add and store_data nodes for live variables
       std::multimap< std::pair<int,int>, int>::iterator it;
       int livenode_present=0;
-      for(it = nodeid_type.begin(); it != nodeid_type.end(); ++it)
-      {
-        if(it->first.first == nodeID)
-        {
+      for (it = nodeid_type.begin(); it != nodeid_type.end(); ++it) {
+        if (it->first.first == nodeID) {
           livenode_present=1;
           break;
         }
       }
-      if(livenode_present == 0)
-      {
-	nodeid_names.insert(std::pair<int,string>(nodeID,nodename));
+      if (livenode_present == 0) {
+        nodeid_names.insert(std::pair<int,string>(nodeID,nodename));
         std::pair<int,int> e2(nodeID,node_type);
         nodeid_type.insert(std::pair<std::pair<int, int>,int>(e2, node_datatype));
         //nodeid_type.insert(std::pair<int,int>(nodeID,node_type));
@@ -4467,12 +4443,12 @@ int main(int argc, char* argv[])
         if(alignment > 0)
           memory_access_alignment.insert(std::pair<int, unsigned>(nodeID,alignment));
 
-	if(node_type == constant){
-	  constantnodes++;
-	  if(isLargeConstant(nodeID)){
-	    largeConstants.insert(nodeID);
-	  }
-	}
+        if (node_type == constant) {
+          constantnodes++;
+          if (isLargeConstant(nodeID)) {
+            largeConstants.insert(nodeID);
+          }
+	      }
       }
     }
   }
@@ -4483,10 +4459,8 @@ int main(int argc, char* argv[])
   //populate the operand orders
   //All edges are required and new so should be added
   ifstream LiveEdgeFile (argv[13]);
-  if(LiveEdgeFile.is_open())
-  {
-    while ( getline(LiveEdgeFile,line) )
-    {
+  if (LiveEdgeFile.is_open()) {
+    while ( getline(LiveEdgeFile,line) ) {
       int operandOrder,distance;
       string dependencyType;
       istringstream strout(line);
@@ -4507,10 +4481,8 @@ int main(int argc, char* argv[])
   //read the prolog file
   int opID,num_ops,i=0;
   ifstream prologFile (argv[6]);
-  if(prologFile.is_open())
-  {
-    while ( getline(prologFile,line) )
-    {
+  if (prologFile.is_open()) {
+    while ( getline(prologFile,line) ) {
       istringstream strout(line);
       strout >> prolog_size;
     }
@@ -4520,10 +4492,8 @@ int main(int argc, char* argv[])
   II = prolog_size/(X*Y);
   prologFile.open(argv[6], ifstream::in);
   cout << "file ptr:"<<prologFile.tellg()<<"\topen:"<<prologFile.is_open() <<"\t prolog_size:"<< prolog_size<<"\n"<<endl;
-  if(prologFile.is_open())
-  {
-    while ( getline(prologFile,line) )
-    {
+  if (prologFile.is_open()) {
+    while ( getline(prologFile,line) ) {
       istringstream strout(line);
       strout >> opID;
       if(i<prolog_size)
@@ -4535,10 +4505,8 @@ int main(int argc, char* argv[])
   //read the kernel file
   i=0;
   ifstream kernelFile (argv[7]);
-  if(kernelFile.is_open())
-  {
-    while ( getline(kernelFile,line) )
-    {
+  if (kernelFile.is_open()) {
+    while ( getline(kernelFile,line) ) {
       istringstream strout(line);
       strout >> kernel_size;
     }
@@ -4548,34 +4516,26 @@ int main(int argc, char* argv[])
   kernelFile.close();
   int numRegisters,sched_t,max_schedule_time=0;
   kernelFile.open(argv[7], ifstream::in);
-  if(kernelFile.is_open())
-  {
-    while ( getline(kernelFile,line) )
-    {
-      if(i<kernel_size)
-      {
+  if (kernelFile.is_open()) {
+    while ( getline(kernelFile,line) ) {
+      if (i<kernel_size) {
         istringstream strout(line);
         strout >> opID >> numRegisters >> sched_t;
 
         int t=getTime(i);
         int pe=getPE(i);
 
-        if(opID != -1)
-        {
+        if (opID != -1) {
           node_schedule_time[opID] = sched_t;
 
           max_schedule_time = (sched_t>max_schedule_time)?sched_t:max_schedule_time;
           earliest_sched_time = (sched_t < earliest_sched_time) ? sched_t : earliest_sched_time;
 
-          if(schedule_time_nodes.count(sched_t) > 0)
-          {
-
+          if (schedule_time_nodes.count(sched_t) > 0) {
             std::set<int> operations = schedule_time_nodes[sched_t];
             operations.insert(opID);
             schedule_time_nodes[sched_t] = operations;
-          }
-          else
-          {
+          } else {
             std::set<int> operations;
             operations.insert(opID);
             schedule_time_nodes[sched_t] = operations;
@@ -4592,10 +4552,8 @@ int main(int argc, char* argv[])
   //read the epilog file
   i=0;
   ifstream epilogFile (argv[8]);
-  if(epilogFile.is_open())
-  {
-    while ( getline(epilogFile,line) )
-    {
+  if (epilogFile.is_open()) {
+    while ( getline(epilogFile,line) ) {
       istringstream strout(line);
       strout >> epilog_size;
     }
@@ -4603,10 +4561,8 @@ int main(int argc, char* argv[])
   }
   epilogFile.close();
   epilogFile.open(argv[8], ifstream::in);
-  if(epilogFile.is_open())
-  {
-    while ( getline(epilogFile,line) )
-    {
+  if (epilogFile.is_open()) {
+    while ( getline(epilogFile,line) ) {
       istringstream strout(line);
       strout >> opID;
       if(i<epilog_size)
@@ -4616,23 +4572,24 @@ int main(int argc, char* argv[])
   epilogFile.close();
 
   ifstream LoopCtrlNodeFile("Control_Node.txt");
-  if(LoopCtrlNodeFile.is_open()){
+  if (LoopCtrlNodeFile.is_open()){
     FATAL(!getline(LoopCtrlNodeFile,line), "FATAL: Cannot read from Control_Node.txt file\n");
     istringstream strout(line);
     int temp;
     strout >> temp;
-    if(!LCE_found) loopCtrl_node = temp; // No LCE edge
-    else if(loopCtrl_node != temp) _FATAL("FATAL: Inconsistent loop control node detected\n");
-  } else _FATAL("WARNING: Cannot open Control_Node.txt file\n");
+    if(!LCE_found) 
+      loopCtrl_node = temp; // No LCE edge
+    else if (loopCtrl_node != temp) 
+      _FATAL("FATAL: Inconsistent loop control node detected\n");
+  } else 
+    _FATAL("WARNING: Cannot open Control_Node.txt file\n");
     
   
 
   //POPULATE THE PROLOG, KERNEL and EPILOG related maps
   cout <<"\n"<< prolog_size << endl << kernel_size<<endl<<epilog_size<<endl;
-  for(int j=0;j<prolog_size;j++)
-  {
-    if(prolog[j] != -1)
-    {
+  for (int j=0;j<prolog_size;j++) {
+    if (prolog[j] != -1) {
       int pe,t,node;
       pe = getPE(j);
       node = prolog[j];
@@ -4646,10 +4603,8 @@ int main(int argc, char* argv[])
   int pecount=0;
 
   cout<<"*********KERNEL*****************\n";
-  for(int j=0;j<kernel_size;j++)
-  {
-    if(kernel[j] != -1)
-    {
+  for (int j=0;j<kernel_size;j++) {
+    if (kernel[j] != -1) {
       int pe,t,node;
       pe = getPE(j);
       node = kernel[j];
@@ -4662,10 +4617,8 @@ int main(int argc, char* argv[])
   }
 
   cout<<"*********EPILOG*****************\n";
-  for(int j=0;j<epilog_size;j++)
-  {
-    if(epilog[j] != -1)
-    {
+  for (int j=0;j<epilog_size;j++) {
+    if (epilog[j] != -1) {
       int pe,t,node;
       pe = getPE(j);
       node = epilog[j];
@@ -4680,11 +4633,9 @@ int main(int argc, char* argv[])
 
   int totalPEs = X*Y;
   //initialize the free registers ma for each PE
-  for(int i=0;i<totalPEs;++i)
-  {
+  for (int i=0;i<totalPEs;++i) {
     std::set<int> freeRegs;
-    for(int j=0;j<pe_reg_config[i];++j)
-    {
+    for (int j=0;j<pe_reg_config[i];++j) {
       freeRegs.insert(j);
     }
     pe_free_registers[i] = freeRegs;
@@ -4698,15 +4649,12 @@ int main(int argc, char* argv[])
 
   //Generate Instruction For Nodes Other Than Phi Nodes
   cout << "\n****** Generating Instructions For Non-Phi Nodes *****\n";
-  for(int i=0; i<=max_schedule_time; ++i)
-  {
-    if(schedule_time_nodes.count(i) > 0)
-    {
+  for (int i=0; i<=max_schedule_time; ++i) {
+    if (schedule_time_nodes.count(i) > 0) {
       std::set<int> nodesAtTime = schedule_time_nodes.find(i)->second;
       std::set<int>::iterator it;
       std::set<int> OtherThanPhiAtTime;
-      for(it=nodesAtTime.begin(); it != nodesAtTime.end(); ++it)
-      {
+      for (it=nodesAtTime.begin(); it != nodesAtTime.end(); ++it) {
         if(getNodeType(*it) != cgra_select)
           OtherThanPhiAtTime.insert(*it);
       }
@@ -4718,25 +4666,20 @@ int main(int argc, char* argv[])
 
   cout << "\n****** Generating Instructions For Phi Nodes *****\n";
   //Generate Instruction For Nodes Other Than Phi Nodes
-  for(int i=0; i<=max_schedule_time; ++i)
-  {
-    if(schedule_time_nodes.count(i) > 0)
-    {
+  for (int i=0; i<=max_schedule_time; ++i) {
+    if (schedule_time_nodes.count(i) > 0) {
       std::set<int> nodesAtTime = schedule_time_nodes.find(i)->second;
       std::set<int>::iterator it;
       std::set<int> PhiAtTime;
       int phi_node_available = 0;
-      for(it=nodesAtTime.begin(); it != nodesAtTime.end(); ++it)
-      {
-        if(getNodeType(*it) == cgra_select)
-        {
+      for (it=nodesAtTime.begin(); it != nodesAtTime.end(); ++it) {
+        if (getNodeType(*it) == cgra_select) {
           PhiAtTime.insert(*it);
           phi_node_available++;
         }
       }
 
-      if(phi_node_available > 0)
-      {
+      if (phi_node_available > 0) {
         cout<<"\nNODES SCHEDULED AT "<<i<<"\n";
         printSet(PhiAtTime);
         cout << "Phi Instructions" << endl;
@@ -4750,10 +4693,8 @@ int main(int argc, char* argv[])
   cout << "\n****** Generating Instructions For Store Nodes For Live Variables*****\n";
   int sched_time = max_schedule_time+1;
 
-  for(i = sched_time; i<= max_time; i++)
-  {
-    if(schedule_time_nodes.count(i) > 0)
-    {
+  for (i = sched_time; i<= max_time; i++) {
+    if (schedule_time_nodes.count(i) > 0) {
       std::set<int> LiveNodesAtTime = schedule_time_nodes.find(i)->second;
       std::set<int>::iterator it;
 
@@ -4775,40 +4716,43 @@ int main(int argc, char* argv[])
   std::tie(node_stage_map, stage_cycle_map)  = construct_stage_map(iteration_map);
   // Number of stages for an iteration
   int stage_count = -1;
-  for(std::map<int,int>::iterator it = node_stage_map.begin(); it != node_stage_map.end(); ++it)
-    if(it->second > stage_count) stage_count = it->second;
+  for (std::map<int,int>::iterator it = node_stage_map.begin(); it != node_stage_map.end(); ++it)
+    if (it->second > stage_count) 
+      stage_count = it->second;
   
   cout << "Iteration schedule:";
-  for(auto it = iteration_map.begin(); it != iteration_map.end(); ++it){
+  for (auto it = iteration_map.begin(); it != iteration_map.end(); ++it) {
     cout << "\nTime: " << it->first << "\n";
-    for(int i=0; i<it->second.size(); i++){
+    for (int i=0; i<it->second.size(); i++) {
       cout << " " << it->second[i].first << "(" << it->second[i].second << ")(" << node_stage_map[it->second[i].first] << ")  - ";
     }
-  } cout << endl;
+  } 
+  cout << endl;
 
   std::map<int,std::map<int,int>> prolog_version_phi_counter;
   int loopCtrl_stage, extend_cycle, array_size;
   
-  if(!LCE_found) goto predicated_loop;  // No loopCtrl_node, skip adjustments
-  
-  // Stage at which loopCtrl node is scheduled
-  loopCtrl_stage = node_stage_map[loopCtrl_node];
-  cout << "Loop control node: " << loopCtrl_node << " - stage: " << loopCtrl_stage << " - exceeds: " << stage_count - loopCtrl_stage << endl;
+  //if(!LCE_found) goto predicated_loop;  // No loopCtrl_node, skip adjustments
+  if (LCE_found) {
+    // Stage at which loopCtrl node is scheduled
+    loopCtrl_stage = node_stage_map[loopCtrl_node];
+    cout << "Loop control node: " << loopCtrl_node << " - stage: " << loopCtrl_stage << " - exceeds: " << stage_count - loopCtrl_stage << endl;
 
-  // Now modify epilog accordingly
-  epilog_adjustment(iteration_map, node_stage_map, stage_cycle_map, loopCtrl_node);
+    // Now modify epilog accordingly
+    epilog_adjustment(iteration_map, node_stage_map, stage_cycle_map, loopCtrl_node);
 
-  cout << "New epilog_size: " << epilog_size << " - adjusted epilog:\n";
-  for(int i=0; i < (epilog_size/(X*Y)); i++){
-    cout << "Time: " << i << endl;
-    for(int x=0; x<X; x++){
-      for(int y=0; y<Y; y++)
-	cout << epilog[i*X*Y + x*X + y] << "\t";
-      cout << endl;
+    cout << "New epilog_size: " << epilog_size << " - adjusted epilog:\n";
+    for (int i=0; i < (epilog_size/(X*Y)); i++) {
+      cout << "Time: " << i << endl;
+      for (int x=0; x<X; x++) {
+        for(int y=0; y<Y; y++)
+          cout << epilog[i*X*Y + x*X + y] << "\t";
+        cout << endl;
+      }
     }
   }
 
- predicated_loop:
+  //predicated_loop:
   // Generate versions of prolog
   int ** multi_prolog_mapping; // 2D array, 1 for version and 1 for mapping in a version
   //std::map<int,std::map<int,int>> prolog_version_phi_counter;
@@ -4819,35 +4763,37 @@ int main(int argc, char* argv[])
   cout << "Version cycle: " << version_cycle << endl;
 
   // Add livevar store inst to end of prolog cycles
-  for(int i=0; i<n_version; i++)
-    for(int j=0; j<final_livevar_store_size; j++){
-      if(livevar_store[j] == -1) multi_prolog_mapping[i][(version_cycle*X*Y) + j] = -1;
-      else multi_prolog_mapping[i][(version_cycle*X*Y) + j] = livevar_store[j];
+  for (int i=0; i<n_version; i++)
+    for (int j=0; j<final_livevar_store_size; j++) {
+      if (livevar_store[j] == -1) 
+        multi_prolog_mapping[i][(version_cycle*X*Y) + j] = -1;
+      else 
+        multi_prolog_mapping[i][(version_cycle*X*Y) + j] = livevar_store[j];
     }
 
   cout << "\nProlog versions:\n";
-  for(int i=0; i<n_version; i++){
+  for (int i=0; i<n_version; i++) {
     cout << "Version " << i << ":\n";
-    for(int j=0; j<version_cycle; j++){
+    for (int j=0; j<version_cycle; j++) {
       cout << "Cycle " << j << endl;
-      for(int x=0; x<X; x++){
-	for(int y=0; y<Y; y++)
-	  cout << multi_prolog_mapping[i][(j*X*Y) + x*X + y] << "\t";
-	cout << endl;
+      for (int x=0; x<X; x++) {
+        for (int y=0; y<Y; y++)
+          cout << multi_prolog_mapping[i][(j*X*Y) + x*X + y] << "\t";
+        cout << endl;
       }
     }
-    for(int j=0; j<final_livevar_store_size/(X*Y); j++){
+    for (int j=0; j<final_livevar_store_size/(X*Y); j++) {
       cout << "Store cycle: " << j << endl;
-      for(int x=0; x<X; x++){
-	for(int y=0; y<Y; y++)
-	  cout << multi_prolog_mapping[i][version_cycle*X*Y + j*X*Y + x*X + y] << "\t";
-	cout << endl;
+      for (int x=0; x<X; x++) {
+        for (int y=0; y<Y; y++)
+          cout << multi_prolog_mapping[i][version_cycle*X*Y + j*X*Y + x*X + y] << "\t";
+        cout << endl;
       }
     }
   }
   cout << "Prolog version phi counter:\n";
-  for(auto it = prolog_version_phi_counter.begin(); it != prolog_version_phi_counter.end(); ++it)
-    for(auto itt = it->second.begin(); itt != it->second.end(); ++itt)
+  for (auto it = prolog_version_phi_counter.begin(); it != prolog_version_phi_counter.end(); ++it)
+    for (auto itt = it->second.begin(); itt != it->second.end(); ++itt)
       cout << "Version: " << it->first << " - node: " << itt->first << " - counter: " << itt->second << endl;
 
   extend_cycle = n_version*(version_cycle + (final_livevar_store_size/(X*Y)));
