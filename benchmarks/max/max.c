@@ -78,6 +78,11 @@ int main(int32_t argc, char* argv[]){
     int c = 0;  // Max index
     int d = -1;  // 2nd max index
 
+    // if clang turns the vector into a constant --> can't pass
+    // the pointer to CGRA, maybe needs a fix at some end (either LLVM passes, or CLang optimization)
+    // currently this problem is ignored
+    printf("%p",vector);
+
     #pragma CGRA
     for(unsigned i=1; i<count; i++) {
       int temp = vector[i];
