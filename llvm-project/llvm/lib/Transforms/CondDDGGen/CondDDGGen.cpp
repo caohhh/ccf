@@ -1424,18 +1424,16 @@ Default:
       Type* T = v->getType();
       int bit_width = T->getPrimitiveSizeInBits()/8; 
       llvm::Datatype dt = get_Datatype(T, bit_width);
-      if(dt == _struct){
-	errs() << "DT returned _struct\n";
-	dt = int32;
-      }
-      else if(dt == _array){
-	errs() << "DT returned _array\n";
-	dt = get_Datatype(T->getArrayElementType(), T->getArrayElementType()->getPrimitiveSizeInBits()/8);
+      if (dt == _struct) {
+        errs() << "DT returned _struct\n";
+        dt = int32;
+      } else if (dt == _array) {
+        errs() << "DT returned _array\n";
+        dt = get_Datatype(T->getArrayElementType(), T->getArrayElementType()->getPrimitiveSizeInBits()/8);
       }
       
 
-      switch (BI->getOpcode())
-      {
+      switch (BI->getOpcode()) {
         // Terminator Instructions
         case Instruction::Ret:
           errs() << "\n\nReturn Detected!\n\n";
@@ -1443,15 +1441,12 @@ Default:
         case Instruction::Br:
           retVal = true;
           return retVal;
-        case Instruction::Switch:
-          {
-            if(DEBUG) {
+        case Instruction::Switch: {
+            if (DEBUG) {
               errs() << "instr: " << *BI << "\n";
               errs() << "\n\nSwitch Detected!\n\n";
               errs() << "num_cases: " << cast<SwitchInst>(BI)->getNumCases() << "\n";
             }
-
-
             //errs() << "num_cases: " << (cast<SwitchInst>(BI)->getSuccessor())->getName().str() << "\n";
 
             // Mahesh says:
@@ -1459,19 +1454,18 @@ Default:
             // in the getSuccessor. So get 1 to numcases+1 and then get default again. 
             int num_subblocks = cast<SwitchInst>(BI)->getNumCases(); 
 
-            for(int i=1; i < num_subblocks+1; i++)
-            {
+            for (int i=1; i < num_subblocks+1; i++) {
               //errs() << "switch blocks " << (cast<SwitchInst>(BI)->getSuccessor(i)) << "\n";
               BasicBlock * bb = cast<SwitchInst>(BI)->getSuccessor(i); 
-              for(BasicBlock::iterator it = bb->begin(); it!=bb->end(); ++it)
+              for (BasicBlock::iterator it = bb->begin(); it!=bb->end(); ++it)
                 if (!Add_Node(&(*it), myDFG, loopHeader))
                   return false;
               //errs() << "intrs: " << *it << "\n";
             } 
-            if(DEBUG)
+            if (DEBUG)
               errs() << "default: " << cast<SwitchInst>(BI)->getDefaultDest() << "\n";
             BasicBlock * bbs = cast<SwitchInst>(BI)->getDefaultDest(); 
-            for(BasicBlock::iterator it = bbs->begin(); it!=bbs->end(); ++it)
+            for (BasicBlock::iterator it = bbs->begin(); it!=bbs->end(); ++it)
               if (!Add_Node(&(*it), myDFG, loopHeader))
                 return false;
 
@@ -1507,7 +1501,7 @@ Default:
           errs() << "\n\nUnreachable Detected!\n\n";
           return retVal;
 
-          // Standard binary operators...
+        // Standard binary operators...
         case Instruction::Add:
         case Instruction::FAdd:  
           node = new NODE(add, 1, NodeID++, BI->getName().str(), BI);
@@ -1546,7 +1540,7 @@ Default:
           retVal = true;
           return retVal;
 
-          // Bitwise Binary Operations
+        // Bitwise Binary Operations
         case Instruction::Shl:
           node = new NODE(shiftl, 1, NodeID++, BI->getName().str(), BI);
           node->setDatatype(dt);
@@ -1584,7 +1578,7 @@ Default:
           retVal = true;
           return retVal;
 
-          // Memory instructions...
+        // Memory instructions...
         case Instruction::Alloca:
           retVal = true;
           return retVal;
@@ -1600,77 +1594,77 @@ Default:
           tempLoadInst = dyn_cast<LoadInst>(BI);
           alignment = tempLoadInst->getAlignment();
 
-	  // Check if loading node targets a struct then adjust alignment to struct size
-	  if(dyn_cast<Value>(BI)->getType()->isPointerTy()){
-	    Type* BI_type = dyn_cast<Value>(BI)->getType();
-	    Type* element_type = BI_type->getPointerElementType();
-	    if(element_type->isStructTy()){
-	      BI_type = element_type;
-	      std::string struct_name = BI_type->getStructName().str();
-	      if(map_struct_size.find(struct_name) == map_struct_size.end())
-	        get_Datatype(BI_type, BI_type->getPrimitiveSizeInBits()/8);
-	      alignment = map_struct_size[struct_name];
-	      if(DEBUG) errs() << "\t  Loading struct - name: " << struct_name << " - alignment: " << alignment << "\n";
-	    }
-	  }
-	  else if(dyn_cast<Value>(BI)->getType()->isStructTy()){
-	    Type* BI_type = dyn_cast<Value>(BI)->getType();
-	    std::string struct_name = BI_type->getStructName().str();
-	    if(map_struct_size.find(struct_name) == map_struct_size.end())
-	      get_Datatype(BI_type, BI_type->getPrimitiveSizeInBits()/8);
-	    alignment = map_struct_size[struct_name];
-	    if(DEBUG) errs() << "\t  Loading struct - name: " << struct_name << " - alignment: " << alignment << "\n";
-	  }
+          // Check if loading node targets a struct then adjust alignment to struct size
+          if (dyn_cast<Value>(BI)->getType()->isPointerTy()) {
+            Type* BI_type = dyn_cast<Value>(BI)->getType();
+            Type* element_type = BI_type->getPointerElementType();
+            if (element_type->isStructTy()) {
+              BI_type = element_type;
+              std::string struct_name = BI_type->getStructName().str();
+              if (map_struct_size.find(struct_name) == map_struct_size.end())
+                get_Datatype(BI_type, BI_type->getPrimitiveSizeInBits()/8);
+              alignment = map_struct_size[struct_name];
+              if(DEBUG) 
+                errs() << "\t  Loading struct - name: " << struct_name << " - alignment: " << alignment << "\n";
+            }
+          } else if (dyn_cast<Value>(BI)->getType()->isStructTy()) {
+            Type* BI_type = dyn_cast<Value>(BI)->getType();
+            std::string struct_name = BI_type->getStructName().str();
+            if (map_struct_size.find(struct_name) == map_struct_size.end())
+              get_Datatype(BI_type, BI_type->getPrimitiveSizeInBits()/8);
+            alignment = map_struct_size[struct_name];
+            if(DEBUG) 
+              errs() << "\t  Loading struct - name: " << struct_name << " - alignment: " << alignment << "\n";
+          }
 	  
           node->setAlignment(alignment);
           myDFG->insert_Node(node);
           myDFG->insert_Node(node2);
-          for(unsigned ii=0; ii<BI->getNumOperands(); ii++)
-          {
+          for (unsigned ii=0; ii<BI->getNumOperands(); ii++) {
             GetElementPtrInst *temp = dyn_cast<GetElementPtrInst>(BI->getOperand(ii));
-            if(temp)
-            {
+            if(temp) {
               idxprom_nodeID_load_alignment_map[temp]=alignment;
               break;
             }
           }
           retVal = true;
           return retVal;
-	  break;
-        case Instruction::Store:
-          {
-            node = new NODE(st_add, 1, NodeID++, BI->getName().str(), BI);
-            node2 = new NODE(st_data, 1, NodeID++, BI->getName().str(), BI);
-            node->set_Store_Data_Bus_Write(node2);
-            node2->set_Store_Address_Generator(node);
-            StoreInst *tempStoreInst;
-            tempStoreInst = dyn_cast<StoreInst>(BI);
-            alignment = tempStoreInst->getAlignment();
-            if(DEBUG1) errs() << "alignment for store: " << alignment << "\n";
-            if(DEBUG1) errs() << "T: " << T << "\n";
-            StoreInst* si = dyn_cast<StoreInst>(BI); 
-            Value *vi = si->getPointerOperand(); 
-            Type* Ti = vi->getType()->getPointerElementType();
-            if(DEBUG1) errs() << "store name: " << node->get_ID() << "\n"; 
-            dt = get_Datatype(Ti, alignment); 
-            if(DEBUG1) errs() << "Datatype: " << dt << "\n";
-            node->setAlignment(alignment);
-            node->setDatatype(dt);
-            node2->setDatatype(dt);
-            myDFG->insert_Node(node);
-            myDFG->insert_Node(node2);
-            for(unsigned ii=0; ii<BI->getNumOperands(); ii++)
-            {
-              GetElementPtrInst *temp = dyn_cast<GetElementPtrInst>(BI->getOperand(ii));
-              if(temp)
-              {
-                idxprom_nodeID_load_alignment_map[temp]=alignment;
-                break;
-              }
+          break;
+        case Instruction::Store: {
+          node = new NODE(st_add, 1, NodeID++, BI->getName().str(), BI);
+          node2 = new NODE(st_data, 1, NodeID++, BI->getName().str(), BI);
+          node->set_Store_Data_Bus_Write(node2);
+          node2->set_Store_Address_Generator(node);
+          StoreInst *tempStoreInst;
+          tempStoreInst = dyn_cast<StoreInst>(BI);
+          alignment = tempStoreInst->getAlignment();
+          if(DEBUG1) 
+            errs() << "alignment for store: " << alignment << "\n";
+          if(DEBUG1) 
+            errs() << "T: " << T << "\n";
+          StoreInst* si = dyn_cast<StoreInst>(BI); 
+          Value *vi = si->getPointerOperand(); 
+          Type* Ti = vi->getType()->getPointerElementType();
+          if(DEBUG1) 
+            errs() << "store name: " << node->get_ID() << "\n"; 
+          dt = get_Datatype(Ti, alignment); 
+          if(DEBUG1) 
+            errs() << "Datatype: " << dt << "\n";
+          node->setAlignment(alignment);
+          node->setDatatype(dt);
+          node2->setDatatype(dt);
+          myDFG->insert_Node(node);
+          myDFG->insert_Node(node2);
+          for (unsigned ii=0; ii<BI->getNumOperands(); ii++) {
+            GetElementPtrInst *temp = dyn_cast<GetElementPtrInst>(BI->getOperand(ii));
+            if(temp) {
+              idxprom_nodeID_load_alignment_map[temp]=alignment;
+              break;
             }
-            retVal = true;
-            return retVal;
           }
+          retVal = true;
+          return retVal;
+        }
         case Instruction::AtomicCmpXchg:
           retVal = false;
           errs() << "\n\nAtomicCmpXchg Detected!\n\n";
@@ -1691,7 +1685,7 @@ Default:
           retVal = true;
           return retVal;
 
-          // Convert instructions...
+        // Convert instructions...
         case Instruction::Trunc:
         case Instruction::ZExt:
           node = new NODE(andop, 1, NodeID++, BI->getName().str(), BI);
@@ -1733,37 +1727,32 @@ Default:
           // llvm document: It is always a no-op cast becasue
           // no bits change.
           return retVal;
-          // Other instructions...
+        // Other instructions...
         case Instruction::ICmp:
         case Instruction::FCmp:
-          if(dt == 0)
-          {
+          if (dt == 0) {
             Value *v = dyn_cast<Value>(BI->getOperand(0));
             Type* T = v->getType();
             int width = T->getPrimitiveSizeInBits()/8; 
 
             //errs() << "width " << width << "\n";
-            if(T->isIntegerTy())
-            {
+            if (T->isIntegerTy()) {
               //errs() << "cmp int type    " << T->getPrimitiveSizeInBits() << "\n";
-              if(width == 1)
+              if (width == 1)
                 dt = character;
-              else if(width == 2)
+              else if (width == 2)
                 dt = int16;
               else
                 dt = int32;
-            }
-            else if(T->isFloatingPointTy())
-            {
-              if(T->isDoubleTy())
+            } else if(T->isFloatingPointTy()) {
+              if (T->isDoubleTy())
                 dt = float64;
-              else if(width == 2)
+              else if (width == 2)
                 dt = float32;
               else
                 dt = float16;
               //errs() << "cmp float    " << T->getPrimitiveSizeInBits() << "\n";
             } 
-
           } 
           llvm::Instruction_Operation op;
           if (cast<CmpInst>(BI)->getPredicate() == llvm::CmpInst::FCMP_OEQ
@@ -1798,7 +1787,6 @@ Default:
           {
             op = cmpUGEQ;
           }
-
           else if (cast<CmpInst>(BI)->getPredicate() == llvm::CmpInst::FCMP_OLT
               || cast<CmpInst>(BI)->getPredicate() == llvm::CmpInst::FCMP_ULT
               || cast<CmpInst>(BI)->getPredicate() == llvm::CmpInst::ICMP_SLT)
@@ -1824,21 +1812,21 @@ Default:
           myDFG->insert_Node(node);
           retVal = true;
           return retVal;
-        case Instruction::PHI:
+        case Instruction::PHI:{
           //TODO Optimize Phi's here
           /* Phi's are generated to select inputs from multiple blocks.
              We can treat a Phi node (in loopHeader block) as a special case;
              select live-in value for the first time, and recurrent value otherwise
              If Phi is not in loopHeader block, treat it as a select instruction
-           */
-          {
-            if(DEBUG) errs() << "We are here for PHI\n";
-            node = new NODE(cgra_select, 1, NodeID++, BI->getName().str(), BI);
-            node->setDatatype(dt);
-            myDFG->insert_Node(node);
-            retVal = true;
-            return retVal;
-          }
+          */
+          if(DEBUG) 
+            errs() << "We are here for PHI\n";
+          node = new NODE(cgra_select, 1, NodeID++, BI->getName().str(), BI);
+          node->setDatatype(dt);
+          myDFG->insert_Node(node);
+          retVal = true;
+          return retVal;
+        }
         case Instruction::Select:
           node = new NODE(cond_select, 1, NodeID++, BI->getName().str(), BI);
           node->setDatatype(dt);
@@ -1846,7 +1834,7 @@ Default:
           retVal = true;
           return retVal;
 
-          // Vector Operations
+        // Vector Operations
         case Instruction::ExtractElement:
         case Instruction::InsertElement:
         case Instruction::ShuffleVector:
@@ -1854,14 +1842,14 @@ Default:
           errs() << "\n\nVector Instruction Detected!\n\n";
           return retVal;
 
-          // Aggregate Operations
+        // Aggregate Operations
         case Instruction::ExtractValue:
         case Instruction::InsertValue:
           retVal = false;
           errs() << "\n\nAggregate Instruction Detected!\n\n";
           return retVal;
 
-          // Other Operations
+        // Other Operations
         case Instruction::Call:
           retVal = false;
           errs() << "\n\nCall Detected!\n\n";
@@ -5255,8 +5243,10 @@ Default:
       std::ofstream LoopCtrlNodeFile;
       std::string filename = "./CGRAExec/L" + osLoopID.str() + "/Control_Node.txt";
       LoopCtrlNodeFile.open(filename.c_str());
-      if(loopCtrl_node) LoopCtrlNodeFile << loopCtrl_node->get_Name() << "\n";
-      else LoopCtrlNodeFile << "-1\n";
+      if (loopCtrl_node) 
+        LoopCtrlNodeFile << loopCtrl_node->get_Name() << "\n";
+      else 
+        LoopCtrlNodeFile << "-1\n";
       LoopCtrlNodeFile.close();
       
       std::ostringstream osNodeID;
