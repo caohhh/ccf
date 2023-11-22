@@ -12,7 +12,7 @@
   return ret;
   }*/
 
-int power(int base, int pow){
+static int power(int base, int pow){
   if(pow == 0) return 1;
   printf("Base = %d - Pow = %d\n", base, pow);
   int ret = base;
