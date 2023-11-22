@@ -789,6 +789,11 @@ int LE_Instruction::getImmediateValue(){
   return ImmediateValue;
 }
 
+bool LE_Instruction::getPredicator()
+{
+    return Predicator;
+}
+
 void LE_Instruction::ENCODE_LE_instruction(){
   unsigned long ins_trunc= LEInsWord & 0x1fffffffffffffffUL;
 
@@ -925,6 +930,7 @@ void LE_Instruction::ENCODE_LE_instruction(){
       break;
   }
 
+  Predicator = (LEInsWord & INS_PREDICT) >> SHIFT_PREDICT;
   ReadRegAddress1 = (LEInsWord & INS_R1 )>>SHIFT_R1 ;
   ReadRegAddress2 = (LEInsWord & INS_R2 )>>SHIFT_R2 ;
   WriteRegAddress = (LEInsWord & INS_RW )>>SHIFT_RW ;

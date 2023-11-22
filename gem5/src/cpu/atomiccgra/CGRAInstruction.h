@@ -160,6 +160,7 @@ public:
   bool getWriteRegisterEnable();
   unsigned getBranchOffset();
   int getImmediateValue();
+  bool getPredicator();
 
   /**
    * instruction word -> attributes
@@ -192,6 +193,7 @@ private:
   int ReadRegAddress2;
   int WriteRegAddress;
   bool WriteRegisterEnable;
+  bool Predicator;
 
   // 0x3ff for loop exiting, else for the cycles the jump
   unsigned branchOffset;

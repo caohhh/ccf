@@ -54,7 +54,7 @@
 
   Loop Exit Instruction Decode:
   63 62 61 | 60 59 58 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 ... 26 | 25...
-  DT       | OpCode      | 0  | 1  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE |   BrImm   | Imme
+  DT       | OpCode      | P  | 1  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE |   BrImm   | Imme
 
   Note: 34-bit immediate is redundant since RF only supports 32-bit data
  */

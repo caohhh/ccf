@@ -3485,7 +3485,7 @@ void generateProlog(int extend_cycle)
     printf("%d: %lx\n",i,final_prolog[i]);
 }
 
-void generateKernel(int loopCtrl_node)
+void generateKernel(int loopCtrl_node, bool loopCtrl_dest)
 {
   // Update Apr 2022:
   // Kernel instruction for loop control node is moved to LE type for gem5 exit mechanism
@@ -3497,37 +3497,32 @@ void generateKernel(int loopCtrl_node)
   CGRA_Instruction noop_ins = generateNOOP();
   unsigned long noop_decoded = noop_ins.DecodeInstruction(&noop_ins);
 
-  for(int i =0; i<kernel_size; ++i)
-  {
-    if(kernel[i] == -1)
-    {
+  for (int i =0; i<kernel_size; ++i) {
+    if (kernel[i] == -1) {
       final_kernel[i] = noop_decoded;
-    }
-    else
-    {
-      if(isPTypeInstruction(kernel[i]))
-      {
+    } else {
+      if (isPTypeInstruction(kernel[i])) {
         Pred_Instruction temp = nodeid_Predinstruction[kernel[i]];
         final_kernel[i] = temp.DecodePredInstruction(&temp);
-      }
-      else
-      {
-	if(kernel[i] == loopCtrl_node){
-	  CGRA_Instruction temp = nodeid_instruction[kernel[i]];
-	  unsigned long temp_dec = temp.DecodeInstruction(&temp);
-	  temp_dec |= (WIDTH_LE) << SHIFT_LE; // Set LE bit
-	  unsigned long temp_imm = (temp_dec & WIDTH_IMMEDIATE) & WIDTH_LE_IMMEDIATE;
-	  temp_dec &= ~(WIDTH_BRANCH_OFFSET << SHIFT_BRANCH_OFFSET); // Reset branch offset field
-	  temp_dec |= ((MAX_BRANCH_OFFSET & WIDTH_BRANCH_OFFSET) << SHIFT_BRANCH_OFFSET);
-	  temp_dec &= ~(WIDTH_LE_IMMEDIATE);
-	  temp_dec |= temp_imm;
-	  final_kernel[i] = temp_dec;
-	  printf("GenerateKernel::loopCtrl_node: Previous inst: %lx - Current ins: %lx\n", temp.DecodeInstruction(&temp), temp_dec);
-	}
-	else{
-	  CGRA_Instruction temp = nodeid_instruction[kernel[i]];
-	  final_kernel[i] = temp.DecodeInstruction(&temp);
-	}
+      } else {
+        if (kernel[i] == loopCtrl_node) {
+          CGRA_Instruction temp = nodeid_instruction[kernel[i]];
+          unsigned long temp_dec = temp.DecodeInstruction(&temp);
+          temp_dec |= (WIDTH_LE) << SHIFT_LE; // Set LE bit
+          // set exit destination
+          temp_dec &= ~(WIDTH_PREDICT << SHIFT_PREDICT);
+          temp_dec |= ((unsigned long)loopCtrl_dest << SHIFT_PREDICT);
+          unsigned long temp_imm = (temp_dec & WIDTH_IMMEDIATE) & WIDTH_LE_IMMEDIATE;
+          temp_dec &= ~(WIDTH_BRANCH_OFFSET << SHIFT_BRANCH_OFFSET); // Reset branch offset field
+          temp_dec |= ((MAX_BRANCH_OFFSET & WIDTH_BRANCH_OFFSET) << SHIFT_BRANCH_OFFSET);
+          temp_dec &= ~(WIDTH_LE_IMMEDIATE);
+          temp_dec |= temp_imm;
+          final_kernel[i] = temp_dec;
+          printf("GenerateKernel::loopCtrl_node: Previous inst: %lx - Current ins: %lx\n", temp.DecodeInstruction(&temp), temp_dec);
+        } else {
+          CGRA_Instruction temp = nodeid_instruction[kernel[i]];
+          final_kernel[i] = temp.DecodeInstruction(&temp);
+        }
       }
     }
   }
@@ -3963,6 +3958,7 @@ void dumpEpilog()
 
 void generateKernelCounter(int max_schedule_time)
 {
+  /*
   int KernelCounter = 100;
   FILE* count;
   count=fopen("./loop_iterations.txt","r");
@@ -3981,6 +3977,10 @@ void generateKernelCounter(int max_schedule_time)
   int unroll_count = ((int) unroll_count_ceil) - 1; //+ 1;
 
   KernelCounter = KernelCounter - unroll_count;
+  */
+
+  // since for COMSAT technique, trip count is not required
+  int KernelCounter = 0;
 
   ofstream myfile;
   myfile.open("kernel_count.txt");
@@ -4239,7 +4239,7 @@ void extendProlog(int** multi_prolog_mapping, int n_version, int version_cycle, 
   }
 }
 
-void modifyProlog(int loopCtrl_node, int n_version, int version_cycle){
+void modifyProlog(int loopCtrl_node, bool loopCtrl_dest, int n_version, int version_cycle){
   int noop_cycles = (init_cycles%kernel_II != 0)? (kernel_II - (init_cycles%kernel_II)) : 0;
   int start_idx = (init_cycles + noop_cycles)*X*Y;  // Index for final_prolog after config cycles
   
@@ -4248,6 +4248,9 @@ void modifyProlog(int loopCtrl_node, int n_version, int version_cycle){
     if(prolog[prolog_idx] == loopCtrl_node){
       unsigned long temp = final_prolog[start_idx + prolog_idx];
       temp |= (WIDTH_LE) << SHIFT_LE; // Set LE bit
+      // set destination
+      temp &= ~(WIDTH_PREDICT << SHIFT_PREDICT);
+      temp |= ((unsigned long)loopCtrl_dest << SHIFT_PREDICT);
       unsigned long temp_imm = (temp & WIDTH_IMMEDIATE) & WIDTH_LE_IMMEDIATE;
 
       // Calculate offset
@@ -4360,6 +4363,7 @@ int main (int argc, char* argv[])
   //populate the operand orders
 
   int loopCtrl_node = -1; // "from" node of LCE edges
+  bool loopCtrl_dest = true;
   bool LCE_found = false;
 
   //IMPORTANT: The out_edge and in_edge map contain the edges genrated by the mapping technique
@@ -4590,6 +4594,9 @@ int main (int argc, char* argv[])
     istringstream strout(line);
     int temp;
     strout >> temp;
+    getline(LoopCtrlNodeFile,line);
+    istringstream strout1(line);
+    strout1 >> loopCtrl_dest;
     if(!LCE_found) 
       loopCtrl_node = temp; // No LCE edge
     else if (loopCtrl_node != temp) 
@@ -4813,8 +4820,8 @@ int main (int argc, char* argv[])
 
   generateProlog(extend_cycle);
   extendProlog(multi_prolog_mapping, n_version, version_cycle, prolog_version_phi_counter); // add prolog nodes to final_prolog array
-  modifyProlog(loopCtrl_node, n_version, (version_cycle + (final_livevar_store_size/(X*Y)))); // modify loopCtrl node to LE instruction
-  generateKernel(loopCtrl_node);
+  modifyProlog(loopCtrl_node, loopCtrl_dest, n_version, (version_cycle + (final_livevar_store_size/(X*Y)))); // modify loopCtrl node to LE instruction
+  generateKernel(loopCtrl_node, loopCtrl_dest);
   generateEpilog();
 
   dumpProlog(extend_cycle, n_version);

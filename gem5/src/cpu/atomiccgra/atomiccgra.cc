@@ -1967,6 +1967,7 @@ AtomicCGRA::CGRA_advancePC(SimpleThread* thread)
     //DPRINTF(Instruction_print,"%s,%s,%d,PC:%x\n",
     //   __FILE__,__func__,__LINE__,(unsigned int) tc->instAddr());
     //DPRINTF(Instruction_print, "newPC before: %lx\n", (long)newPC) ;
+    DPRINTF(CGRA_Detailed,"current state: %u\n", state);
 
     if (Len == 0) {
         if (state == PRO) {
@@ -2006,6 +2007,7 @@ AtomicCGRA::CGRA_advancePC(SimpleThread* thread)
         }
     }
     thread->pcState((Addr) newPC);
+    DPRINTF(CGRA_Detailed,"state after advance PC: %u\n", state);
 }
 
 void

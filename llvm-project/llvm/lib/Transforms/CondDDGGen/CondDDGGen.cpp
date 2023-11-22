@@ -4681,7 +4681,7 @@ Default:
     /* Added by Vinh TA
        This function makes edges from a unique loop control node to liveOut nodes to be later used by mapping algos to enforce mapping constraints
      */
-    NODE* Update_Loop_Control (std::vector<BasicBlock *> bbs, BasicBlock* ExitBlock, DFG* myDFG)
+    NODE* Update_Loop_Control (std::vector<BasicBlock *> bbs, Loop *L, DFG* myDFG, bool* Loop_Exit_Dest_p)
     {
       if (DEBUG)	
         errs() << "Inside update_loop_control\n";
@@ -4690,6 +4690,27 @@ Default:
       if (DEBUG) 
         errs() << " loop_branch_inst: " << *branchinst << "\n";
       
+      // set the whether true dest or false dest is loop exit
+      if (!(L->contains(branchinst->getSuccessor(0)))) {
+        if (DEBUG)
+          errs() << "true dest is exit\n";
+        *Loop_Exit_Dest_p = true;
+      }  
+      if (!(L->contains(branchinst->getSuccessor(1)))) {
+        if (*Loop_Exit_Dest_p == true) {
+          if (DEBUG)
+            errs() << "ERROR: both exits\n";
+          return NULL;
+        }
+        if (DEBUG)
+          errs() << "false dest is exit\n";
+        *Loop_Exit_Dest_p = false;
+      } else if (*Loop_Exit_Dest_p == false){
+        if (DEBUG)
+          errs() << "ERROR: no exit\n";
+        return NULL;
+      }
+
       Instruction* op0_inst = cast<Instruction>(branchinst->getOperand(0));
       if (op0_inst == NULL) 
         return NULL;
@@ -5239,13 +5260,15 @@ Default:
       updateStoresInConditionalBBs(L->getLoopLatch(),L->getHeader(),bbs, myDFG);
 
       // Added by: Vinh TA
-      NODE* loopCtrl_node = Update_Loop_Control(bbs, ExitBlk, myDFG);
+      bool Loop_Exit_Dest = false;
+      NODE* loopCtrl_node = Update_Loop_Control(bbs, L, myDFG, &Loop_Exit_Dest);
       std::ofstream LoopCtrlNodeFile;
       std::string filename = "./CGRAExec/L" + osLoopID.str() + "/Control_Node.txt";
       LoopCtrlNodeFile.open(filename.c_str());
-      if (loopCtrl_node) 
+      if (loopCtrl_node) {
         LoopCtrlNodeFile << loopCtrl_node->get_Name() << "\n";
-      else 
+        LoopCtrlNodeFile << Loop_Exit_Dest << "\n";
+      } else 
         LoopCtrlNodeFile << "-1\n";
       LoopCtrlNodeFile.close();
       

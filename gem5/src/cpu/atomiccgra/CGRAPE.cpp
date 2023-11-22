@@ -156,7 +156,7 @@ CGRA_PE::Decode()
             } // end of ins->getRightMuxSelector()
         } // end of ins->getOpCode()!=NOOP
 
-        if (ins->getPredicator() == 1) {
+        if ((ins->getPredicator() == 1) && (ins->getLE() == 0)) {
             Pred_Instruction temp(ins->DecodeInstruction(ins));
             Pred_Instruction *predIns = &temp;
             switch (predIns->getPredMuxSelector()) {
@@ -316,7 +316,7 @@ CGRA_PE::Decode()
             }   // end of ins->getOpCode() == address_generator
         } // end of ins->getOpCode()!=NOOP
 
-        if (ins->getPredicator() == 1) {
+        if ((ins->getPredicator() == 1) && (ins->getLE() == 0)) {
             Pred_Instruction temp(ins->DecodeInstruction(ins));
             Pred_Instruction *predIns = &temp;
             switch (predIns->getPredMuxSelector()) {
@@ -370,7 +370,7 @@ CGRA_PE::IExecute()
         DPRINTF(CGRA_Execute, "Register file content:\n"
     }*/
 
-    if (!predicate_bit) {
+    if (!(predicate_bit & !LE_bit)) {
         switch (ins_opcode) {
             case Add:
               Output=Input1+Input2;
@@ -480,18 +480,13 @@ CGRA_PE::IExecute()
         if (LE_bit) {
             LE_Instruction temp(ins->getInsWord());
             LE_Instruction *LE_Ins = &temp;
-
-            DPRINTF(CGRA_Execute, "LE Branch: %lx\n", LE_Ins->getBranchOffset());
+            bool LE_dest = ins->getPredicator();
+            DPRINTF(CGRA_Execute, "LE Branch: %lx, Destination: %d\n", LE_Ins->getBranchOffset(),LE_dest);
             if (LE_Ins->getBranchOffset() == 0x3ff) {
-                if(ins_opcode == NEQ || ins_opcode == LT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR)
-                    this->Controller_Reg = Output;  // Output = 0 to exit
-                else 
-                    this->Controller_Reg = !Output;  // Output = 1 to exit
+                this->Controller_Reg = !(Output == LE_dest);  // Output == LE_dest to exit
+                DPRINTF(CGRA_Detailed, "Set controller reg to %d\n", !((bool)Output == LE_dest));
             } else {
-                if(ins_opcode == NEQ || ins_opcode == LT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR) // Fix me: should NEQ be false to branch?
-                    branch_offset = (!Output)? LE_Ins->getBranchOffset():0;
-                else
-                    branch_offset = (Output == 1)? LE_Ins->getBranchOffset():0;
+                branch_offset = ((bool)Output == LE_dest)? LE_Ins->getBranchOffset():0;
                 DPRINTF(CGRA_Detailed, "\n***LE Instruction - branching %d cycles***\n", branch_offset);
             }
         } // end of loop exit
@@ -504,7 +499,7 @@ CGRA_PE::IExecute()
         (this->Controller_Reg) = (ins_opcode == EQ)? !Output:Output;
         }*/
 
-    } else {  // end of !predicate_bit
+    } else {  // end of !(predicate_bit & !LE_bit)
 
         //Pred_Instruction temp(ins->DecodeInstruction(ins));
         //Pred_Instruction *predIns = &temp; 
@@ -614,7 +609,7 @@ CGRA_PE::FExecute()
     unsigned branch_offset = 0; // only used in loop_exit, otherwise 0
     //DPRINTF(CGRA_Detailed, "Predictor bit: %d\n", (int) predicate_bit); 
 
-    if (!predicate_bit) {
+    if (!(predicate_bit & !LE_bit)) {
         switch (ins_opcode) {
             case Add:
               FPOutput=FPInput1+FPInput2;
@@ -724,17 +719,12 @@ CGRA_PE::FExecute()
         if (LE_bit) {
             LE_Instruction temp(ins->DecodeInstruction(ins));
             LE_Instruction *LE_Ins = &temp;
-
+            bool LE_dest = ins->getPredicator();
+            DPRINTF(CGRA_Execute, "LE Branch: %lx\n", LE_Ins->getBranchOffset());
             if (LE_Ins->getBranchOffset() == 0x3ff) {
-                if (ins_opcode == NEQ || ins_opcode == LT || ins_opcode == GT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR)
-                    (this->Controller_Reg) = (Output != 0)? 1:0;
-                else 
-                    this->Controller_Reg = (Output == 0)? 1:0;
+                this->Controller_Reg = !(Output == LE_dest);  // Output == LE_dest to exit
             } else {
-                if (ins_opcode == NEQ || ins_opcode == LT || ins_opcode == GT || ins_opcode == AND || ins_opcode == OR || ins_opcode == XOR) // Fix me: should NEQ be false to branch?
-                    branch_offset = (Output == 0)? LE_Ins->getBranchOffset():0;
-                else
-                    branch_offset = (Output != 0)? LE_Ins->getBranchOffset():0;
+                branch_offset = (Output == LE_dest)? LE_Ins->getBranchOffset():0;
                 DPRINTF(CGRA_Detailed, "\n***LE Instruction - branching %d cycles***\n", branch_offset);
             }
         }
