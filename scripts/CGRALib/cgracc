@@ -174,7 +174,7 @@ if [[ $target_arm == 1 ]] || ([[ ! -f "CGRAGen.bc" ]] && [[ ! -d "CGRAExec" ]]);
     llvm-dis CondDDGGen.bc -o CondDDGGen.ll
     llc -march="arm" CondDDGGen.ll
     clang -w -O3 -mllvm -force-vector-width=1 -Wpadded -static --target=armv7a-none-linux-eabi CondDDGGen.s -o $obj -lm
-    rm *.s *.bc *.ll
+    rm  *.bc
     exit
 fi
 

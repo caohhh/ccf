@@ -8,4 +8,4 @@ LIB = -lm
 pow: ${FILE1} Makefile
 	$(CC) -static -O3 ${FILE1} -o pow
 clean:
-	rm -rf pow CGRAExec m5out *.bc *.ll
+	rm -rf pow CGRAExec m5out *.bc *.ll *.s *.log
