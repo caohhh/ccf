@@ -4731,14 +4731,18 @@ Default:
         if (temp->get_Instruction() == ld_data) 
           temp = temp->get_Related_Node();
         std::vector<NODE*> temp_prev = temp->Get_Prev_Nodes();
-	
+
+        // think this is to prevent the added route node from being added
+        // but these nodes are not added
+        /*
         if (temp_prev.size() > 0 && temp_prev[0]->get_Instruction() == cond_select) 
           continue;
         if (temp_prev.size() > 1 && temp_prev[1]->get_Instruction() == cond_select) 
           continue;
         if (temp_prev.size() > 2 && temp_prev[2]->get_Instruction() == cond_select) 
           continue;
-	
+        */
+
         LiveOutNodes.push_back(myDFG->get_Node(it->first));
         if(DEBUG) 
           errs() << "  Added: " << myDFG->get_Node(it->first)->get_Name() << "\n";
