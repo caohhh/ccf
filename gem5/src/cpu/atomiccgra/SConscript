@@ -51,6 +51,7 @@ if 'AtomicCGRA' in env['CPU_MODELS']:
     DebugFlag('Conditional_DEBUG')
     DebugFlag('Cycles')
     DebugFlag('Instruction_Fetch')
+    DebugFlag('CGRA_IFU')
 
     Source('CGRAException.cpp')
     Source('CGRAInstruction.cpp')
@@ -60,3 +61,4 @@ if 'AtomicCGRA' in env['CPU_MODELS']:
     Source('CGRAPE.cpp')
     Source('CGRARegisterFile.cpp')
     Source('CGRAFPRegisterFile.cpp')
+    Source('CGRA_IFU.cc')

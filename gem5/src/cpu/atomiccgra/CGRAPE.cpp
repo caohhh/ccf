@@ -1285,3 +1285,14 @@ void CGRA_PE::setDatatypeBus(int * dt)
   (this->BsDatatype) = dt; 
 }
 
+bool
+CGRA_PE::isCMP()
+{
+    if (!(ins->getPredicator() && !ins->getLE())) {
+        if (ins->getOpCode() == EQ || ins->getOpCode() == NEQ ||
+            ins->getOpCode() == GT || ins->getOpCode() == LT) {
+                return true;
+            }
+    }
+    return false;
+}

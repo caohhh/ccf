@@ -49,6 +49,7 @@
 
 /*CGRA RELATED INCLUDES AND DEFINES STARTED*/
 #include "cpu/atomiccgra/CGRAPE.h"
+#include "cpu/atomiccgra/CGRA_IFU.hh"
 
 #define PRO 1
 #define KERN 2
@@ -198,6 +199,8 @@ class AtomicCGRA: public BaseCGRA
     bool isTCdynamic = false;
     //std::vector<CGRA_PE> cgra_PEs;    
     CGRA_PE* cgra_PEs;
+
+    CGRA_IFU* IFU;
 
     // for backup instruction fetch straight from bin (maybe a hack?)
     //uint64_t fetched_instructions[MAX_INSTRUCTION_SIZE];

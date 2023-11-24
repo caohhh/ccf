@@ -1060,6 +1060,13 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
             if(!cgra_PEs[i * CGRA_YDim + j].isNOOP())
                 Conditional_Reg = (Conditional_Reg & cgra_PEs[i * CGRA_YDim + j].getController_Reg());
             DPRINTF(CGRA_Detailed, "Conditional reg is %d : Len = %d\n", Conditional_Reg, Len);
+
+
+            // here to extract branching information from cmp instructions
+            if (cgra_PEs[i * CGRA_YDim + j].isCMP()) {
+                DPRINTF(CGRA_Detailed, "Condition Compare @ PE %d\n", i*CGRA_YDim+j);
+                IFU->recordCMP(thread->instAddr() + ((i*CGRA_XDim)+j)*(sizeof(unsigned long)), cgra_PEs[i * CGRA_YDim + j].getPredOutput());
+            }
         }
     }
     /**
@@ -1532,6 +1539,7 @@ AtomicCGRA::tick()
             {*/
                 //DPRINTF(CGRA,"newPC=%ld, II=%ld, EPILog=%ld, Prolog=%ld, Len=%ld\n", (long) newPC, (long) II, (long) EPILog, (long) Prolog, (long) Len);
                 DPRINTF(CGRA_Detailed,"newPC=%ld, II=%ld, EPILog=%ld, Prolog=%ld, Len=%ld\n", (long) newPC, (long) II, (long) EPILog, (long) Prolog, (long) Len);
+                IFU->printCMPHistory();
                 DPRINTF(CGRA||CGRA_Detailed,"\n\n********************** CGRA Execution is over @ %d **********************\n", debugCycles);
                 Restore_CPU_Execution(thread);
                 Switch_To_CPU();
@@ -1608,6 +1616,7 @@ AtomicCGRA::Setup_CGRA()
     //cgra_PEs = new CGRA_PE[CGRA_XDim * CGRA_YDim];
 
     DPRINTF(Setup_DEBUG, "Passed CGRA_PE initialization\n");
+    IFU = new CGRA_IFU;
 
     //Setting Neighbors - Populate Output structures
     for (int i = 0; i < CGRA_XDim; i++) {

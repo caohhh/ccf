@@ -149,6 +149,9 @@ public:
   void setDatatypeBus(int * dt);
 
   bool isNOOP();
+
+  // whether instruction in this PE is CMP
+  bool isCMP();
 };
 
 
