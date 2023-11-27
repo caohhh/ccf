@@ -148,13 +148,11 @@ AtomicCGRA::AtomicCGRA(AtomicCGRAParams *p)
 
 AtomicCGRA::~AtomicCGRA()
 {
-  delete[] CGRA_instructions;
-  //delete[] fetched_instructions;
-  delete[] MemData;
-  delete[] FMemData; 
-  delete[] MemBusDatatype; 
-  //cgra_PEs.resize(0);
-  delete[] cgra_PEs; 
+    delete[] MemData;
+    delete[] FMemData; 
+    delete[] MemBusDatatype; 
+    //cgra_PEs.resize(0);
+    delete[] cgra_PEs; 
     if (tickEvent.scheduled()) {
         deschedule(tickEvent);
     }
@@ -987,7 +985,6 @@ AtomicCGRA::amoMem(Addr addr, uint8_t* data, unsigned size,
 void 
 AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
 {
-    Prolog_Branch_Cycle = 0;
     //SimpleExecContext& t_info = *threadInfo[curThread];
     SimpleThread* thread = t_info.thread;
 
@@ -998,8 +995,6 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
     //DPRINTF(CGRA, "Length %d\n", Len);
     //DPRINTF(Instruction_print, "Fault print number: %d\n", (int)fault);
     //DPRINTF(Instruction_print, "stayAtPC: %d\n", (int)stayAtPC); 
-    Len--;
-
     _status = BaseCGRA::Running;
     //numCycles++;
     //cgraCycles++;
@@ -1017,7 +1012,7 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
     for (unsigned i = 0; i < CGRA_XDim; i++) {
         for (unsigned j = 0; j < CGRA_YDim; j++) {
             // little modification compared to hardware implementation
-            CGRA_Instruction *currentIns = new CGRA_Instruction(CGRA_instructions[i*CGRA_YDim + j]);
+            CGRA_Instruction *currentIns = new CGRA_Instruction(cgraIFU->getInsWord(i*CGRA_YDim + j));
             cgra_PEs[i * CGRA_YDim + j].Fetch(currentIns);
             //DPRINTF(Instruction_print,"Ins: %lx\t @ PE: %d\n",currentIns->getInsWord(), i * CGRA_YDim + j); 
         }
@@ -1033,39 +1028,34 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
         for (unsigned j = 0; j < CGRA_YDim; j++)
             cgra_PEs[i * CGRA_YDim + j].Decode();
     
-    // Finished executing an iteration of kernal (if TC statically known)
-    if(!isTCdynamic) {
-        if((Len == 0) & (state == KERN))
-            KernelCounter--;
-    }
-
     //*********EXECUTE********************
     // Support for multiple datatypes added in exec unit.
     for (int i = 0; i < CGRA_XDim; i++) {
         for (int j = 0; j < CGRA_YDim; j++) {
             DPRINTF(CGRA_Detailed, "Ins: %lx @ %lx \t@ PE %d\n", 
-                    CGRA_instructions[i*CGRA_YDim + j], 
+                    cgraIFU->getInsWord(i*CGRA_YDim + j), 
                     thread->instAddr() + ((i*CGRA_XDim)+j)*(sizeof(unsigned long)), 
                     (i*CGRA_YDim)+j);
 
             if (cgra_PEs[i * CGRA_YDim + j].GetDatatype() == character || 
                 cgra_PEs[i * CGRA_YDim + j].GetDatatype() == int32 || 
                 cgra_PEs[i * CGRA_YDim + j].GetDatatype() == int16) {
-                Prolog_Branch_Cycle += cgra_PEs[i * CGRA_YDim + j].IExecute();
-            } else if (cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float32)
-                Prolog_Branch_Cycle += cgra_PEs[i * CGRA_YDim + j].FExecute();
+                unsigned jmpCycles = cgra_PEs[i * CGRA_YDim + j].IExecute();
+                cgraIFU->setPrologBranchCycle(jmpCycles);
+            } else if (cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float32) {
+                unsigned jmpCycles = cgra_PEs[i * CGRA_YDim + j].FExecute();
+                cgraIFU->setPrologBranchCycle(jmpCycles);
+            }
             //else if(cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float64)
             //  cgra_PEs[i * CGRA_YDim + j].DExecute();
 
             if(!cgra_PEs[i * CGRA_YDim + j].isNOOP())
-                Conditional_Reg = (Conditional_Reg & cgra_PEs[i * CGRA_YDim + j].getController_Reg());
-            DPRINTF(CGRA_Detailed, "Conditional reg is %d : Len = %d\n", Conditional_Reg, Len);
-
+                cgraIFU->setConditionalReg(cgra_PEs[i * CGRA_YDim + j].getController_Reg());
 
             // here to extract branching information from cmp instructions
             if (cgra_PEs[i * CGRA_YDim + j].isCMP()) {
                 DPRINTF(CGRA_Detailed, "Condition Compare @ PE %d\n", i*CGRA_YDim+j);
-                IFU->recordCMP(thread->instAddr() + ((i*CGRA_XDim)+j)*(sizeof(unsigned long)), cgra_PEs[i * CGRA_YDim + j].getPredOutput());
+                cgraIFU->recordCMP(thread->instAddr() + ((i*CGRA_XDim)+j)*(sizeof(unsigned long)), cgra_PEs[i * CGRA_YDim + j].getPredOutput());
             }
         }
     }
@@ -1075,22 +1065,6 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
      * branch_offset == 1023 (all 1), Controller_Reg == 0 => Conditional_Reg == 0
      * Execute returns branch_offset, Prolog_Branch_Cycle += branch_offset
     */
-
-
-
-    /*
-        If TC is statically known then, decrement KernelCounter till 0.
-        Set Conditional_Reg as 0 to exit the kernel, moving to epilogue.
-        If TC is not known statically,
-        CGRA PE evaluating exit operation would set Conditional_Reg to 0.
-    */
-    if (!isTCdynamic) {
-        if(KernelCounter < 1)
-            Conditional_Reg = 0;
-        else
-            Conditional_Reg = 1;
-        DPRINTF(CGRA_Detailed, "Conditional reg is %d : Len = %d\n", Conditional_Reg, Len);
-    }
  
     //*********WRITE BACK********************
     // setup MemBusStatus and MemBusDataType
@@ -1152,8 +1126,8 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
     //DPRINTF(Instruction_print, "Fault after exe: %d\n",(int)fault);
 
  
-    if(fault != NoFault || !t_info.stayAtPC) 
-        CGRA_advancePC(t_info.thread);
+    if (fault != NoFault || !t_info.stayAtPC) 
+        cgraIFU->advancePC(t_info.thread);
 
   
     if (tryCompleteDrain()) {
@@ -1176,25 +1150,24 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
 
 void AtomicCGRA::CGRA_advanceTime()
 {
-  CycleCounter++;
-
-  if (CycleCounter%II==0)
-  {
-    CycleCounter = 0;
-    for (unsigned i = 0; i < CGRA_XDim; i++)
-      for (unsigned j = 0; j < CGRA_YDim; j++)
-        cgra_PEs[i * CGRA_YDim + j].advanceTime();
-  }
-} //CGRA_Execution
-
-/*void AtomicCGRA::fetch_CGRA_inst(long cycle_pc, uint64_t* CGRA_inst){
-  DPRINTF(CGRA_Execute, "Fetching instructions @ %lx\n", cycle_pc);
-  for(int i=0; i<CGRA_XDim; i++)
-    for(int j=0; j<CGRA_YDim; j++){
-      DPRINTF(CGRA_Execute, "%d: Fetched %lx\t\t", i*CGRA_XDim+j, (uint64_t) *((long*)cycle_pc + (i*CGRA_XDim+j)));
-      CGRA_inst[i*CGRA_XDim + j] = (uint64_t) *((long*)cycle_pc + (i*CGRA_XDim+j));
+    // TODO: check this function, gonna leave it be now,
+    // but PE advanceTime should only be active in KERN stage
+    /*
+    CycleCounter++;
+    if (CycleCounter%II==0) {
+        CycleCounter = 0;
+        for (unsigned i = 0; i < CGRA_XDim; i++)
+            for (unsigned j = 0; j < CGRA_YDim; j++)
+                cgra_PEs[i * CGRA_YDim + j].advanceTime();
     }
-    }*/
+    */
+    cgraIFU->advanceTime();
+    if (cgraIFU->finishedIter())
+        for (unsigned i = 0; i < CGRA_XDim; i++)
+            for (unsigned j = 0; j < CGRA_YDim; j++)
+                cgra_PEs[i * CGRA_YDim + j].advanceTime();
+} //CGRA_advanceTime
+
 
 void
 AtomicCGRA::tick()
@@ -1249,8 +1222,6 @@ AtomicCGRA::tick()
             /*  
               Mahesh:: Set Mem access during the initialization of CGRA constructor.
             */
-
-
             //MemBusStatus.reserve(CGRA_XDim); 
             //for (int i = 0; i < CGRA_XDim; i++)
               //MemBusStatus[i] = 0;
@@ -1290,17 +1261,15 @@ AtomicCGRA::tick()
                 } // end of needToFetch
             } // end of fault == NoFault
         } else { // end of is_CPU()
-
             if (needToFetch) {
                 ifetch_req->taskId(taskId());
                 // get PC and size to fetch
                 setupFetchRequest(ifetch_req);
 
-
                 Addr frag_addr = ifetch_req->getVaddr();
                 int frag_size = 0;
                 int size_left = ifetch_req->getSize();
-                uint64_t * instruction = CGRA_instructions;
+                uint64_t * instruction = cgraIFU->getInstPtr();
                 
                 // for multiple cache line access
                 while (size_left > 0) {
@@ -1329,61 +1298,14 @@ AtomicCGRA::tick()
                         break;
                     }
                     frag_addr += frag_size;
-                    instruction += frag_size/sizeof(CGRA_instructions);
+                    instruction += frag_size/sizeof(instruction);
                 }
-                /* Added by Vinh TA */
-                /** 
-                 * most likely useless now, kept in just in case
-                */
-               /*
-                if(!is_CPU()) {
-                    DPRINTF(CGRA_Execute, "Fetching PC: %lx - Index: %d\n", thread->instAddr(), PC_index_map[thread->instAddr()]);
-                    for(int i=0; i<CGRA_XDim*CGRA_YDim; i++) {
-                        DPRINTF(Instruction_Fetch, "Initial Instruction Fetched: %lx @ PE %d\n", CGRA_instructions[i], i);
-                        int addr = PC_index_map[thread->instAddr()] + i;
-                        if((CGRA_instructions[i] != fetched_instructions[addr])) { // & (INS_DATATYPE<<SHIFT_DATATYPE)) < int32){
-                            DPRINTF(ExecFaulting||CGRA_Detailed, "Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
-                            warn("Instruction Fetch Failed @ PE %d - Fetching back up instructions\n", i);
-                            //int addr = PC_index_map[thread->instAddr()] + i;
-                            DPRINTF(ExecFaulting, "Fetched Wrong Instructions: %lx\n", CGRA_instructions[i]); 
-                            CGRA_instructions[i] = fetched_instructions[addr];
-                            DPRINTF(ExecFaulting, "Refetched Instructions: %lx\n", CGRA_instructions[i]); 
-                        }
-                    }
-                }
-                */
             }
         }
 
         if (is_CPU()) {
 	        //DPRINTF(SimpleCPU, "CGRA is_CPU().\n"); 
             //DPRINTF(CGRA, "inside isCPU reg: %d\n", (int) thread->readIntReg(11));
-
-            /*char output[30];
-            char status[6];
-            FILE *fp = popen("test -f CGRAExec/CGRA_ACTIVE.* && echo true || echo false", "r");
-            if(fp == NULL)
-                fatal("Failed to check CGRA status!\n");
-            fgets(output, sizeof(output), fp);
-            //DPRINTF(CGRA, "\n*******************\nCOMMAND OUTPUT: %s \n****************\n", output);
-            pclose(fp);
-            if(output[0] == 't'){
-                //command = "ls CGRAExec/CGRA_ACTIVE.*";
-                fp = popen("ls CGRAExec/CGRA_ACTIVE.*", "r");
-                if(fp == NULL)
-                fatal("Failed to find CGRA loop!\n");
-                fgets(output, sizeof(output), fp);
-                memcpy(status, output+21, 6);
-                pclose(fp);
-                cpu_switch = true;
-                loopID = atoi(status);
-                DPRINTF(CGRA||CGRA_Detailed, "Switching to CGRA - loop %d\n", loopID);
-                //command = "rm CGRAExec/CGRA_ACTIVE*";
-                fp = popen("rm CGRAExec/CGRA_ACTIVE*", "r");
-                if(fp == NULL)
-                fatal("Cannot remove loopID file!\n");
-                pclose(fp);
-                }*/
 	  
             #ifdef DEBUG_BINARY
                 DPRINTF(CGRA||CGRA_Detailed, "CPU::Executing inst %lx @ PC: %lx\n", inst, thread->instAddr());
@@ -1456,55 +1378,13 @@ AtomicCGRA::tick()
                     clockPeriod();
             }
 
-            /*if ((int) thread->readIntReg(CPU_STATE_REG) == CGRA_DEACTIVATE)  // 17)
-                {
-                    DPRINTF(CGRA,"********Deleting CGRA********\n");
-                    //thread->setStatus(ThreadContext::Halted);
-                    //suspendContext(0);
-            }*/ // No more implemented
-
             if ((int) thread->readIntReg(CPU_STATE_REG) == CGRA_ACTIVATE) { //15)
-	        //if(cpu_switch)
-                loopID = thread->readIntReg(CGRA_LOOPID_REG);
-                //cpu_switch = false;
-                /*FILE* fp = fopen("CGRAExec/CGRA.ACTIVE", "r");
-                if(fp == NULL) fatal("Failed to read loopID\n");
-                fscanf(fp, "%d\n%d", &loopID, &callback_reg);
-                fclose(fp);
-                //fp = popen("rm CGRAExec/CGRA.ACTIVE", "r");
-                //if(fp == NULL) fatal("Failed to remove file!\n");
-                //pclose(fp);*/
+                int loopID = thread->readIntReg(CGRA_LOOPID_REG);
 	      
 	            DPRINTF(CGRA||CGRA_Detailed,"\n\n**************Setting UP the CGRA - loopID: %d******************\n", loopID);
-                Setup_CGRA_Execution(thread);
-
-                if(Prolog>0 || KernelCounter>0 || EPILog>0) {
-                    Switch_To_CGRA();
-                    schedule(tickEvent, nextCycle());
-                } else {
-                    //CGRA execution over
-                    DPRINTF(CGRA||CGRA_Detailed,"SHOULD NOT GET HERE!\n");
-                    warn("should not get here\n");
-                    Prepare_to_Switch_Back_to_CPU(thread);
-                    Restore_CPU_Execution(thread);
-                    DPRINTF(CGRA, "Setting CPU_STATE_REG to %d\n", CGRA_SWITCH);
-                    thread->setIntReg(CPU_STATE_REG, CGRA_SWITCH);  // 16);
-                    Switch_To_CPU();
-                    DPRINTF(CGRA,"\nCALL IN ADVANCE INST TO CPU.\n");
-
-                    if(fault != NoFault || !t_info.stayAtPC)
-                        CGRA_advancePC(thread);
-
-                    if (tryCompleteDrain())
-                        return;
-
-                    // instruction takes at least one cycle
-                    if (latency < clockPeriod())
-                        latency = clockPeriod();
-
-                    if (_status != Idle)
-                        reschedule(tickEvent, curTick() + latency, true);
-                }
+                Setup_CGRA_Execution(thread, loopID);
+                Switch_To_CGRA();
+                schedule(tickEvent, nextCycle());
             } else {  //end of readIntReg(CPU_STATE_REG) == CGRA_ACTIVATE
                 if (fault != NoFault || !t_info.stayAtPC)
                     advancePC(fault);
@@ -1525,26 +1405,15 @@ AtomicCGRA::tick()
         } else { // end of isCPU()
             DPRINTF(CGRA_Execute, "Inside CGRA Execution else statement.\n"); 
             //CGRA EXECUTION
-            if(Len==0) {
-                if(state==EPI)
-                    state=FINISH;
-            }
 
-            if(state==FINISH) {
+            if (cgraIFU->getState() == CGRA_IFU::FINISH) {
                 DPRINTF(CGRA_Detailed,"\n************************PREPARING TO MOVE TO CPU************\n");
                 Prepare_to_Switch_Back_to_CPU(thread);
-		    /*}
-            //CGRA EXECUTION OVER
-            if ((int) thread->readIntReg(CGRA_STATE_REG) == CGRA_EXEC_OVER)  // 66)
-            {*/
-                //DPRINTF(CGRA,"newPC=%ld, II=%ld, EPILog=%ld, Prolog=%ld, Len=%ld\n", (long) newPC, (long) II, (long) EPILog, (long) Prolog, (long) Len);
-                DPRINTF(CGRA_Detailed,"newPC=%ld, II=%ld, EPILog=%ld, Prolog=%ld, Len=%ld\n", (long) newPC, (long) II, (long) EPILog, (long) Prolog, (long) Len);
-                IFU->printCMPHistory();
+                cgraIFU->printCMPHistory();
                 DPRINTF(CGRA||CGRA_Detailed,"\n\n********************** CGRA Execution is over @ %d **********************\n", debugCycles);
                 Restore_CPU_Execution(thread);
                 Switch_To_CPU();
-                //thread->setIntReg(CPU_STATE_REG, callback_reg);
-                //thread->setIntReg(CGRA_STATE_REG,  60);
+
                 //DPRINTF(CGRA,"******CPU_STATE_REG = %lx*********\n",(unsigned)thread->readIntReg(CPU_STATE_REG));
                 //DPRINTF(CGRA_Detailed,"AFTER COMPLETETION PC: %x\n\n\n",(unsigned long) thread->instAddr());
                 for (int i = 0; i < CGRA_XDim; i++)
@@ -1553,7 +1422,7 @@ AtomicCGRA::tick()
 		
                 //If thread is not joined after CGRA Execution
                 //and we need to continue from old PC of CGRA controller
-                if(fault != NoFault || !t_info.stayAtPC)
+                if (fault != NoFault || !t_info.stayAtPC)
                     advancePC(fault);
 
                 if (tryCompleteDrain())
@@ -1603,11 +1472,8 @@ AtomicCGRA::Setup_CGRA()
 {
 
     DPRINTF(Setup_DEBUG, "Inside Setup_CGRA() with  %d x %d and RF %d\n", CGRA_XDim, CGRA_YDim, RFSize);
-    //CGRA_instructions = new uint32_t[16]; //Shail: TODO Parameterize this
-    CGRA_instructions = new uint64_t[CGRA_XDim * CGRA_YDim];
     //unknownRes = new uint64_t[16]; // Shail: TODO Parameterize this
     unknownRes = new uint64_t[CGRA_XDim * CGRA_YDim];
-    written = 0;
 
     DPRINTF(Setup_DEBUG, "Passed the first initialization\n");
     //cgra_PEs.reserve(CGRA_XDim * CGRA_YDim); //set number of PEs.
@@ -1616,7 +1482,7 @@ AtomicCGRA::Setup_CGRA()
     //cgra_PEs = new CGRA_PE[CGRA_XDim * CGRA_YDim];
 
     DPRINTF(Setup_DEBUG, "Passed CGRA_PE initialization\n");
-    IFU = new CGRA_IFU;
+    cgraIFU = new CGRA_IFU(CGRA_XDim, CGRA_YDim);
 
     //Setting Neighbors - Populate Output structures
     for (int i = 0; i < CGRA_XDim; i++) {
@@ -1781,149 +1647,22 @@ AtomicCGRA::Setup_CGRA()
     DPRINTF(Setup_DEBUG, "Leaving Setup_CGRA\n");
 }
 
-void AtomicCGRA::Setup_CGRA_Parameters()
+
+void AtomicCGRA::Setup_CGRA_Execution(SimpleThread* thread, int loopID)
 {
-  // Setting up controller
-  std::ostringstream osLoopID;
-  osLoopID << TotalLoops;
+    DPRINTF(CGRA_Detailed,"Inside Setup_CGRA_Execution\n");
+    DPRINTF(CGRA_Detailed,"\nEntering CGRA: OLD PC: %x\n",(unsigned int) thread->instAddr());
+    //DPRINTF(Instruction_print, "CGRA: OLD PC: %x\n",(unsigned long) tc->instAddr());
+    backPC = thread->pcState();
+    cgraIFU->setupExec(thread, loopID);
 
-  /*(ifstream execLoop;
-  execLoop.open("./CGRAExec/LoopID.txt");
-  std::string loopID;
-  execLoop >> loopID;*/
-  
-  std::string directoryPath = "./CGRAExec/L" + std::to_string(loopID) + "/initCGRA.txt";
+    DPRINTF(CGRA,"\n********************** CGRA Execution is started @ %d ****************************\n", debugCycles);
 
-  unsigned long temp;
-  ifstream initCGRAFile;
-  initCGRAFile.open(directoryPath.c_str());
-
-  initCGRAFile >> temp;
-  initCGRAFile >> temp;
-
-  initCGRAFile >> II;
-  initCGRAFile >> EPILog;
-  initCGRAFile >> Prolog;
-  initCGRAFile >> KernelCounter;
-  initCGRAFile >> LiveVar_St_Epilog;
-
-  initCGRAFile >> EPILogPC;
-  initCGRAFile >> PROLogPC;
-  initCGRAFile >> KernelPC;
-
-  initCGRAFile >> Prolog_extension_cycle;
-  initCGRAFile >> Prolog_version_cycle;
-  initCGRAFile.close();
-
-  DPRINTF(CGRA_Detailed,"Loop count is %d\n",KernelCounter);
-  DPRINTF(CGRA_Detailed,"Epilog Length is %d\n",EPILog);
-  DPRINTF(CGRA_Detailed,"LiveVar_St_Epilog Length is %d\n",LiveVar_St_Epilog);
-  DPRINTF(CGRA_Detailed,"II is %d\n",II);
-  int epilog_count = (int) ceil((float) ((EPILog-LiveVar_St_Epilog)/II));
-  int prolog_count = 1;
-  DPRINTF(CGRA_Detailed,"Epilog count is %d\n",epilog_count);
-  DPRINTF(CGRA_Detailed,"Prolog count is %d\n",prolog_count);
-  DPRINTF(CGRA_Detailed,"Kernel Counter is %d\n",KernelCounter);
-  DPRINTF(CGRA_Detailed, "Prolog PC is %lx\n", PROLogPC); 
-  DPRINTF(CGRA_Detailed, "Kernel PC is %lx\n", KernelPC);
-  DPRINTF(CGRA_Detailed, "Epilog PC is %lx\n", EPILogPC);
-
-  newPC=PROLogPC;
-  Len=Prolog;
-  state=PRO;
-  CycleCounter = 0;
-  Conditional_Reg = true;
-
-  isTCdynamic = (KernelCounter <= 0)? true:false;
-
-  DPRINTF(CGRA,"CGRA PARAMETERS: PROLOG= %d, EPILOG=%d, II=%d, KernelCounter=%d\n",Prolog,EPILog,II,KernelCounter);
-  DPRINTF(CGRA_Execute,"CGRA PARAMETERS: PROLOG=%d, EPILOG=%d, II=%d, KernelCounter=%d TCdynamic=%d, PROLOG_EXT=%d, PROLOG_VERSION_LEN=%d\n",Prolog,EPILog,II,KernelCounter,isTCdynamic, Prolog_extension_cycle, Prolog_version_cycle);
-  DPRINTF(CGRA_Detailed,"CGRA PARAMETERS: PROLOGPC= %lx, EPILOGPC=%lx,  KernelPC=%lx\n",(unsigned int)PROLogPC,(unsigned int)EPILogPC,(unsigned int)KernelPC);
-  DPRINTF(CGRA_Execute,"CGRA PARAMETERS: PROLOGPC= %lx, EPILOGPC=%lx,  KernelPC=%lx\n",(unsigned int)PROLogPC,(unsigned int)EPILogPC,(unsigned int)KernelPC);
-
-  // Added by Vinh TA
-  // Update: instruction fetch backup for fetch errors (read directly from bin file
-  //delete[] fetched_instructions;
-  // should be useless by now
-  /*
-  DPRINTF(CGRA_Detailed, "Instruction size: %d - backup size: %d\n", (Prolog + Prolog_extension_cycle + II + EPILog)*CGRA_XDim*CGRA_YDim, sizeof(fetched_instructions)/sizeof(uint64_t));
-  if((Prolog + Prolog_extension_cycle + II + EPILog)*CGRA_XDim*CGRA_YDim > MAX_INSTRUCTION_SIZE)
-    fatal("FATAL: Instructions exceeded MAX_INSTRUCTION_SIZE!\n");
-  
-  //fetched_instructions = new uint64_t[(Prolog + Prolog_extension_cycle + II + EPILog)*CGRA_XDim*CGRA_YDim];
-  std::string prolog_ins = "./CGRAExec/L" + std::to_string(loopID) + "/prolog_ins.bin";
-  std::string kernel_ins = "./CGRAExec/L" + std::to_string(loopID) + "/kernel_ins.bin";
-  std::string epilog_ins = "./CGRAExec/L" + std::to_string(loopID) + "/epilog_ins.bin";
-  FILE *instruction_stream;
-  int read_size, pro_ext_size, pro_ver_size;
-
-  instruction_stream = fopen(prolog_ins.c_str(), "rb");
-  fread(&read_size,sizeof(int),1,instruction_stream);
-  fread(&pro_ext_size,sizeof(int),1,instruction_stream);
-  fread(&pro_ver_size,sizeof(int),1,instruction_stream);
-  DPRINTF(ExecFaulting,"Read prolog size: %d - prolog ext size: %d - prolog ver size: %d\n", read_size, pro_ext_size, pro_ver_size);
-  fread(&fetched_instructions,sizeof(uint64_t),(read_size + pro_ext_size),instruction_stream);
-  fclose(instruction_stream);
-
-  instruction_stream = fopen(kernel_ins.c_str(), "rb");
-  fread(&read_size,sizeof(int),1,instruction_stream);
-  DPRINTF(ExecFaulting,"Read kernel size: %d\n", read_size);
-  fread(&fetched_instructions[(Prolog+Prolog_extension_cycle)*CGRA_XDim*CGRA_YDim],sizeof(uint64_t),read_size,instruction_stream);
-  fclose(instruction_stream);
-
-  instruction_stream = fopen(epilog_ins.c_str(), "rb");
-  fread(&read_size,sizeof(int),1,instruction_stream);
-  DPRINTF(ExecFaulting,"Read epilog size: %d\n", read_size);
-  fread(&fetched_instructions[(Prolog+Prolog_extension_cycle+II)*CGRA_XDim*CGRA_YDim],sizeof(uint64_t),read_size,instruction_stream);
-  fclose(instruction_stream);
-
-
-  // Manually adjust insword for patricia bench!
-  //for(int i=0; i<(Prolog + Prolog_extension_cycle + II + EPILog)*CGRA_XDim*CGRA_YDim; i++)
-  //if(fetched_instructions[i] == 0x4d1c000800000002UL && (i % 64 == 36)) fetched_instructions[i] -= 1; 
-  
-
-  DPRINTF(ExecFaulting, "Fetched prolog:\n");
-  for(int i=0; i<Prolog*CGRA_XDim*CGRA_YDim + pro_ext_size; i++)
-    DPRINTF(ExecFaulting, "%d: %lx\n", i, fetched_instructions[i]);
-  for(int i=0; i<Prolog+Prolog_extension_cycle; i++)
-    PC_index_map.insert(std::make_pair(PROLogPC + (i*CGRA_XDim*CGRA_YDim*sizeof(uint64_t)),(i*CGRA_XDim*CGRA_YDim)));
-
-  DPRINTF(ExecFaulting, "Fetched kernel:\n");
-  for(int i=0; i<II*CGRA_XDim*CGRA_YDim; i++)
-    DPRINTF(ExecFaulting, "%d: %lx\n", i, fetched_instructions[(Prolog*CGRA_XDim*CGRA_YDim)+i]);
-  for(int i=Prolog+Prolog_extension_cycle, j=0; i<Prolog+Prolog_extension_cycle+II; i++)
-    PC_index_map.insert(std::make_pair(KernelPC + ((j++)*CGRA_XDim*CGRA_YDim*sizeof(uint64_t)),(i*CGRA_XDim*CGRA_YDim)));
-
-  DPRINTF(ExecFaulting, "Fetched epilog:\n");
-  for(int i=0; i<EPILog*CGRA_XDim*CGRA_YDim; i++)
-    DPRINTF(ExecFaulting, "%d: %lx\n", i, fetched_instructions[((Prolog+II)*CGRA_XDim*CGRA_YDim)+i]);
-  for(int i=Prolog+Prolog_extension_cycle+II, j=0; i<Prolog+Prolog_extension_cycle+II+EPILog; i++)
-    PC_index_map.insert(std::make_pair(EPILogPC + ((j++)*CGRA_XDim*CGRA_YDim*sizeof(uint64_t)),(i*CGRA_XDim*CGRA_YDim)));
-
-    */
-  
-}
-
-void AtomicCGRA::Setup_CGRA_Execution(SimpleThread* thread)
-{
-  DPRINTF(CGRA_Detailed,"Inside Setup_CGRA_Execution\n");
-  DPRINTF(CGRA_Detailed,"\nEntering CGRA: OLD PC: %x\n",(unsigned int) thread->instAddr());
-  //DPRINTF(Instruction_print, "CGRA: OLD PC: %x\n",(unsigned long) tc->instAddr());
-  Setup_CGRA_Parameters();
-  DPRINTF(CGRA,"CGRA PC : %x\n",(unsigned int)newPC);
-  DPRINTF(CGRA,"\n********************** CGRA Execution is started @ %d ****************************\n", debugCycles);
-  backPC = thread->pcState();
-  thread->pcState((Addr) newPC);
-
-  for (int i = 0; i < CGRA_XDim; i++)
-  {
-    for (int j = 0; j < CGRA_YDim; j++)
-    {
-      cgra_PEs[i * CGRA_YDim + j].SetController_Reg();
+    for (int i = 0; i < CGRA_XDim; i++) {
+        for (int j = 0; j < CGRA_YDim; j++) {
+            cgra_PEs[i * CGRA_YDim + j].SetController_Reg();
+        }
     }
-  }
-
 }
 
 void AtomicCGRA::Prepare_to_Switch_Back_to_CPU(SimpleThread* thread)
@@ -1966,58 +1705,6 @@ void AtomicCGRA::setupFetchRequest(const RequestPtr &req)
   }
 }
 
-void 
-AtomicCGRA::CGRA_advancePC(SimpleThread* thread)
-{
-    DPRINTF(CGRA_Detailed,"*******IN ADVANCE PC******\n");
-    //DPRINTF(Instruction_print,"*******IN ADVANCE PC******\n");
-    DPRINTF(CGRA_Detailed,"%s,%s,%d,PC:%x\n",
-        __FILE__,__func__,__LINE__,(unsigned int) thread->instAddr());
-    //DPRINTF(Instruction_print,"%s,%s,%d,PC:%x\n",
-    //   __FILE__,__func__,__LINE__,(unsigned int) tc->instAddr());
-    //DPRINTF(Instruction_print, "newPC before: %lx\n", (long)newPC) ;
-    DPRINTF(CGRA_Detailed,"current state: %u\n", state);
-
-    if (Len == 0) {
-        if (state == PRO) {
-            if (Prolog_Branch_Cycle == 0) {
-                DPRINTF(CGRA_Detailed,"\nPROLOG->KERNEL\n");
-                DPRINTF(Instruction_print,"\nPROLOG->KERNEL\n");
-                state = KERN;
-                newPC = KernelPC;
-                Len = II;
-                Conditional_Reg = 1;
-            } else { 
-                newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim)*Prolog_Branch_Cycle);
-                DPRINTF(CGRA_Execute, "\nJumped to: %lx\n", newPC);
-                Len = Prolog_version_cycle;
-                state = EPI;
-            }
-        } else if (state == KERN) { // end of state == PRO
-            if (Conditional_Reg) {
-                Len = II;
-                newPC = KernelPC;
-            } else {
-                DPRINTF(CGRA_Detailed,"\nKERNEL->EPILOG\n");
-                DPRINTF(Instruction_print,"\nKERNEL->EPILOG\n");
-                state = EPI;
-                newPC = EPILogPC;
-                Len = EPILog;
-            }
-        } // end of state == KERN
-    } else { // end of Len == 0
-        if(Prolog_Branch_Cycle == 0)
-            newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim));
-        else {
-            newPC += ((sizeof(long))*(CGRA_XDim*CGRA_YDim)*Prolog_Branch_Cycle);
-            DPRINTF(CGRA_Execute, "\nJumped to: %lx\n", newPC);
-            Len = Prolog_version_cycle;
-            state = EPI;
-        }
-    }
-    thread->pcState((Addr) newPC);
-    DPRINTF(CGRA_Detailed,"state after advance PC: %u\n", state);
-}
 
 void
 AtomicCGRA::regProbePoints()

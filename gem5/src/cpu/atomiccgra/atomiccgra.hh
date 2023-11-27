@@ -51,11 +51,6 @@
 #include "cpu/atomiccgra/CGRAPE.h"
 #include "cpu/atomiccgra/CGRA_IFU.hh"
 
-#define PRO 1
-#define KERN 2
-#define EPI 3
-#define FINISH 4
-
 #define CGRA_STATE_REG 0
 #define CPU_STATE_REG 12
 #define SIM_CLOCK_REG 12
@@ -81,17 +76,17 @@
 
 enum ConnectionType {Simple_Connection, Diagonal_Connection, Hop_Connection, Only_Hop_Connection};
 enum POSITION
-    {
-      topleftcorner=0,
-      toprow,
-      leftcol,
-      toprightcorner,
-      rightcol,
-      bottomleftcorner,
-      bottomrightcorner,
-      bottomrow,
-      regular
-    };
+{
+    topleftcorner=0,
+    toprow,
+    leftcol,
+    toprightcorner,
+    rightcol,
+    bottomleftcorner,
+    bottomrightcorner,
+    bottomrow,
+    regular
+};
 
 class AtomicCGRA: public BaseCGRA 
 {
@@ -106,28 +101,18 @@ class AtomicCGRA: public BaseCGRA
     /*CGRA DEFINITIONS START*/
     bool CGRA_Mode;
 
-    //uint32_t *CGRA_instructions;
-    uint64_t *CGRA_instructions;
-    int loopID;
-    //void fetchInstructions(unsigned int *InstMem);
-  //void fetch_CGRA_inst(long, uint64_t*);
 
     /*AtomicCGRA related CGRA functions. This is replaced by tick() in atomic mode
        due to the functionality of atomic mode in gem5.*/
 
     Tick latency = 0;
 
-    //int x_dim=0;
-
-    void CGRA_advancePC(SimpleThread*);
     void CGRA_advanceTime();
     
-    int Position(int current, int x, int y);
     void Setup_CGRA();
 
     void Prepare_to_Switch_Back_to_CPU(SimpleThread*);
-    void Setup_CGRA_Execution(SimpleThread*);
-    void Setup_CGRA_Parameters();
+    void Setup_CGRA_Execution(SimpleThread* thread, int loopID);
     void Restore_CPU_Execution(SimpleThread*);
 
     void Switch_To_CPU();
@@ -161,49 +146,10 @@ class AtomicCGRA: public BaseCGRA
     
   protected:
 
-    /*CGRA DEFINITIONS START*/
-    long newPC;
-    long EPILogPC;
-    long PROLogPC;
-    long KernelPC;
-    unsigned II;
-    unsigned EPILog;
-    unsigned Prolog;
-    unsigned Prolog_extension_cycle;
-    unsigned Prolog_version_cycle;
-    unsigned Len;
-    int originalLen;
-    int KernelCounter;
-    unsigned CycleCounter;
-    int LiveVar_St_Epilog;
-    unsigned long long TotalLoops = 0;
+    /*CGRA DEFINITIONS STARTS*/
 
-    unsigned callback_reg;
-
-    unsigned short state;
-
-    bool written;
-    int writeValue;
-    int operand1;
-
-    /**
-     * False: CGRA should leave KERN stage
-     *        either from KernelCounter == 0 (static)
-     *        or meeting loop exit condition (dynamic)
-    */
-    bool Conditional_Reg;
-    // branch_offset, relate to loop exit
-    unsigned Prolog_Branch_Cycle;
-    //bool * PE_Conditional_Reg[CGRA_XDim*CGRA_YDim];
-    bool ** PE_Conditional_Reg;
-    bool isTCdynamic = false;
-    //std::vector<CGRA_PE> cgra_PEs;    
     CGRA_PE* cgra_PEs;
-
-    CGRA_IFU* IFU;
-
-    // for backup instruction fetch straight from bin (maybe a hack?)
-    //uint64_t fetched_instructions[MAX_INSTRUCTION_SIZE];
+    CGRA_IFU* cgraIFU;
 
     TheISA::PCState backPC;
     /*CGRA DEFINITIONS END*/
@@ -357,20 +303,20 @@ class AtomicCGRA: public BaseCGRA
     //DrainState drain() override;
     DrainState drain(); // override;
 
-  //void drainResume() override;
+    //void drainResume() override;
     void drainResume();
 
-  //    void switchOut();
+    //    void switchOut();
     void switchOut();
     //void takeOverFrom(BaseCPU *oldCPU) override;
     void takeOverFrom(BaseCPU *oldCPU);
 
-  //void verifyMemoryMode() const override;
+    //void verifyMemoryMode() const override;
     void verifyMemoryMode() const;
 
-  //void activateContext(ThreadID thread_num) override;
+    //void activateContext(ThreadID thread_num) override;
     void activateContext(ThreadID thread_num);
-  //void suspendContext(ThreadID thread_num) override;
+    //void suspendContext(ThreadID thread_num) override;
     void suspendContext(ThreadID thread_num);
 
     /**
