@@ -3170,186 +3170,166 @@ immediate = (addr & 0xff000000) >>24
 
 }
  */
-void generateINITinstructions(char* objfile)
+void 
+generateINITinstructions(char* objfile)
 {
-  for(unsigned i=0; i < X*Y; i++)
-  {
+  for (unsigned i=0; i < X*Y; i++) {
     pe_mem_op_cycles_map[i] = 0;
     pe_livein_load_map[(i/X)] = 0;
   }
 
   vector<int> nonrecNode = getNonRecurringNodes(); 
 
-  if(nonrecNode.size() > 0)
-  {
-    for(int i=0;i<nonrecNode.size();++i)
-    {
+  if (nonrecNode.size() > 0) {
+    for (int i=0;i<nonrecNode.size();++i) {
       int node = nonrecNode[i];
       int pe;
       std::vector<int> store_pe_set;
       int liveOutData = node;
-      if(isLiveStoreData(node)) // && isLiveStoreNode(node))
-      {
+      if(isLiveStoreData(node)) {// && isLiveStoreNode(node))
         liveOutData = getLiveOutToBeStored(node);
         pe = getLiveVarMappedPE(node);
-      }
-      else if(isLiveStoreNode(node)){
+      } else if (isLiveStoreNode(node)) {
         pe = getLiveVarMappedPE(node);
-      }
-      else if(isLargeConstant(node)){
+      } else if(isLargeConstant(node)) {
         store_pe_set = getConstantMappedPE(node);
-	if(store_pe_set.size() == 0) continue;
-      }
-      else if(isLiveInNode(node)){
+        if (store_pe_set.size() == 0) 
+          continue;
+      } else if(isLiveInNode(node)) {
         pe = getLiveInMappedPE(node);
-      }
-      else{
+      } else {
         pe = getMappedPE(node, state_kernel);
       }
 
-      if(store_pe_set.size() == 0) store_pe_set.push_back(pe);
+      if (store_pe_set.size() == 0) 
+        store_pe_set.push_back(pe);
 
-      for(std::vector<int>::iterator pe_it = store_pe_set.begin(); pe_it != store_pe_set.end(); ++pe_it){
-	int pe = *pe_it;
-	int num_mem_ops = (pe_mem_op_map.count(pe) <= 0)?0: pe_mem_op_map[pe];
-	int reg_num;    
+      for (std::vector<int>::iterator pe_it = store_pe_set.begin(); pe_it != store_pe_set.end(); ++pe_it) {
+        int pe = *pe_it;
+        int num_mem_ops = (pe_mem_op_map.count(pe) <= 0)?0: pe_mem_op_map[pe];
+        int reg_num;    
 
-	// Mahesh: LiveStore Nodes are stored in the non recurring part of the reg. 
-	if(isStoreNode(node))  // Inspect me: should I be isStoreNode or isLiveStoreNode?
-	  reg_num = num_mem_ops;
-	else
-	  reg_num = num_mem_ops + pe_reg_config[pe];
+        // Mahesh: LiveStore Nodes are stored in the non recurring part of the reg. 
+        if (isStoreNode(node))  // Inspect me: should I be isStoreNode or isLiveStoreNode?
+          reg_num = num_mem_ops;
+        else
+          reg_num = num_mem_ops + pe_reg_config[pe];
 
-	if(pe_reg_config[pe] > R) {
-	  cerr << "Configuration exceeds RF size\n";
-	  exit (EXIT_FAILURE);
-	}
-	else
-	  cout << "\treg_num: " << reg_num << " - PE: " << pe << " - Node: " << getNodeName(node) << endl;
+        if (pe_reg_config[pe] > R) {
+          cerr << "Configuration exceeds RF size\n";
+          exit (EXIT_FAILURE);
+        } else
+          cout << "\treg_num: " << reg_num << " - PE: " << pe << " - Node: " << getNodeName(node) << endl;
 
 
-	pe_mem_op_map[pe] = num_mem_ops + 1;
+        pe_mem_op_map[pe] = num_mem_ops + 1;
 
-	if(isLiveStoreData(node))
-	{
-	  mem_node_regNum[liveOutData] = reg_num;
-	  continue;
-	}
-	mem_node_regNum[node] = reg_num;
+        if (isLiveStoreData(node)) {
+          mem_node_regNum[liveOutData] = reg_num;
+          continue;
+        }
+        mem_node_regNum[node] = reg_num;
+        
+        // Added by Vinh Ta
+        // Update: this is to fix error where the same constant/livein that uses reg appears in more than 1 PEs and have different regNum across them
+        // TODO: need more work on this -> currently only used for getreg1address, should replace every mem_node_regNum occurence
+        mem_node_pe_regNum[node][pe] = reg_num;
 	
-	// Added by Vinh Ta
-	// Update: this is to fix error where the same constant/livein that uses reg appears in more than 1 PEs and have different regNum across them
-	// TODO: need more work on this -> currently only used for getreg1address, should replace every mem_node_regNum occurence
-	mem_node_pe_regNum[node][pe] = reg_num;
-	
-	pe_mem_op_cycles_map[pe] += 1; // moved from 3 to 1 with support of 64-bit insword
-	maxMemoryOperations = ((num_mem_ops+1) > maxMemoryOperations)? (num_mem_ops+1):maxMemoryOperations;
+        pe_mem_op_cycles_map[pe] += 1; // moved from 3 to 1 with support of 64-bit insword
+        maxMemoryOperations = ((num_mem_ops+1) > maxMemoryOperations)? (num_mem_ops+1):maxMemoryOperations;
 
-	int id = getNodeType(node);
+        int id = getNodeType(node);
 
-	if (id == ld_add || id == st_add)
-	{
-	  string var = (getNodeType(node) == ld_add)? getloadvarname(node):getstorevarname(node);
-	  unsigned int addr = getVariableAddress(var,objfile);
+        if (id == ld_add || id == st_add) {
+          string var = (getNodeType(node) == ld_add)? getloadvarname(node):getstorevarname(node);
+          unsigned int addr = getVariableAddress(var,objfile);
 
-	  std::multimap<int, int>::iterator it1 = in_edge.find(node);
+          std::multimap<int, int>::iterator it1 = in_edge.find(node);
 
-	  if ( it1->second == 0)
-	  {
-	    printf("\nVariable Address (Hex): %x\t",addr);
-	    cout<< "Node: " << node<<"\tPE: "<<pe<<"\tAddress (Decimal): "<<addr<<"\tRegNum: "<< reg_num << endl;
-	    storeNonRecurringVal(addr, reg_num, pe);
-	  }
-	  else
-	    getArrayAddress(pe,addr,node,reg_num,maxMemoryOperations,num_mem_ops);
-	  }
-	else if(id == constant)
-	{
-	  string nodename = getNodeName(node);
-	  if(nodename.find("ConstInt") != string::npos)  //a constant
-	  {
-	    unsigned int largeconst; // cannot use long because of RF config
-	    largeconst = (unsigned int) extractNumber(nodename);
-	    printf("Large Constant (Hex): %x\tConstant (Decimal): %d\n",largeconst,largeconst);
-	    storeNonRecurringVal(largeconst, reg_num, pe);
-	  }
-	  else if (nodename.find("ConstFP") != string::npos)
-	  {
-	    FLOAT largeFP; 
-	    largeFP = extractFPNumber(nodename); 
-	    printf("Floating Point Constant (Hex): %f\t",largeFP.f);
-	    unsigned int ieee754=0;
-	    ieee754 = (unsigned int) getDoublePrecision(largeFP); 
-	    storeNonRecurringFPVal(ieee754, reg_num, pe); 
-	  }
-	  else
-	  {
-	    unsigned int addrOfLargeconst = getVariableAddress(nodename,objfile);
-	    printf("Generating Instructions To Load Address (Hex) %x\n",addrOfLargeconst);
-	    cout << nodename << endl;
-	    storeNonRecurringVal(addrOfLargeconst, reg_num, pe);
-	    Datatype DType = (Datatype)(getNodeDataType(node)); 
+          if ( it1->second == 0) {
+            printf("\nVariable Address (Hex): %x\t",addr);
+            cout<< "Node: " << node<<"\tPE: "<<pe<<"\tAddress (Decimal): "<<addr<<"\tRegNum: "<< reg_num << endl;
+            storeNonRecurringVal(addr, reg_num, pe);
+          } else
+            getArrayAddress(pe,addr,node,reg_num,maxMemoryOperations,num_mem_ops);
+        } else if (id == constant) {
+          string nodename = getNodeName(node);
+          if (nodename.find("ConstInt") != string::npos) {  //a constant
+            unsigned int largeconst; // cannot use long because of RF config
+            largeconst = (unsigned int) extractNumber(nodename);
+            printf("Large Constant (Hex): %x\tConstant (Decimal): %d\n",largeconst,largeconst);
+            storeNonRecurringVal(largeconst, reg_num, pe);
+          } else if (nodename.find("ConstFP") != string::npos) {
+            FLOAT largeFP; 
+            largeFP = extractFPNumber(nodename); 
+            printf("Floating Point Constant (Hex): %f\t",largeFP.f);
+            unsigned int ieee754=0;
+            ieee754 = (unsigned int) getDoublePrecision(largeFP); 
+            storeNonRecurringFPVal(ieee754, reg_num, pe); 
+          } else {
+            unsigned int addrOfLargeconst = getVariableAddress(nodename,objfile);
+            printf("Generating Instructions To Load Address (Hex) %x\n",addrOfLargeconst);
+            cout << nodename << endl;
+            storeNonRecurringVal(addrOfLargeconst, reg_num, pe);
+            Datatype DType = (Datatype)(getNodeDataType(node)); 
 
-	    if(liveInoperand_node_list.count(node) != 0)
-	    {
-	      std::vector<Pred_Instruction> ins_set;
+            if (liveInoperand_node_list.count(node) != 0) {
+              std::vector<Pred_Instruction> ins_set;
 
-	      unsigned alignment = 4;
-	      std::map<int,unsigned>::iterator itt;
-	      itt = memory_access_alignment.find(node);
-	      if(itt != memory_access_alignment.end())
-		alignment = memory_access_alignment.find(node)->second;
+              unsigned alignment = 4;
+              std::map<int,unsigned>::iterator itt;
+              itt = memory_access_alignment.find(node);
+              if (itt != memory_access_alignment.end())
+                alignment = memory_access_alignment.find(node)->second;
 
-	      int rowID = pe/Y;
-	      int cycleDiff = pe_mem_op_cycles_map[pe] - pe_livein_load_map[rowID];
-	      if(cycleDiff < 0)
-	      {
-		for(unsigned ii=0; ii < abs(cycleDiff); ii++)
-		{
-		  CGRA_Instruction noop_ins = generateNOOP();
-		  unsigned long noop_decoded = noop_ins.DecodeInstruction(&noop_ins);
-		  
-		  Pred_Instruction temp(noop_decoded);
-		  ins_set.push_back(temp.DecodePredInstruction(&temp));
-		  pe_mem_op_cycles_map[pe]++;
-		}
-	      }
+              int rowID = pe/Y;
+              int cycleDiff = pe_mem_op_cycles_map[pe] - pe_livein_load_map[rowID];
+              if (cycleDiff < 0) {
+                for (unsigned ii=0; ii < abs(cycleDiff); ii++) {
+                  CGRA_Instruction noop_ins = generateNOOP();
+                  unsigned long noop_decoded = noop_ins.DecodeInstruction(&noop_ins);
+                  
+                  Pred_Instruction temp(noop_decoded);
+                  ins_set.push_back(temp.DecodePredInstruction(&temp));
+                  pe_mem_op_cycles_map[pe]++;
+                }
+              }
 	      
-	      // The datatype of load data generator depends on the value. If gVar or gPtr is loaded then
-	      // the datatype is the datatype of that node. This ensures that the data is loaded into the correct membus. 
-	      // The datatype of load data address generator is int32. This ensures that the data address in calculated
-	      // by Int Execution unit. The Data_ins carries the info of the datatype to be loaded. 
-	      cout << "Break: Node " << getNodeName(node) << " dt: " << DType << endl;
-	      Datatype dt = DType; // int32; // This problem has been fixed by gem5 and dt of ld_add for loading fp should be float32
-	      CGRA_Instruction LD_Add_ins(dt,(OPCode)address_generator,1,Register,Immediate,reg_num,0,0,0,alignment,1,0);
-	      CGRA_Instruction LD_Data_ins(DType,Add,0,DataBus,Immediate,0,0,reg_num,1,0,0,0); //Mahesh check for FP.
-	      pe_mem_op_cycles_map[pe] += 2;
-	      pe_livein_load_map[rowID] = pe_mem_op_cycles_map[pe];
+              // The datatype of load data generator depends on the value. If gVar or gPtr is loaded then
+              // the datatype is the datatype of that node. This ensures that the data is loaded into the correct membus. 
+              // The datatype of load data address generator is int32. This ensures that the data address in calculated
+              // by Int Execution unit. The Data_ins carries the info of the datatype to be loaded. 
+              cout << "Break: Node " << getNodeName(node) << " dt: " << DType << endl;
+              Datatype dt = DType; // int32; // This problem has been fixed by gem5 and dt of ld_add for loading fp should be float32
+              CGRA_Instruction LD_Add_ins(dt,(OPCode)address_generator,1,Register,Immediate,reg_num,0,0,0,alignment,1,0);
+              CGRA_Instruction LD_Data_ins(DType,Add,0,DataBus,Immediate,0,0,reg_num,1,0,0,0); //Mahesh check for FP.
+              pe_mem_op_cycles_map[pe] += 2;
+              pe_livein_load_map[rowID] = pe_mem_op_cycles_map[pe];
 
-	      unsigned long dec1 = LD_Add_ins.DecodeInstruction(&LD_Add_ins);
-	      unsigned long dec2 = LD_Data_ins.DecodeInstruction(&LD_Data_ins);
-	      //printf("Loading dynamic constant value. LDA and LDD are %lu: %lu\n",dec1,dec2);
-	      printf("Loading dynamic constant value. LDA and LDD are %lx: %lx in pe %d\n",dec1,dec2,pe);
-	      Pred_Instruction temp1(dec1);
-	      Pred_Instruction temp2(dec2);
-	      printf("Load Dyn Cons %lx %lx\n", temp1.DecodePredInstruction(&temp1), temp2.DecodePredInstruction(&temp2));
-	      ins_set.push_back(temp1.DecodePredInstruction(&temp1));
-	      ins_set.push_back(temp2.DecodePredInstruction(&temp2));
-	      initInstructions.insert(std::pair<int,std::vector<Pred_Instruction> >(pe,ins_set));
-	    }
+              unsigned long dec1 = LD_Add_ins.DecodeInstruction(&LD_Add_ins);
+              unsigned long dec2 = LD_Data_ins.DecodeInstruction(&LD_Data_ins);
+              //printf("Loading dynamic constant value. LDA and LDD are %lu: %lu\n",dec1,dec2);
+              printf("Loading dynamic constant value. LDA and LDD are %lx: %lx in pe %d\n",dec1,dec2,pe);
+              Pred_Instruction temp1(dec1);
+              Pred_Instruction temp2(dec2);
+              printf("Load Dyn Cons %lx %lx\n", temp1.DecodePredInstruction(&temp1), temp2.DecodePredInstruction(&temp2));
+              ins_set.push_back(temp1.DecodePredInstruction(&temp1));
+              ins_set.push_back(temp2.DecodePredInstruction(&temp2));
+              initInstructions.insert(std::pair<int,std::vector<Pred_Instruction> >(pe,ins_set));
+            }
 
-	    //generate instructions to load the address of dynamic constant and obtain and store the value
-	    //avoid it in case of the base address for array
-	    //Activate correct code in case of dynamic constant
-	  }
-	}
-	init_cycles = (pe_mem_op_cycles_map[pe] > init_cycles)? (pe_mem_op_cycles_map[pe]) : init_cycles;
+            //generate instructions to load the address of dynamic constant and obtain and store the value
+            //avoid it in case of the base address for array
+            //Activate correct code in case of dynamic constant
+          }
+        }
+        init_cycles = (pe_mem_op_cycles_map[pe] > init_cycles)? (pe_mem_op_cycles_map[pe]) : init_cycles;
       }
     }
   }
   std::map<int,int>::iterator it; 
   std::cout << "pe mem op" << std::endl;
-  for(it = pe_mem_op_cycles_map.begin(); it!= pe_mem_op_cycles_map.end(); it++) 
+  for (it = pe_mem_op_cycles_map.begin(); it!= pe_mem_op_cycles_map.end(); it++) 
     std::cout << it->first << "\t" << it->second << std::endl; 
 }
 
@@ -4087,43 +4067,49 @@ std::tuple<std::map<int,int>,std::map<int,std::set<int>>> construct_stage_map(st
   return std::make_tuple(node_stage_map , stage_cycle_map);
 }
 
-void epilog_adjustment(std::map<int,std::vector<std::pair<int,int>>> iteration_map, std::map<int,int> node_stage_map, std::map<int,std::set<int>> stage_cycle_map, int loopCtrl_node){
+void 
+epilog_adjustment(std::map<int,std::vector<std::pair<int,int>>> iteration_map, std::map<int,int> node_stage_map, std::map<int,std::set<int>> stage_cycle_map, int loopCtrl_node)
+{
   // This modifies epilog schedule such that the schedule would execute correctly
   // Iterate from the final iteration inwards
   // At each iteration, find location of a node stored in *epilog and replace with noop (-1)
 
   int stage_count = -1;
-  for(std::map<int,int>::iterator it = node_stage_map.begin(); it != node_stage_map.end(); ++it)
-    if(it->second > stage_count) stage_count = it->second;
+  for (std::map<int,int>::iterator it = node_stage_map.begin(); it != node_stage_map.end(); ++it)
+    if (it->second > stage_count) 
+      stage_count = it->second;
   int loopCtrl_stage = node_stage_map[loopCtrl_node];
   int exceeds = stage_count - loopCtrl_stage;
   int iteration_cycle = 0;
-  for(auto iteration_it = iteration_map.begin(); iteration_it != iteration_map.end(); ++iteration_it)
-    if(iteration_it->first > iteration_cycle) iteration_cycle = iteration_it->first;
+  for (auto iteration_it = iteration_map.begin(); iteration_it != iteration_map.end(); ++iteration_it)
+    if (iteration_it->first > iteration_cycle) 
+      iteration_cycle = iteration_it->first;
 
-  //cout << "Epilog_Adj: stage count: " << stage_count << " - loopCtrl stage: " << loopCtrl_stage << " - exceeds: " << exceeds << " - iteration cycle: " << iteration_cycle << " - epilog_size: " << epilog_size << endl;
+  cout << "Epilog_Adj: stage count: " << stage_count << " - loopCtrl stage: " << loopCtrl_stage << " - exceeds: " << exceeds << " - iteration cycle: " << iteration_cycle << " - epilog_size: " << epilog_size << endl;
   
   std::vector<int> deleting_indices;
-  for(int stage_i = stage_count; stage_i > loopCtrl_stage; stage_i--){
+  for (int stage_i = stage_count; stage_i > loopCtrl_stage; stage_i--) {
     // Start from top stage, delete nodes from after this stage in epilog down to end of iteration
     // Keep going till reaching the stage above loopCtrl_stage
     int start_cycle = int(*(stage_cycle_map[stage_i-1].begin()));
-    for(int cycle_i = start_cycle; cycle_i <= iteration_cycle; cycle_i++){
+    for (int cycle_i = start_cycle; cycle_i <= iteration_cycle; cycle_i++) {
       std::vector<std::pair<int,int>> cycle_nodes = iteration_map[cycle_i];
-      for(auto node_it = cycle_nodes.begin(); node_it != cycle_nodes.end(); ++node_it){
-	int node = (*node_it).first;
-	int pe = (*node_it).second;
-	int epilog_cycle = cycle_i - start_cycle;
-	int index = epilog_cycle*X*Y + pe;
-	if(node != epilog[index]) _FATAL("Error: deleting node and index don't match!");
-	deleting_indices.push_back(index);
+      for (auto node_it = cycle_nodes.begin(); node_it != cycle_nodes.end(); ++node_it) {
+        int node = (*node_it).first;
+        int pe = (*node_it).second;
+        int epilog_cycle = cycle_i - start_cycle;
+        int index = epilog_cycle*X*Y + pe;
+        if (node != epilog[index]) 
+          _FATAL("Error: deleting node and index don't match!");
+        deleting_indices.push_back(index);
       }
     }
   }
-  for(int i=0; i<deleting_indices.size(); i++)
+  for (int i=0; i<deleting_indices.size(); i++)
     epilog[deleting_indices[i]] = -1;
   epilog_size -= (exceeds * kernel_II * X * Y);
-  if(epilog_size < 0) epilog_size = 0;
+  if (epilog_size < 0) 
+    epilog_size = 0;
 }
 
 std::tuple<int**,std::map<int,std::map<int,int>>> generate_prolog_versions(std::map<int,std::vector<std::pair<int,int>>> iteration_map, int loopCtrl_node, int* num_versions, int* version_cycle)

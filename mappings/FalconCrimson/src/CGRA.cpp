@@ -63,7 +63,8 @@ void CGRA::SetII(int II)
   }
 }
 
-void CGRA::ShowMapping()
+void 
+CGRA::ShowMapping()
 {
   totalRotatingReg = new unsigned int [SizeX*SizeY];
 
@@ -74,38 +75,32 @@ void CGRA::ShowMapping()
   printf("*********************************Kernel Start*********************************\n");
   debugfile << "*********************************Kernel Start*********************************\n";
   
-  for (int timeIndex = 0; timeIndex < II; timeIndex++)
-  {
-
+  for (int timeIndex = 0; timeIndex < II; timeIndex++) {
     TimeCGRA* cgraTime = timeCGRAList[timeIndex];
     PE* candidatePE;
     cout << "Time:" << timeIndex << endl;
     //debugfile << "Time:" << timeIndex << endl;
     debugfile << "Time: " << timeIndex << endl;
-    for (int i = 0; i < SizeX; i++)
-    {
-      for (int j = 0; j < SizeY; j++)
-      {
-        if(timeIndex == 0) totalRotatingReg[i*SizeY + j] = 0;
+    for (int i = 0; i < SizeX; i++) {
+      for (int j = 0; j < SizeY; j++) {
+        if (timeIndex == 0) 
+          totalRotatingReg[i*SizeY + j] = 0;
         candidatePE = cgraTime->getPE(i, j);
-        if (candidatePE->isBusy())
-        {
+        if (candidatePE->isBusy()) {
           int usedReg = candidatePE->NumberOfUsedRegisters();
           if((usedReg < 0) || (usedReg > SizeReg))
             usedReg = 0;
           printf("%10d(%d)", candidatePE->getNode()->get_ID(), usedReg);
           debugfile << std::setw(10) << candidatePE->getNode()->get_ID();
-	  //debugfile << "\t" << candidatePE->getNode()->get_ID() << "(" << usedReg << ")";
+          //debugfile << "\t" << candidatePE->getNode()->get_ID() << "(" << usedReg << ")";
           //kernelFile << candidatePE->getNode()->get_ID()<<"\t"<< usedReg <<"\t"<< candidatePE->getNode()->get_Sched_Info()->get_Current() << "\n";
           kernelFile << candidatePE->getNode()->get_ID()<<"\t"<< usedReg <<"\t"<< candidatePE->getNode()->get_Sched_Info()->get_Modulo_Current() << "\n";
-          if(((unsigned)usedReg) > totalRotatingReg[i*SizeY + j])
+          if (((unsigned)usedReg) > totalRotatingReg[i*SizeY + j])
             totalRotatingReg[i*SizeY + j] = usedReg;
-        }
-        else
-        {
+        } else {
           kernelFile << "-1\t0\t0" << "\n";
           printf("         F");
-	  debugfile << "         F";
+          debugfile << "         F";
         }
         printf("\t");
         debugfile << "\t";
@@ -13933,9 +13928,9 @@ void CGRA::Prolog(DFG* myDFG, int highest_distance, int node_with_highest_distan
   prologFile.close();
 }
 
-void CGRA::EPIlog(DFG* myDFG)
+void 
+CGRA::EPIlog(DFG* myDFG)
 {
-
   std::ofstream epilogFile;
   std::string epilog = "epilog";
   epilog.append(".sch");
@@ -13948,10 +13943,8 @@ void CGRA::EPIlog(DFG* myDFG)
   cout << "\n*********************************Epilog Start*********************************\n";
   debugfile << "\n*********************************Epilog Start*********************************\n";
   
-  while (nextBreak)
-  {
-    for (int timeIndex = 0; timeIndex < II; timeIndex++)
-    {
+  while (nextBreak) {
+    for (int timeIndex = 0; timeIndex < II; timeIndex++) {
       t++;
       toBreak = true;
       TimeCGRA* cgraTime = timeCGRAList[timeIndex];
@@ -13959,63 +13952,50 @@ void CGRA::EPIlog(DFG* myDFG)
       cout << "Time:" << t << endl;
       debugfile << "Time: " << t << endl;
       
-      for (int i = 0; i < SizeX; i++)
-      {
-        for (int j = 0; j < SizeY; j++)
-        {
+      for (int i = 0; i < SizeX; i++) {
+        for (int j = 0; j < SizeY; j++) {
           candidatePE = cgraTime->getPE(i, j);
-          if (candidatePE->isBusy())
-          {
-            if (candidatePE->getNode()->get_Sched_Info()->get_Current() > t)
-            {
+          if (candidatePE->isBusy()) {
+            if (candidatePE->getNode()->get_Sched_Info()->get_Current() > t) {
               toBreak = false;
             }
           }
         }
       }
-      if (toBreak)
-      {
+      if (toBreak) {
         nextBreak = false;
         break;
       }
-      for (int i = 0; i < SizeX; i++)
-      {
-        for (int j = 0; j < SizeY; j++)
-        {
+      for (int i = 0; i < SizeX; i++) {
+        for (int j = 0; j < SizeY; j++) {
           candidatePE = cgraTime->getPE(i, j);
-          if (candidatePE->isBusy())
-          {
-            if (candidatePE->getNode()->get_Sched_Info()->get_Current() > t)
-            {
+          if (candidatePE->isBusy()) {
+            if (candidatePE->getNode()->get_Sched_Info()->get_Current() > t) {
               printf("%10d", candidatePE->getNode()->get_ID());
-	      debugfile << std::setw(10) << candidatePE->getNode()->get_ID();
+              debugfile << std::setw(10) << candidatePE->getNode()->get_ID();
               epilogFile << candidatePE->getNode()->get_ID() << "\n";
               total++;
-            }
-            else
-            {
+            } else {
               printf("         F");
-	      debugfile << "         F";
+              debugfile << "         F";
               epilogFile << "-1" << "\n";
               total++;
               toBreak = false;
             }
-          }
-          else
-          {
+          } else {
             printf("         F");
-	    debugfile << "         F";
+            debugfile << "         F";
             epilogFile << "-1" << "\n";
             total++;
           }
           printf("\t");
-	  debugfile << "\t";
+          debugfile << "\t";
         }
         printf("\n");
-	debugfile << "\n";
+        debugfile << "\n";
       }
     }
-   }
+  }
   cout << "\n*********************************Epilog End*********************************\n";
   debugfile << "\n*********************************Epilog End*********************************\n";
   epilogFile << total << "\n";

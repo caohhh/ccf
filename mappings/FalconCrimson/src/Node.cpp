@@ -1515,7 +1515,8 @@ void Node::SetTempCurrentPosition(MappingPair* pos)
   temp_pos = pos;
 }
 
-void Node::set_node_mode(int mode){
+void Node::set_node_mode(int mode)
+{
   liveOut_or_loopCtrl = mode;  // 1 for liveOut, 2 for loopCtrl
 }
 

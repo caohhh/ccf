@@ -2358,15 +2358,15 @@ int DFG::Schedule_ASAP()
 }
 
 // schedule operations in ASAP manner considering number of available resources
-int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
+int 
+DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
 {
   int* Total_Resources_asap = new int[MAPPING_POLICY.MAX_LATENCY];      //total number of PEs at each cycle
   int* Address_BUS_asap     = new int[MAPPING_POLICY.MAX_LATENCY];      //total number of memory bus at each cycle
   int* Data_BUS_asap        = new int[MAPPING_POLICY.MAX_LATENCY];
 
   //initialize used resources to 0
-  for (int i = 0; i < MAPPING_POLICY.MAX_LATENCY; i++)
-  {
+  for (int i = 0; i < MAPPING_POLICY.MAX_LATENCY; i++) {
     Total_Resources_asap[i]  = 0;
     Address_BUS_asap[i]      = 0;
     Data_BUS_asap[i]         = 0;
@@ -2397,17 +2397,13 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
 
   DEBUG_FEASIBLE_ASAP_SCHEDULING("Hi. FEASIBLE Init nodes Start");
   //first schedule selected nodes
-  for (int i = 0; i < (int) to_be_scheduled.size(); i++)
-  {
+  for (int i = 0; i < (int) to_be_scheduled.size(); i++) {
     //if selected node is load address assert
-    if (to_be_scheduled[i]->is_Load_Address_Generator())
-    {
+    if (to_be_scheduled[i]->is_Load_Address_Generator()) {
       //find a time slot with enough resources to schedule
-      for (int j = 0; j < MAPPING_POLICY.MAX_LATENCY; j++)
-      {
+      for (int j = 0; j < MAPPING_POLICY.MAX_LATENCY; j++) {
         //enough PE?
-        if (Total_Resources_asap[j] >= number_of_resources)
-        {
+        if (Total_Resources_asap[j] >= number_of_resources) {
           DEBUG_FEASIBLE_ASAP_SCHEDULING("not enough resources available at %d. The resources are %d\n", j, number_of_resources);
           cout << "Error Code: 0a on mem operation" << endl;
           //_FATAL("not enough resources available at %d for scheduling mem operations %d. The resources are %d\n", j, Total_Resources_asap[j], number_of_resources); 
@@ -2420,8 +2416,8 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
         if (has_Node_Conflict_Feasible_ASAP(to_be_scheduled[i]->get_Related_Node(), j+1))
           continue;
         //enough memory resource at this cycle and next when data would be available, enough PE available next cycle?
-        if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE(j, j + 1, Address_BUS_asap, Data_BUS_asap, Total_Resources_asap, number_of_resources))
-        {
+        if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE
+            (j, j + 1, Address_BUS_asap, Data_BUS_asap, Total_Resources_asap, number_of_resources)) {
           //if so, allocate those resources
           Address_BUS_asap[j]++;
           Data_BUS_asap[j + 1]++;
@@ -2440,29 +2436,21 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
           break;
         }
       }
-    }
-    //if selected node is store address assert
-    else if (to_be_scheduled[i]->is_Store_Address_Generator())
-    {
+    } else if (to_be_scheduled[i]->is_Store_Address_Generator()) {
+      //if selected node is store address assert
       not_scheduled.push_back(to_be_scheduled[i]);
       not_scheduled.push_back(to_be_scheduled[i]->get_Related_Node());
       continue;
-    }
-    //regular node to be scheduled
-    else
-    {
-      if (to_be_scheduled[i]->is_PHI_Operations())
-      {
+    } else {  //regular node to be scheduled
+      if (to_be_scheduled[i]->is_PHI_Operations()) {
         //Phi Nodes Can Not Be There At Very Beginning, It should be near the successor
         phi_rescheduled.push_back(to_be_scheduled[i]);
       }
 
       //find a time slot
-      for (int j = 0; j < MAPPING_POLICY.MAX_LATENCY; j++)
-      {
+      for (int j = 0; j < MAPPING_POLICY.MAX_LATENCY; j++) {
         //enough PE available?
-        if (Total_Resources_asap[j] >= number_of_resources)
-        {
+        if (Total_Resources_asap[j] >= number_of_resources) {
           DEBUG_FEASIBLE_ASAP_SCHEDULING("not enough resources available at %d for scheduling regular nodes. The resources are %d\n", j, number_of_resources);
           cout << "Error Code : 0b on regular operations" << endl;
           //_FATAL("not enough resources available at %d for scheduling regular operations %d. The resources are %d\n", j, Total_Resources_asap[j],number_of_resources);
@@ -2473,12 +2461,12 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
         if (has_Node_Conflict_Feasible_ASAP(to_be_scheduled[i], j))
           continue;
 
-	//Check if the node is liveOut: ASAP of liveOut > ALAP of loopCtrl
-	if(to_be_scheduled[i]->get_node_mode() == 1){
-	  cout << "DFG::Schedule_ASAP_Feasible::Init iteration: node_" << to_be_scheduled[i]->getName() << " is liveOut -> pushing back\n";
-	  not_scheduled.push_back(to_be_scheduled[i]);
-	  break;
-	}
+        //Check if the node is liveOut: ASAP of liveOut > ALAP of loopCtrl
+        if (to_be_scheduled[i]->get_node_mode() == 1) {
+          cout << "DFG::Schedule_ASAP_Feasible::Init iteration: node_" << to_be_scheduled[i]->getName() << " is liveOut -> pushing back\n";
+          not_scheduled.push_back(to_be_scheduled[i]);
+          break;
+        }
 
         //allocate resource
         Total_Resources_asap[j]++;
@@ -2497,7 +2485,7 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
      Update Schedule Time of Phi Nodes.
      Ensure that ASAP time of PHI is immediately above to all successors
    */
-  for(unsigned int ii=0; ii < phi_rescheduled.size(); ii++)
+  for (unsigned int ii=0; ii < phi_rescheduled.size(); ii++)
     phi_rescheduled[ii]->Update_ASAP_for_Phi(II);
 
   //update set of scheduled nodes
@@ -2512,33 +2500,25 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
 
   bool detect=false;
   //while there is an unscheduled node
-  while ((int) rest.size() > 0)
-  {
+  while ((int) rest.size() > 0) {
     //for all nodes
-    for (int i = 0; i < (int) rest.size(); i++)
-    {
+    for (int i = 0; i < (int) rest.size(); i++) {
       //any new node schedule? not yet
       change = false;
       //is this node ready to be scheduled? if yes, earliest time?
-      if (rest[i]->is_ready_to_schedule_Feasible_ASAP(schedule_time, II))
-      {
+      if (rest[i]->is_ready_to_schedule_Feasible_ASAP(schedule_time, II)) {
         //find the earliest time slot with enough resources
-        for (int time = schedule_time; time < MAPPING_POLICY.MAX_LATENCY; time++)
-        {
+        for (int time = schedule_time; time < MAPPING_POLICY.MAX_LATENCY; time++) {
           DEBUG_FEASIBLE_ASAP_SCHEDULING("Node %d is to be scheduled at time %d from %d", rest[i]->get_ID(), time,MAPPING_POLICY.MAX_LATENCY);
           //enough PE?
-          if (Total_Resources_asap[time] < number_of_resources)
-          {
+          if (Total_Resources_asap[time] < number_of_resources) {
             DEBUG_FEASIBLE_ASAP_SCHEDULING("Enough Resources");
             //if node is load address generator
-            if (rest[i]->is_Load_Address_Generator())
-            {
+            if (rest[i]->is_Load_Address_Generator()) {
               //is related node ready to be scheduled? if yes, at what cycle?
-              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ASAP(schedule_time_2, II))
-              {
+              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ASAP(schedule_time_2, II)) {
                 //if related node is ready but at some cycle greater than current time slot
-                if (schedule_time_2 > time)
-                {
+                if (schedule_time_2 > time) {
                   //update time slot to schedule the operation
                   //node address should be scheduled at one cycle earlier than load data read
                   time = schedule_time_2 - 2;
@@ -2553,12 +2533,12 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
                   continue;
 
                 int node2_asap_reverse = -1000;
-                for (std::map<Node*, vector<Node*> >::iterator it=constrained_store_load_pairs.begin(); it!=constrained_store_load_pairs.end(); ++it)
-                {
+                for (std::map<Node*, vector<Node*> >::iterator 
+                      it=constrained_store_load_pairs.begin(); it!=constrained_store_load_pairs.end(); ++it) {
                   vector<Node*> load_address_nodes = it->second;
-                  for(unsigned int n = 0; n < load_address_nodes.size(); n++) {
-                    if(load_address_nodes[n]->get_ID() == rest[i]->get_ID()) //We need to Update ASAP of Load Address Node (node2).
-                    {
+                  for (unsigned int n = 0; n < load_address_nodes.size(); n++) {
+                    //We need to Update ASAP of Load Address Node (node2).
+                    if (load_address_nodes[n]->get_ID() == rest[i]->get_ID()) {
                       //Check That ASAP of Load Address is In Accordance With ASAP of Successor Node.
                       Node* succ = constrained_ld_succ_pairs[load_address_nodes[n]];
                       ARC* edge = get_Arc(rest[i]->get_Related_Node(),succ);
@@ -2580,8 +2560,8 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
                   continue;
 
                 //is there enough resources available at time and time+1, memory and PE
-                if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE(time, time + 1, Address_BUS_asap, Data_BUS_asap, Total_Resources_asap, number_of_resources))
-                {
+                if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE
+                    (time, time + 1, Address_BUS_asap, Data_BUS_asap, Total_Resources_asap, number_of_resources)) {
                   //allocate resources
                   Address_BUS_asap[time]++;
                   Data_BUS_asap[time + 1]++;
@@ -2603,26 +2583,21 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
                     latest_time = time + 1;
                   break;
                 }
-              }
-              else
+              } else
                 break;
-            }
-            //if node is load data read
-            else if (rest[i]->is_Load_Data_Bus_Read())
-            {
-	      debugfile << "    is_Load_Data_Bus_Read\n";
+            } else if (rest[i]->is_Load_Data_Bus_Read()) {
+              //if node is load data read
+              debugfile << "    is_Load_Data_Bus_Read\n";
               //is the related node, (address generation) is ready to be scheduled? at what cycle?
-              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ASAP(schedule_time_2, II))
-              {
-		debugfile << "Schedule_Feasible_ASAP node: " << rest[i]->get_ID() << " - schedule_time: " << time << endl;
-		if(time == 0){
-		  debugfile << "  Load_data_bus_read has time 0 -> pushing back\n";
-		  time++;
-		  continue;
-		}
+              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ASAP(schedule_time_2, II)) {
+                debugfile << "Schedule_Feasible_ASAP node: " << rest[i]->get_ID() << " - schedule_time: " << time << endl;
+                if (time == 0) {
+                  debugfile << "  Load_data_bus_read has time 0 -> pushing back\n";
+                  time++;
+                  continue;
+                }
                 //if its schedule is greater than time - 1 > change time and try again
-                if (schedule_time_2 > (time - 1))
-                {
+                if (schedule_time_2 > (time - 1)) {
                   time = schedule_time_2;
                   continue;
                 }
@@ -2635,8 +2610,8 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
                   continue;
 
                 //is there enough resources to schedule both operations
-                if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE(time - 1, time, Address_BUS_asap, Data_BUS_asap, Total_Resources_asap, number_of_resources))
-                {
+                if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE
+                    (time - 1, time, Address_BUS_asap, Data_BUS_asap, Total_Resources_asap, number_of_resources)) {
                   //allocate resources
                   Data_BUS_asap[time]++;
                   Address_BUS_asap[time - 1]++;
@@ -2660,63 +2635,58 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
                     latest_time = time;
                   break;
                 }
-              }
-              else
+              } else
                 break;
-            }
-            //if node is store (data or address)
-            else if (rest[i]->is_Store_Address_Generator() || rest[i]->is_Store_Data_Bus_Write())
-            {
+            } else if (rest[i]->is_Store_Address_Generator() || rest[i]->is_Store_Data_Bus_Write()) {
+              //if node is store (data or address)
               //is the related node ready? when?
               DEBUG_FEASIBLE_ASAP_SCHEDULING("Check for Store Related to be Ready");
-              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ASAP(schedule_time_2, II))
-              {
+              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ASAP(schedule_time_2, II)) {
                 //if later, update schedule time and try again
-                if (schedule_time_2 > (time))
-                {
+                if (schedule_time_2 > (time)) {
                   DEBUG_FEASIBLE_ASAP_SCHEDULING("Node %d was to be scheduled at time %d", rest[i]->get_ID(), time);
                   DEBUG_FEASIBLE_ASAP_SCHEDULING("Node %d was to be scheduled at time %d", rest[i]->get_Related_Node()->get_ID(), schedule_time_2);
                   time = schedule_time_2 - 1;
                   continue;
                 }
                 //is there node conflict if scheduled at time?
-                if (has_Node_Conflict_Feasible_ASAP(rest[i], time))
-                {
+                if (has_Node_Conflict_Feasible_ASAP(rest[i], time)) {
                   DEBUG_FEASIBLE_ASAP_SCHEDULING("Node Conflict");
                   continue;
                 }
                 //is there conflict for related node if scheduled at time?
-                if (has_Node_Conflict_Feasible_ASAP(rest[i]->get_Related_Node(), time))
-                {
+                if (has_Node_Conflict_Feasible_ASAP(rest[i]->get_Related_Node(), time)) {
                   DEBUG_FEASIBLE_ASAP_SCHEDULING("Related Conflict");
                   continue;
                 }
-		// Check for liveOut node constraints
-		if(rest[i]->get_node_mode() == 1){
-		  cout << "DFG::Schedule_ASAP_Feasible::store_node_" << rest[i]->getName() << " is a liveOut\n";
-		  vector<Node*> loopCtrl_set = get_set_loopCtrl();
-		  int constraint_violated = 0; // 0 for none, 1 to increment scheduling time, 2 to skip node
-		  for(int i=0; i<loopCtrl_set.size(); i++){
-		    if(loopCtrl_set[i]->get_Sched_Info()->is_Feasible_ASAP_Initiated()){
-		      if(loopCtrl_set[i]->get_Sched_Info()->get_Feasible_ASAP() >= time){
-			cout << " loopCtrl node_" << loopCtrl_set[i]->getName() << " has ASAP scheduled after current time\n";
-			constraint_violated = 1;
-		      }
-		    } else {
-		      cout << " loopCtrl node_" << loopCtrl_set[i]->getName() << " has yet to be scheduled -> pushing back\n";
-		      constraint_violated = 2; break;
-		    }
-		  }
-		  if(constraint_violated == 1) continue;
-		  else if(constraint_violated == 2) break;
-		  else cout << " Constraint satisfied\n";
-		}
-
-
+                // Check for liveOut node constraints
+                if (rest[i]->get_node_mode() == 1) {
+                  cout << "DFG::Schedule_ASAP_Feasible::store_node_" << rest[i]->getName() << " is a liveOut\n";
+                  vector<Node*> loopCtrl_set = get_set_loopCtrl();
+                  int constraint_violated = 0; // 0 for none, 1 to increment scheduling time, 2 to skip node
+                  for (int i=0; i<loopCtrl_set.size(); i++) {
+                    if (loopCtrl_set[i]->get_Sched_Info()->is_Feasible_ASAP_Initiated()) {
+                      if (loopCtrl_set[i]->get_Sched_Info()->get_Feasible_ASAP() >= time) {
+                        cout << " loopCtrl node_" << loopCtrl_set[i]->getName() << " has ASAP scheduled after current time\n";
+                        constraint_violated = 1;
+                      }
+                    } else {
+                      cout << " loopCtrl node_" << loopCtrl_set[i]->getName() << " has yet to be scheduled -> pushing back\n";
+                      constraint_violated = 2; 
+                      break;
+                    }
+                  }
+                  if (constraint_violated == 1) 
+                    continue;
+                  else if (constraint_violated == 2) 
+                    break;
+                  else 
+                    cout << " Constraint satisfied\n";
+                }
                 DEBUG_FEASIBLE_ASAP_SCHEDULING("Check for Memory resources");
                 //is there enough resources to schedule both operations
-                if (HAS_ENOUGH_RESOURCES_FOR_STORE_INSTRUCTION_AT_CYCLE(time, Address_BUS_asap, Data_BUS_asap, Total_Resources_asap, number_of_resources))
-                {
+                if (HAS_ENOUGH_RESOURCES_FOR_STORE_INSTRUCTION_AT_CYCLE
+                    (time, Address_BUS_asap, Data_BUS_asap, Total_Resources_asap, number_of_resources)) {
                   //allocate resources
                   Address_BUS_asap[time]++;
                   Data_BUS_asap[time]++;
@@ -2736,41 +2706,39 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
                   if (time > latest_time)
                     latest_time = time;
                   break;
-                }
-                else
+                } else
                   DEBUG_FEASIBLE_ASAP_SCHEDULING("Does not have enough Resources Data_BUS_asap %d, Address_BUS_asap %d, PE %d",Address_BUS_asap[time], Data_BUS_asap[time], Total_Resources_asap[time]);
-              }
-              else
+              } else
                 break;
-            }
-            //if node is a regular operation
-            else
-            {
-	      //is there any conflict with scheduled operations?
+            } else {  //if node is a regular operation
+              //is there any conflict with scheduled operations?
               if (has_Node_Conflict_Feasible_ASAP(rest[i], time))
                 continue;
 
-	      //if node is liveOut or loopCtrl, check if constraint satisfied
-	      if(rest[i]->get_node_mode() == 1){ // Node is liveOut
-		cout << "DFG::Schedule_ASAP_Feasible::regular_node_" << rest[i]->getName() << " is liveOut\n";
-		vector<Node*> loopCtrl_set = get_set_loopCtrl();
-		int constraint_violation = 0; // 0 for no violation, 1 to increase time, 2 to push back
-		for(int i=0; i<loopCtrl_set.size(); i++){
-		  if(loopCtrl_set[i]->get_Sched_Info()->is_Feasible_ASAP_Initiated()){
-		    if(loopCtrl_set[i]->get_Sched_Info()->get_Feasible_ASAP() >= time){
-		      cout << " loopCtrl node_" << loopCtrl_set[i]->getName() << " has ASAP scheduled after current time\n";
-		      constraint_violation = 1;
-		    }
-		  } else {
-		    cout << " loopCtrl node_" << loopCtrl_set[i]->getName() << " has yet to be scheduled -> pushing back\n";
-		    constraint_violation = 2;
-		    break;
-		  }
-		}
-		if(constraint_violation == 1) continue;
-		else if(constraint_violation == 2) break;
-		else cout << " Constraint satisfied\n";
-	      }
+              //if node is liveOut or loopCtrl, check if constraint satisfied
+              if (rest[i]->get_node_mode() == 1) { // Node is liveOut
+                cout << "DFG::Schedule_ASAP_Feasible::regular_node_" << rest[i]->getName() << " is liveOut\n";
+                vector<Node*> loopCtrl_set = get_set_loopCtrl();
+                int constraint_violation = 0; // 0 for no violation, 1 to increase time, 2 to push back
+                for (int i=0; i<loopCtrl_set.size(); i++) {
+                  if (loopCtrl_set[i]->get_Sched_Info()->is_Feasible_ASAP_Initiated()) {
+                    if (loopCtrl_set[i]->get_Sched_Info()->get_Feasible_ASAP() >= time) {
+                      cout << " loopCtrl node_" << loopCtrl_set[i]->getName() << " has ASAP scheduled after current time\n";
+                      constraint_violation = 1;
+                    }
+                  } else {
+                    cout << " loopCtrl node_" << loopCtrl_set[i]->getName() << " has yet to be scheduled -> pushing back\n";
+                    constraint_violation = 2;
+                    break;
+                  }
+                }
+                if (constraint_violation == 1) 
+                  continue;
+                else if (constraint_violation == 2) 
+                  break;
+                else 
+                  cout << " Constraint satisfied\n";
+              }
 
               //schedule it at time
               rest[i]->get_Sched_Info()->set_Feasible_ASAP(time);
@@ -2797,21 +2765,17 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
         break;
     }
 
-    if (!change)
-    {
+    if (!change) {
       DEBUG_FEASIBLE_ASAP_SCHEDULING("NO CHANGE SIZE OF REST %d", (int)rest.size());
-      for (int i = 0; i < (int) rest.size(); i++)
-      {
+      for (int i = 0; i < (int) rest.size(); i++) {
         bool ready=rest[i]->is_ready_to_schedule_Feasible_ASAP(schedule_time, II);
         DEBUG_FEASIBLE_ASAP_SCHEDULING("Node %d is %d ready to schedule at time %d", rest[i]->get_ID(), ready, schedule_time);
-        if (rest[i]->is_Mem_Operation())
-        {
+        if (rest[i]->is_Mem_Operation()) {
           ready = rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ASAP(schedule_time_2, II);
           DEBUG_FEASIBLE_ASAP_SCHEDULING("Related Node %d is %d ready to schedule at time %d", rest[i]->get_Related_Node()->get_ID(), ready, schedule_time_2);
         }
       }
-      if (detect)
-      {     
+      if (detect) {     
         DEBUG_FEASIBLE_ASAP_SCHEDULING("Inside detect\n");
         _FATAL("NO FEASIBLE_ASAP_SCHEDULE FOR THIS LOOP!!!\n");
       }
@@ -2819,7 +2783,7 @@ int DFG::Schedule_ASAP_Feasible(int number_of_resources, int II)
     }
   }
 
-  for(unsigned int ii=0; ii < _node_Set.size(); ii++)
+  for (unsigned int ii=0; ii < _node_Set.size(); ii++)
     _node_Set[ii]->Update_ASAP_Feasible(Address_BUS_asap,Data_BUS_asap,Total_Resources_asap,number_of_resources,MAX_MEM_RESOURCES);
 
   delete [] Total_Resources_asap;
@@ -3295,8 +3259,7 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
   int* Data_BUS_alap = new int[MAPPING_POLICY.MAX_LATENCY];
 
   //initally reset all resources
-  for (int i = 0; i < MAPPING_POLICY.MAX_LATENCY; i++)
-  {
+  for (int i = 0; i < MAPPING_POLICY.MAX_LATENCY; i++) {
     Total_Resources_alap[i] = 0;
     Data_BUS_alap[i] = 0;
     Address_BUS_alap[i] = 0;
@@ -3323,36 +3286,30 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
 
   DEBUG_SCHEDULING("scheduling leaf nodes");
   //pick a node
-  for (int i = 0; i < (int) to_be_scheduled.size(); i++)
-  {
+  for (int i = 0; i < (int) to_be_scheduled.size(); i++) {
     latest_time = (to_be_scheduled[i]->get_Sched_Info()->get_Feasible_ASAP()) + II - 1;
     //if node is load bus read
-    if (to_be_scheduled[i]->is_Load_Data_Bus_Read())
-    {
+    if (to_be_scheduled[i]->is_Load_Data_Bus_Read()) {
       //find a time slot to schedule the node
-      for (int j = latest_time; j > -1; j--)
-      {
+      for (int j = latest_time; j > -1; j--) {
         //is there enough PE resource to schedule the node?
-        if (Total_Resources_alap[j] >= number_of_resources)  // Modified by Vinh Ta: Total_Resources_alap[latest_time] -> Total_Resources_alap[j] 
-        {
+        if (Total_Resources_alap[j] >= number_of_resources) { // Modified by Vinh Ta: Total_Resources_alap[latest_time] -> Total_Resources_alap[j] 
           //FATAL(true,"has total resources >= number of resources");
           continue; 
         }
         //is there a conflict with scheduled operations
-        if (has_Node_Conflict_Feasible_ALAP(to_be_scheduled[i], j))
-        {
+        if (has_Node_Conflict_Feasible_ALAP(to_be_scheduled[i], j)) {
           //FATAL(true,"has Node conflict with feasible ALAP j");
           continue;
         }
         //is there conflict for load address assert with scheduled operations
-        if (has_Node_Conflict_Feasible_ALAP(to_be_scheduled[i]->get_Related_Node(), j - 1))
-        {
+        if (has_Node_Conflict_Feasible_ALAP(to_be_scheduled[i]->get_Related_Node(), j - 1)) {
           //FATAL(true,"has Node conflict with feasible ALAP j-1");
           continue;
         }
         //is there enough resources to schedule both operations
-        if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE(j - 1, j, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources))
-        {
+        if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE
+            (j - 1, j, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources)) {
           //allocate resources
           Address_BUS_alap[j - 1]++;
           Data_BUS_alap[j]++;
@@ -3369,13 +3326,10 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
           break;
         }
       }
-    }
     //if node is store data bus write
-    else if (to_be_scheduled[i]->is_Store_Data_Bus_Write())
-    {
+    } else if (to_be_scheduled[i]->is_Store_Data_Bus_Write()) {
       //pick up a time
-      for (int j = latest_time; j > -1; j--)
-      {
+      for (int j = latest_time; j > -1; j--) {
         //is there enough resources at this cycle
         if (Total_Resources_alap[latest_time] >= number_of_resources)
           continue;
@@ -3386,8 +3340,8 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
         if (has_Node_Conflict_Feasible_ALAP(to_be_scheduled[i]->get_Related_Node(), j))
           continue;
         //is there enough resources available for both operations
-        if (HAS_ENOUGH_RESOURCES_FOR_STORE_INSTRUCTION_AT_CYCLE(j, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources))
-        {
+        if (HAS_ENOUGH_RESOURCES_FOR_STORE_INSTRUCTION_AT_CYCLE
+            (j, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources)) {
           //allocate resources
           Address_BUS_alap[j]++;
           Data_BUS_alap[j]++;
@@ -3403,45 +3357,42 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
           break;
         }
       }
-    }
     //if it is a regular node
-    else
-    {
+    } else {
       //find a time slot
-      for (int j = latest_time; j > -1; j--)
-      {
+      for (int j = latest_time; j > -1; j--) {
         //is there enough PE?
-        if (Total_Resources_alap[latest_time] >= number_of_resources)
-        {
+        if (Total_Resources_alap[latest_time] >= number_of_resources) {
           //FATAL(true, "total resource >= number_of_resources: Total_Resources_alap[j]:%d", Total_Resources_alap[j] ); 
           continue;
         }
         //is there a conflict with scheduled operations
-        if (has_Node_Conflict_Feasible_ALAP(to_be_scheduled[i], j))
-        {
+        if (has_Node_Conflict_Feasible_ALAP(to_be_scheduled[i], j)) {
           //FATAL(true, "has Node conflict with feasible ALAP j: to_be_sched: %d and j:%d", to_be_scheduled[i], j);
           continue;
         }
 
-	if(to_be_scheduled[i]->get_node_mode() == 2){
-	  cout << "DFG::Schedule_ALAP_Feasible::InitSet: node_" << to_be_scheduled[i]->getName() << " is a loopCtrl\n";
-	  vector<Node*> liveOut_set = get_set_liveOut();
-	  bool constraint_violated = false;
-	  for(int i=0; i<liveOut_set.size(); i++){
-	    if(liveOut_set[i]->get_Sched_Info()->is_Feasible_ASAP_Initiated()){
-	      if(liveOut_set[i]->get_Sched_Info()->get_Feasible_ASAP() <= j){
-		cout << " liveOut node_" << liveOut_set[i]->getName() << " has ASAP scheduled before current time: " << j << "\n";
-		constraint_violated = true;
-		break;
-	      }
-	    } else {
-	      cout << " liveOut node_" << liveOut_set[i]->getName() << " has yet to be scheduled ASAP when it should be! How can this happen?\n";
-	      return false;
-	    }
-	  } 
-	  if(constraint_violated) continue;
-	  else cout << " Constraint satisfied\n";
-	}
+        if (to_be_scheduled[i]->get_node_mode() == 2) {
+          cout << "DFG::Schedule_ALAP_Feasible::InitSet: node_" << to_be_scheduled[i]->getName() << " is a loopCtrl\n";
+          vector<Node*> liveOut_set = get_set_liveOut();
+          bool constraint_violated = false;
+          for (int i=0; i<liveOut_set.size(); i++) {
+            if (liveOut_set[i]->get_Sched_Info()->is_Feasible_ASAP_Initiated()) {
+              if (liveOut_set[i]->get_Sched_Info()->get_Feasible_ASAP() <= j) {
+                cout << " liveOut node_" << liveOut_set[i]->getName() << " has ASAP scheduled before current time: " << j << "\n";
+                constraint_violated = true;
+                break;
+              }
+            } else {
+              cout << " liveOut node_" << liveOut_set[i]->getName() << " has yet to be scheduled ASAP when it should be! How can this happen?\n";
+              return false;
+            }
+          } 
+          if (constraint_violated) 
+            continue;
+          else 
+            cout << " Constraint satisfied\n";
+        }
 	
         //allocate resources
         cout << "  Scheduled time: " << j << endl;
@@ -3464,14 +3415,12 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
   //keep track of the size of scheduled operations
   int prev_size = -1;
   //while there is unscheduled operations
-  while ((int) rest.size() > 0)
-  {
+  while ((int) rest.size() > 0) {
     //cout << "inside rest while" << endl;
     //cout << "prev: " << prev_size << endl;
     //cout << "rest: " << rest.size() << "\tscheduled: " << scheduled.size() << endl;
     //if no change in last attempt, it is unable to make any progress in scheduling
-    if (prev_size == (int) rest.size())
-    {
+    if (prev_size == (int) rest.size()) {
       //  cout << "inside if prev == reset" << endl;
       return false;
     }
@@ -3480,8 +3429,7 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
     prev_size = (int) rest.size();
     //cout << "rest.size: " << rest.size() << endl;
     //for all nodes
-    for (int i = 0; i < (int) rest.size(); i++)
-    {
+    for (int i = 0; i < (int) rest.size(); i++) {
       //cout << "inside for rest" << endl;
       //assume no change in schedules
       change = false;
@@ -3489,41 +3437,33 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
       DEBUG_FEASIBLE_ALAP_SCHEDULING("check if Node %d is ready to be scheduled", rest[i]->get_ID());
       //is it ready to be scheduled? if yes, at what cycle?
       
-      if (rest[i]->is_ready_to_schedule_Feasible_ALAP(schedule_time, MAX_SCHEDULE_LEN, II))
-      {
+      if (rest[i]->is_ready_to_schedule_Feasible_ALAP(schedule_time, MAX_SCHEDULE_LEN, II)) {
         DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d is ready to be scheduled", rest[i]->get_ID());
         //find a time slot to schedule
-        for (int time = schedule_time; time > -1; time--)
-        {
+        for (int time = schedule_time; time > -1; time--) {
           //is there enough PE?
-          if (Total_Resources_alap[time] < number_of_resources)
-          {
+          if (Total_Resources_alap[time] < number_of_resources) {
             //if it is a load adderss assert operation
-            if (rest[i]->is_Load_Address_Generator())
-            {
+            if (rest[i]->is_Load_Address_Generator()) {
               //is related node ready to be scheduled? if yes, when?
-              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ALAP(schedule_time_2, MAX_SCHEDULE_LEN, II)) //II, latesttime
-              {
-                if (schedule_time_2 < time + 1)
-                {
+              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ALAP(schedule_time_2, MAX_SCHEDULE_LEN, II)) { //II, latesttime
+                if (schedule_time_2 < time + 1) {
                   time = schedule_time_2;
                   continue;
                 }
                 //is there a node conflict with scheduled operations
-                if (has_Node_Conflict_Feasible_ALAP(rest[i], time))
-                {
+                if (has_Node_Conflict_Feasible_ALAP(rest[i], time)) {
                   DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d cannot be scheduled at time %d", rest[i]->get_ID(), time);
                   continue;
                 }
                 //is there node conflict between load data assert and scheduled operations
-                if (has_Node_Conflict_Feasible_ALAP(rest[i]->get_Related_Node(), time + 1))
-                {
+                if (has_Node_Conflict_Feasible_ALAP(rest[i]->get_Related_Node(), time + 1)) {
                   DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d cannot be scheduled at time %d", rest[i]->get_Related_Node()->get_ID(), time + 1);
                   continue;
                 }
                 //is there enough resources for both operations
-                if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE(time, time + 1, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources))
-                {
+                if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE
+                    (time, time + 1, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources)) {
                   //        cout << "has enough resources" << endl;
                   //allocate resources
                   Address_BUS_alap[time]++;
@@ -3551,32 +3491,25 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
                   change = true;
                   break;
                 }
-              }
-              else
+              } else
                 break;
-            }
             //if it is a load bus read
-            else if (rest[i]->is_Load_Data_Bus_Read())
-            {
+            } else if (rest[i]->is_Load_Data_Bus_Read()) {
               //is related load address assert ready? if yes, what cycle?
-              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ALAP(schedule_time_2, MAX_SCHEDULE_LEN, II))
-              {
+              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ALAP(schedule_time_2, MAX_SCHEDULE_LEN, II)) {
                 //related node is ready but at cycle < time - 1
-                if (schedule_time_2 < (time - 1))
-                {
+                if (schedule_time_2 < (time - 1)) {
                   //update schedule cycle and try again
                   time = schedule_time_2 + 2;
                   continue;
                 }
                 //is there any conflict with scheduled operations
-                if (has_Node_Conflict_Feasible_ALAP(rest[i], time))
-                {
+                if (has_Node_Conflict_Feasible_ALAP(rest[i], time)) {
                   DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d cannot be scheduled at time %d", rest[i]->get_ID(), time);
                   continue;
                 }
                 //is there conflict between load address assert and scheduled operations?
-                if (has_Node_Conflict_Feasible_ALAP(rest[i]->get_Related_Node(), time - 1))
-                {
+                if (has_Node_Conflict_Feasible_ALAP(rest[i]->get_Related_Node(), time - 1)) {
                   DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d cannot be scheduled at time %d", rest[i]->get_Related_Node()->get_ID(), time - 1);
                   continue;
                 }
@@ -3584,8 +3517,8 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
                 //Iterate Through Successors And Get Earliest Time
 
                 //is there enough resources for both operations
-                if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE(time - 1, time, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources))
-                {
+                if (HAS_ENOUGH_RESOURCES_FOR_LOAD_INSTRUCTION_AT_CYCLE
+                    (time - 1, time, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources)) {
                   //allocate resources
                   Data_BUS_alap[time]++;
                   Address_BUS_alap[time - 1]++;
@@ -3606,37 +3539,30 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
                   change = true;
                   break;
                 }
-              }
-              else
+              } else
                 break;
-            }
             //if it is a store, either address or data assert, operation
-            else if (rest[i]->is_Store_Address_Generator() || rest[i]->is_Store_Data_Bus_Write())
-            {
+            } else if (rest[i]->is_Store_Address_Generator() || rest[i]->is_Store_Data_Bus_Write()) {
               //is related node is ready to be scheduled? if yes, when?
-              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ALAP(schedule_time_2, MAX_SCHEDULE_LEN, II))
-              {
+              if (rest[i]->get_Related_Node()->is_ready_to_schedule_Feasible_ALAP(schedule_time_2, MAX_SCHEDULE_LEN, II)) {
                 //related node is ready but at earlier cycle?
-                if (schedule_time_2 < (time))
-                {
+                if (schedule_time_2 < (time)) {
                   time = schedule_time_2 + 1;
                   continue;
                 }
                 //is there conflict with scheduled noed?
-                if (has_Node_Conflict_Feasible_ALAP(rest[i], time))
-                {
+                if (has_Node_Conflict_Feasible_ALAP(rest[i], time)) {
                   DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d cannot be scheduled at time %d", rest[i]->get_ID(), time);
                   continue;
                 }
                 //is there conflict between related node and scheduled nodes
-                if (has_Node_Conflict_Feasible_ALAP(rest[i]->get_Related_Node(), time))
-                {
+                if (has_Node_Conflict_Feasible_ALAP(rest[i]->get_Related_Node(), time)) {
                   DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d cannot be scheduled at time %d", rest[i]->get_Related_Node()->get_ID(), time);
                   continue;
                 }
                 //is there enough resources for both nodes?
-                if (HAS_ENOUGH_RESOURCES_FOR_STORE_INSTRUCTION_AT_CYCLE(time, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources))
-                {
+                if (HAS_ENOUGH_RESOURCES_FOR_STORE_INSTRUCTION_AT_CYCLE
+                    (time, Address_BUS_alap, Data_BUS_alap, Total_Resources_alap, number_of_resources)) {
                   //allocate resources
                   Address_BUS_alap[time]++;
                   Data_BUS_alap[time]++;
@@ -3653,42 +3579,39 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
                   DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d is scheduled at time %d", rest[i]->get_Related_Node()->get_ID(), time); 
                   break;
                 }
-              }
-              else
-              {
+              } else {
                 break;
               }
-            }
             //regular nodes
-            else
-            {
+            } else {
               //is there conflict with scheduled operations
-              if (has_Node_Conflict_Feasible_ALAP(rest[i], time))
-              {
+              if (has_Node_Conflict_Feasible_ALAP(rest[i], time)) {
                 DEBUG_FEASIBLE_ALAP_SCHEDULING("Node %d cannot be scheduled at time %d", rest[i]->get_ID(), time);
                 continue;
               }
 
-	      // check if scheduling node is loopCtrl (shouldn't be as they are usually leaf nodes and should have been already scheduled)
-	      if(rest[i]->get_node_mode() == 2){
-	        cout << "DFG::Schedule_ALAP_Feasible::regular_node_" << rest[i]->getName() << " is loopCtrl\n";
-	        vector<Node*> liveOut_set = get_set_liveOut();
-	        bool constraint_violated = false;
-	        for(int i=0; i<liveOut_set.size(); i++){
-	          if(liveOut_set[i]->get_Sched_Info()->is_Feasible_ASAP_Initiated()){
-	            if(liveOut_set[i]->get_Sched_Info()->get_Feasible_ASAP() <= time){ 
-	              constraint_violated = true;
-	              cout << " node_" << liveOut_set[i]->getName() << " has ASAP scheduled before current time: " << time << "\n";
-	              break;
-	            }
-	          } else {
-	              cout << " node_" << liveOut_set[i]->getName() << " has yet to be scheduled ASAP! How can this happen?\n";
-   	              return false;
-	          }
-	        }
-	        if(constraint_violated) continue;
-		else cout << " Constraint satisfied\n";
-	      }
+              // check if scheduling node is loopCtrl (shouldn't be as they are usually leaf nodes and should have been already scheduled)
+              if (rest[i]->get_node_mode() == 2) {
+                cout << "DFG::Schedule_ALAP_Feasible::regular_node_" << rest[i]->getName() << " is loopCtrl\n";
+                vector<Node*> liveOut_set = get_set_liveOut();
+                bool constraint_violated = false;
+                for (int i=0; i<liveOut_set.size(); i++) {
+                  if (liveOut_set[i]->get_Sched_Info()->is_Feasible_ASAP_Initiated()) {
+                    if (liveOut_set[i]->get_Sched_Info()->get_Feasible_ASAP() <= time) { 
+                      constraint_violated = true;
+                      cout << " node_" << liveOut_set[i]->getName() << " has ASAP scheduled before current time: " << time << "\n";
+                      break;
+                    }
+                  } else {
+                    cout << " node_" << liveOut_set[i]->getName() << " has yet to be scheduled ASAP! How can this happen?\n";
+                    return false;
+                  }
+                }
+                if (constraint_violated) 
+                  continue;
+                else 
+                  cout << " Constraint satisfied\n";
+              }
 
               //schedule the operation
               rest[i]->get_Sched_Info()->set_Feasible_ALAP(time);
@@ -3706,8 +3629,7 @@ bool DFG::Schedule_ALAP_Feasible(int latesttime, int number_of_resources, int II
         }
       }
       //if there was a change, update set of unscheduled nodes
-      if (change)
-      {
+      if (change) {
         rest = Subtract(rest, scheduled);
         break;
       }

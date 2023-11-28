@@ -307,6 +307,7 @@ class Node
 
     // Added by Vinh Ta
     void set_node_mode(int mode);
+    // 1 for liveout, 2 for loopctrl
     int get_node_mode();
     bool is_Mapped();
 };
