@@ -103,7 +103,8 @@ AtomicCGRA::AtomicCGRA(AtomicCGRAParams *p)
       ppCommit(nullptr),
       CGRA_XDim(p->CGRA_rows),
       CGRA_YDim(p->CGRA_cols),
-      RFSize(p->rfsize)
+      RFSize(p->rfsize),
+      cgraPred(p->predictor)
       //connection_type(p->connection)
 {
     _status = Idle;

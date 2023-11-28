@@ -47,6 +47,7 @@
 from m5.params import *
 #from BaseCGRA import BaseCGRA
 from m5.objects.BaseCGRA import BaseCGRA
+from m5.objects.CGRAPredictor import *
 
 class AtomicCGRA(BaseCGRA):
     """Simple CGRA model executing a configurable number of
@@ -87,6 +88,8 @@ class AtomicCGRA(BaseCGRA):
     simpoint_profile = Param.Bool(False, "Generate SimPoint BBVs")
     simpoint_interval = Param.UInt64(100000000, "SimPoint Interval Size (insts)")
     simpoint_profile_file = Param.String("simpoint.bb.gz", "SimPoint BBV file")
+    predictor = Param.CGRAPredictor(NULL, "CGRA Predictor")
+
 
 ## set of cgra classes with varying sizes and rf 0 with torus architecture.
 class CGRA4x4R0torus(AtomicCGRA):

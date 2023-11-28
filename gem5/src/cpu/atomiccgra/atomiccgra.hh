@@ -50,6 +50,7 @@
 /*CGRA RELATED INCLUDES AND DEFINES STARTED*/
 #include "cpu/atomiccgra/CGRAPE.h"
 #include "cpu/atomiccgra/CGRA_IFU.hh"
+#include "cpu/atomiccgra/pred/cgra_pred_unit.hh"
 
 #define CGRA_STATE_REG 0
 #define CPU_STATE_REG 12
@@ -150,6 +151,7 @@ class AtomicCGRA: public BaseCGRA
 
     CGRA_PE* cgra_PEs;
     CGRA_IFU* cgraIFU;
+    CGRAPredUnit* cgraPred;
 
     TheISA::PCState backPC;
     /*CGRA DEFINITIONS END*/
