@@ -17,6 +17,7 @@
 #define __CGRA_IFU_HH__
 
 #include "cpu/atomiccgra/exec_context.hh"
+#include "cpu/atomiccgra/pred/cgra_pred_unit.hh"
 
 class CGRA_IFU
 {
@@ -24,6 +25,7 @@ class CGRA_IFU
 
     CGRA_IFU();
     CGRA_IFU(unsigned int Xdim, unsigned int Ydim);
+    CGRA_IFU(unsigned int Xdim, unsigned int Ydim, CGRAPredUnit* predictor);
     virtual ~CGRA_IFU();
 
 
@@ -77,6 +79,7 @@ class CGRA_IFU
     std::vector<std::pair<Addr, bool>> cmpHistory;
     unsigned int cgraXDim;
     unsigned int cgraYDim;
+    CGRAPredUnit* cgraPred;
 
     // CGRA state controlling variables
 

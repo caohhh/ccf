@@ -27,6 +27,15 @@ CGRA_IFU::CGRA_IFU(unsigned int Xdim, unsigned int Ydim)
 }
 
 
+CGRA_IFU::CGRA_IFU(unsigned int Xdim, unsigned int Ydim, CGRAPredUnit* predictor)
+{
+    cgraXDim = Xdim;
+    cgraYDim = Ydim;
+    cgraInstructions = new uint64_t[Xdim * Ydim];
+    cgraPred = predictor;
+}
+
+
 CGRA_IFU::~CGRA_IFU()
 {
 }

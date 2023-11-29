@@ -1483,7 +1483,7 @@ AtomicCGRA::Setup_CGRA()
     //cgra_PEs = new CGRA_PE[CGRA_XDim * CGRA_YDim];
 
     DPRINTF(Setup_DEBUG, "Passed CGRA_PE initialization\n");
-    cgraIFU = new CGRA_IFU(CGRA_XDim, CGRA_YDim);
+    cgraIFU = new CGRA_IFU(CGRA_XDim, CGRA_YDim, cgraPred);
 
     //Setting Neighbors - Populate Output structures
     for (int i = 0; i < CGRA_XDim; i++) {
