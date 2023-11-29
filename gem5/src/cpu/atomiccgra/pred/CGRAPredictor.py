@@ -39,3 +39,6 @@ class LocalPredictor(CGRAPredictor):
     type = 'LocalPredictor'
     cxx_class = 'LocalPred'
     cxx_header = "cpu/atomiccgra/pred/local_pred.hh"
+    
+    localPredictorSize = Param.Unsigned(2048, "Size of local predictor")
+    localCtrBits = Param.Unsigned(2, "Bits per counter")

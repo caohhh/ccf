@@ -74,6 +74,23 @@ class CGRA_IFU
     void setPrologBranchCycle(unsigned cycles);
     void setConditionalReg(bool reg);
 
+    /**
+     * After decoding, mark the instruction in the current PE
+     * as a CMP.
+    */
+    void markCMP(unsigned peIndex);
+
+    /**
+     * After execution, expose the predication output to the IFU
+    */
+    void setPred(unsigned peIndex, bool predication);
+
+    /**
+     * Use the predictor to predict the outcome of all the CMP 
+     * instructions in fly
+    */
+    void predict();
+
   private:
     // <PC, outcome> result of all the CMP instruction history
     std::vector<std::pair<Addr, bool>> cmpHistory;
@@ -83,6 +100,7 @@ class CGRA_IFU
 
     // CGRA state controlling variables
 
+    int loopID;
     long epilogPC;
     long prologPC;
     long kernelPC;
@@ -101,6 +119,18 @@ class CGRA_IFU
 
     // False: LE instruction execution indicates should exit loop
     bool conditionalReg;
+
+    // If the instruction in the PE is a CMP
+    bool *isCMP;
+
+    // the predication output of all the PEs
+    bool *predOutput;
+
+    // prediction of all the predications
+    bool *predPredicted;
+
+    // with the predication output of the PEs, update the predictor
+    void updatePredictor();
 
 };
 

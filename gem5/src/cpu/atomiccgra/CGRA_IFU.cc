@@ -24,6 +24,9 @@ CGRA_IFU::CGRA_IFU(unsigned int Xdim, unsigned int Ydim)
     cgraXDim = Xdim;
     cgraYDim = Ydim;
     cgraInstructions = new uint64_t[Xdim * Ydim];
+    isCMP = new bool[Xdim * Ydim];
+    predOutput = new bool[Xdim * Ydim];
+    predPredicted = new bool[Xdim * Ydim];
 }
 
 
@@ -33,6 +36,9 @@ CGRA_IFU::CGRA_IFU(unsigned int Xdim, unsigned int Ydim, CGRAPredUnit* predictor
     cgraYDim = Ydim;
     cgraInstructions = new uint64_t[Xdim * Ydim];
     cgraPred = predictor;
+    isCMP = new bool[Xdim * Ydim];
+    predOutput = new bool[Xdim * Ydim];
+    predPredicted = new bool[Xdim * Ydim];
 }
 
 
@@ -63,6 +69,7 @@ CGRA_IFU::setupExec(SimpleThread *thread, int loopID)
 {
     std::string directoryPath = "./CGRAExec/L" + std::to_string(loopID) + "/initCGRA.txt";
 
+    this->loopID = loopID;
     unsigned long temp;
     std::ifstream initCGRAFile;
     initCGRAFile.open(directoryPath.c_str());
@@ -90,6 +97,9 @@ CGRA_IFU::setupExec(SimpleThread *thread, int loopID)
     prologBranchCycle = 0;
     cgraPC = prologPC;
 
+    for (unsigned i = 0; i < cgraXDim * cgraYDim; i++)
+        isCMP[i] = false;
+
     DPRINTF(CGRA_IFU,"CGRA PARAMETERS: PROLOG=%d, EPILOG=%d, II=%d, PROLOG_VERSION_LEN=%d\n",
             prologLen, epilogLen, II, prologVersionCycle);
     DPRINTF(CGRA_IFU,"CGRA PARAMETERS: PROLOGPC= %lx, EPILOGPC=%lx,  KernelPC=%lx\n",
@@ -106,6 +116,9 @@ CGRA_IFU::advancePC(SimpleThread *thread)
     DPRINTF(CGRA_IFU,"*******IN ADVANCE PC******\n");
     DPRINTF(CGRA_IFU,"%s,%s,%d,PC:%x\n",
         __FILE__,__func__,__LINE__,(unsigned int) thread->instAddr());
+
+    // first update the predictor
+    updatePredictor();
 
     DPRINTF(CGRA_IFU,"current state: %u\n", state);
 
@@ -146,6 +159,9 @@ CGRA_IFU::advancePC(SimpleThread *thread)
         }
     }
     thread->pcState((Addr) cgraPC);
+    for (unsigned i = 0; i < cgraXDim * cgraYDim; i++)
+        isCMP[i] = false;
+
     DPRINTF(CGRA_IFU,"state after advance PC: %u\n", state);
 }
 
@@ -199,4 +215,48 @@ void
 CGRA_IFU::setConditionalReg(bool reg)
 {
     conditionalReg &= reg;
+}
+
+
+void 
+CGRA_IFU::markCMP(unsigned peIndex)
+{
+    isCMP[peIndex] = true;
+}
+
+
+void
+CGRA_IFU::setPred(unsigned peIndex, bool predication)
+{
+    predOutput[peIndex] = predication;
+}
+
+
+void
+CGRA_IFU::updatePredictor()
+{
+    if (cgraPred) {
+        for (unsigned i = 0; i < cgraXDim * cgraYDim; i++) {
+            if (isCMP[i]) {
+                Addr PC = cgraPC + i * sizeof(long);
+                if (predOutput[i] != predPredicted[i])
+                    cgraPred->squash();
+                cgraPred->update(PC, predOutput[i]);
+            }
+        }
+    }
+}
+
+
+void
+CGRA_IFU::predict()
+{
+    if (cgraPred) {
+        for (unsigned i = 0; i < cgraXDim * cgraYDim; i++) {
+            if (isCMP[i]) {
+                Addr PC = cgraPC + i * sizeof(long);
+                predPredicted[i] = cgraPred->predict(PC);
+            }
+        }
+    }
 }
