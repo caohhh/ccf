@@ -10,7 +10,8 @@ CPP_SRCS += \
 ../src/RegisterFile.cpp \
 ../src/SchedulingInfo.cpp  \
 ../src/INTERITERATIONDEPENDENCY.cpp \
-../src/PriorityHeight.cpp
+../src/PriorityHeight.cpp \
+../src/Falcon.cpp
 
 OBJS += \
 ./src/CGRA.o \
@@ -23,7 +24,8 @@ OBJS += \
 ./src/RegisterFile.o \
 ./src/SchedulingInfo.o \
 ./src/INTERITERATIONDEPENDENCY.o \
-./src/PriorityHeight.o
+./src/PriorityHeight.o \
+./src/Falcon.o
 
 CPP_DEPS += \
 ./src/CGRA.d \
@@ -36,7 +38,8 @@ CPP_DEPS += \
 ./src/RegisterFile.d \
 ./src/SchedulingInfo.d \
 ./src/INTERITERATIONDEPENDENCY.d \
-./src/PriorityHeight.d
+./src/PriorityHeight.d \
+./src/Falcon.d
 
 
 # Each subdirectory must supply rules for building sources it contributes

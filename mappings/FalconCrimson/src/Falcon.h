@@ -24,9 +24,10 @@
 class Falcon
 {
   public:
-    Falcon() { } //default constructor
-
-    ~Falcon() {  } //default destructor
+    //default constructor
+    Falcon();
+    //default destructor
+    ~Falcon(); 
 
     // This function adds routing nodes and schedules them to the DFG
     bool Route_And_Reschedule(DFG* copy_DFG, int id, int II, int number_of_resources);

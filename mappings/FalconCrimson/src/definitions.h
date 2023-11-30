@@ -191,7 +191,7 @@ do                                                  \
 #define PREPROCESS_DEBUG 0
 #define ASAP_DEBUG 0
 #define ALAP_DEBUG 0
-#define FEASIBLE_ASAP_DEBUG 0
+#define FEASIBLE_ASAP_DEBUG 1
 #define FEASIBLE_ALAP_DEBUG 0
 #define MODULO_SCHEDULE_DEBUG 0
 #define SCHEDULE_DEBUG 0

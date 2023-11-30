@@ -7,6 +7,16 @@
 
 #include "Falcon.h"
 
+Falcon::Falcon()
+{
+}
+
+
+Falcon::~Falcon()
+{
+}
+
+
 bool 
 Falcon::Route_And_Reschedule(DFG* copy_DFG, int id, int II, int number_of_resources)
 { 
