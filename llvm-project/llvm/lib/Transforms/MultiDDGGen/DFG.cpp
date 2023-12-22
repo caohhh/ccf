@@ -112,6 +112,7 @@ NODE::NODE(Instruction_Operation ins, int laten, int id, std::string name, Value
   branchIdx = -2;
   cond = false;
   bbIdx = basicBlockIdx;
+  brPath = none;
 }
 
 void NODE::set_self_loop(ARC* s_loop)
@@ -458,6 +459,18 @@ unsigned NODE::getBasicBlockIdx()
 void NODE::setOperation(Instruction_Operation newOperation)
 {
   Operation = newOperation;
+}
+
+
+void NODE::setBrPath(nodePath path)
+{
+  brPath = path;
+}
+
+
+nodePath NODE::getBrPath()
+{
+  return brPath;
 }
 
 /*************************************DFG*************************************/

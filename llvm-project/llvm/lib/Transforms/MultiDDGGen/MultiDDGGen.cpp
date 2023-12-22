@@ -19,6 +19,8 @@
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/Transforms/Utils.h"
+#include "llvm/Support/CommandLine.h"
+
 
 #include "DFG.h"
 
@@ -30,6 +32,7 @@ using namespace llvm;
 
 namespace {
 
+static cl::opt<int> splitBr("split", cl::desc("the branch id for the DFG to be split at"), cl::init(-1));
 
 /**
  * Get the loop hint metadata node with a given name
@@ -386,7 +389,7 @@ class MultiDDGGen : public LoopPass {
     
     // map of conditional branch index (the basic block it belongs to) 
     // to all the dominated blocks of either true or false path
-    std::map<unsigned, branchPaths> mapBrIdPaths;
+    std::map<int, branchPaths> mapBrIdPaths;
 
     /**
      * updates the branching information of each basic block of the loop
@@ -444,7 +447,16 @@ class MultiDDGGen : public LoopPass {
      * @param loopDFG DFG of the loop
      * @return tuple of the loop exit control node and exit condition
     */
-    std::tuple<NODE*, bool> updateLoopControl (Loop *L, DFG* loopDFG);
+    std::tuple<NODE*, bool> updateLoopControl(Loop *L, DFG* loopDFG);
+
+    /**
+     * Split the DFG of the loop into true path and false path 
+     * given the branch id to split. If the branch id is out of 
+     * bounds (-1 for instance), the DFG won't be split.
+     * @param loopDFG DFG of the loop
+     * @param splitBrId id of the branch to split at
+    */
+    void splitDFG(DFG* loopDFG, int splitBrId);
 
 }; // end of class MultiDDGGen
 
@@ -1598,7 +1610,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
           }
 
           auto [dummyType, size] = getDatatype(nextType, nextType->getPrimitiveSizeInBits()/8); 
-          DEBUG("dynamic index node : " << nodeOp->get_Name() << "with element size of " << size);
+          DEBUG("dynamic index node : " << nodeOp->get_Name() << " with element size of " << size);
           // now the offset should be a mult node
           NODE* nodeSize = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(size), NULL, bbIdx);
           nodeSize->setDatatype(int32);
@@ -1623,6 +1635,12 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       loopDFG->insert_Node(nodeOffsetConst);
       offsetNodes.push_back(nodeOffsetConst);
     }
+    #ifdef DEBUG
+      DEBUG("offsetNodes size: " << offsetNodes.size() << "\n");
+      for (auto node : offsetNodes) {
+        DEBUG(node->get_Name() << "\n");
+      }
+    #endif
     // just in case
     if (offsetNodes.size() == 0) {
       NODE* nodeOffsetConst = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(0), NULL, bbIdx);
@@ -1809,6 +1827,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       DEBUG("phi inst in loopheader\n");
       DEBUG("  node: " << nodePhi->get_ID() << "\n");
       // get all the incomming nodes
+      nodePhi->setBranchIndex(-1);
       std::vector<NODE*> incomingNodes = nodePhi->Get_Prev_Nodes();
       for (int i = 0; i < (int)incomingNodes.size(); i++) {
         ARC* arcIn = loopDFG->get_Arc(incomingNodes[i], nodePhi); 
@@ -2058,7 +2077,7 @@ MultiDDGGen::updateLoopControl (Loop *L, DFG* loopDFG)
     if (liveoutNode->get_Instruction() == ld_data) 
       liveoutNode = liveoutNode->get_Related_Node();
     LiveOutNodes.push_back(liveoutNode);
-    DEBUG("  Added: " << liveoutNode->get_Name() << "to liveout nodes\n");
+    DEBUG("  Added: " << liveoutNode->get_Name() << " to liveout nodes\n");
   }
   // also all the stores can be treated as liveout?
   std::vector<NODE*> allNodes = loopDFG->getSetOfVertices();
@@ -2075,6 +2094,74 @@ MultiDDGGen::updateLoopControl (Loop *L, DFG* loopDFG)
   }
 
   return std::make_tuple(loopCtrlNode, exitDest);
+}
+
+
+void
+MultiDDGGen::splitDFG(DFG* loopDFG, int splitBrId)
+{
+  DEBUG("splitting the DFG at branch: " << splitBrId << "\n");
+  // first for all the nodes in the true and false paths
+  if (mapBrIdPaths.find(splitBrId) != mapBrIdPaths.end()) {
+    // the brSplit is a branch to split
+    std::vector<unsigned> truePath = mapBrIdPaths[splitBrId].truePath;
+    std::vector<unsigned> falsePath = mapBrIdPaths[splitBrId].falsePath;
+    for (auto nodeIT: loopDFG->getSetOfVertices()) {
+      if (std::find(truePath.begin(), truePath.end(), nodeIT->getBasicBlockIdx()) != truePath.end()) {
+        // node is part of true path
+        // placeholder now
+        nodeIT->setBrPath(true_path);
+        DEBUG("node " << nodeIT->get_Name() <<" set to true path\n");
+      } else if (std::find(falsePath.begin(), falsePath.end(), nodeIT->getBasicBlockIdx()) != falsePath.end()) {
+        // node is part of false path
+        // placeholder now
+        nodeIT->setBrPath(false_path);
+        DEBUG("node " << nodeIT->get_Name() <<" set to false path\n");
+      }
+    }
+  } else 
+    DEBUG("Not a valid br id, DFG won't be split\n");
+
+  // now for all the phi nodes
+  for (auto nodeIT: loopDFG->getSetOfVertices()) {
+    if (nodeIT->get_Instruction() == cgra_select && nodeIT->getBranchIndex() != -1) {
+      // phi nodes inside loop
+      if (nodeIT->getBranchIndex() != splitBrId) {
+        // phi node not determined by the splitting branch 
+        // partial predication tranforms to select
+        nodeIT->setOperation(cond_select);
+      } else {
+        // phi node determined by the splitting branch
+        // need to delete the node and connect the nodes directly 
+        // to the true and false path 
+        DEBUG("node: " << nodeIT->get_Name() << " a phi to be deleted\n");
+        // change the arcs from the node to be from both true and false path
+        // first get the true node and false node
+        NODE* trueNode;
+        NODE* falseNode;
+        for (auto prevNode : nodeIT->Get_Prev_Nodes()) {
+          if (loopDFG->get_Arc(prevNode, nodeIT)->GetOperandOrder() == 0)
+            trueNode = prevNode;
+          else if (loopDFG->get_Arc(prevNode, nodeIT)->GetOperandOrder() == 1)
+            falseNode = prevNode;
+        }
+        DEBUG("previous true node is " << trueNode->get_Name() << ", ");
+        DEBUG("false node is: " << falseNode->get_Name() <<"\n");
+        // now connect both to the succ nodes
+        for (auto succNode : nodeIT->Get_Next_Nodes()) {
+          DEBUG("successor node of phi node: " << succNode->get_Name() << "\n");
+          ARC* arcPhi = loopDFG->get_Arc(nodeIT, succNode);
+          
+          loopDFG->make_Arc(trueNode, succNode, edgeID++, arcPhi->Get_Inter_Iteration_Distance(), 
+                  arcPhi->Get_Dependency_Type(), arcPhi->GetOperandOrder());
+          loopDFG->make_Arc(falseNode, succNode, edgeID++, arcPhi->Get_Inter_Iteration_Distance(), 
+                            arcPhi->Get_Dependency_Type(), arcPhi->GetOperandOrder());
+        }
+        // safe to delete the phi node now
+        loopDFG->delete_Node(nodeIT);
+      }
+    }
+  }
 }
 
 
@@ -2149,7 +2236,6 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
 
   // here to first update the loop's branching information
   updateBranchInfo(L, DT);
-  mapBrIdPaths;
   #ifdef DEBUG
     for (auto const &branch : mapBrIdPaths) {
       DEBUG("Printing out all the branches\n");
@@ -2247,11 +2333,11 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   LoopCtrlNodeFile << loopExitCond << "\n";
   LoopCtrlNodeFile.close();
   DEBUG("Done updating loop control\n");
-
-  // now the output the completed DFG
-  // don't know why we use node id here, but left untouched
-
-  // first, the full DFG
+  
+  // this is to split the DFG
+  splitDFG(loopDFG, splitBr);
+  DEBUG("Done splitting the DFG\n");
+  
   std::ostringstream osNodeID;
   osNodeID << nodeID;
   loopDFG->Dump_Loop("./CGRAExec/L" + osLoopID.str() + "/loop" + osNodeID.str());

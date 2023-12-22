@@ -94,6 +94,13 @@ enum Datatype
   _array
 };
 
+enum nodePath
+{
+  true_path,
+  false_path,
+  none
+};
+
 const unsigned DT_Size[6] = {1,4,2,4,8,2};
 
 class NODE
@@ -125,6 +132,8 @@ class NODE
     bool cond;
     // index of the basic block this node belongs to
     unsigned bbIdx;
+    // the branch path this node belongs to
+    nodePath brPath;
 
   public:
     virtual ~NODE();
@@ -220,6 +229,12 @@ class NODE
 
     // set the instruction operation of this node
     void setOperation(Instruction_Operation);
+
+    // set the branch path of this node
+    void setBrPath(nodePath);
+
+    // get the branch path of this node
+    nodePath getBrPath();
 
 };
 
