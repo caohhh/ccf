@@ -202,13 +202,24 @@ class NODE
 
     // set the branch index for a phi cgra select node, -1 for out of loop
     void setBranchIndex(int branchIndex);
+
     // get the branch index of the node, -1 for out of loop
     int getBranchIndex();
 
+    // set if this node is used as cond for a br
     void setCond(bool ifCond);
+
+    // returns if this node is cond for a br
     bool isCond();
+
+    // set the basic block this node belongs to
     void setBasicBlockIdx(unsigned basicBlockIdx);
+
+    // get the index of the basic block this node belongs to
     unsigned getBasicBlockIdx();
+
+    // set the instruction operation of this node
+    void setOperation(Instruction_Operation);
 
 };
 

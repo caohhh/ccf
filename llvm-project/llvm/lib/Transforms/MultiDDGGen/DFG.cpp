@@ -419,6 +419,47 @@ bool NODE::is_Connected_To(NODE* nextNode)
   return false;
 }
 
+void NODE::setBranchIndex(int idx)
+{
+  branchIdx = idx;
+}
+
+
+int NODE::getBranchIndex()
+{
+  return branchIdx;
+}
+
+
+void NODE::setCond(bool ifCond)
+{
+  cond = ifCond;
+}
+
+
+bool NODE::isCond()
+{
+  return cond;
+}
+
+
+void NODE::setBasicBlockIdx(unsigned idx)
+{
+  bbIdx = idx;
+}
+
+
+unsigned NODE::getBasicBlockIdx()
+{
+  return bbIdx;
+}
+
+
+void NODE::setOperation(Instruction_Operation newOperation)
+{
+  Operation = newOperation;
+}
+
 /*************************************DFG*************************************/
 DFG::~DFG()
 {
@@ -856,39 +897,4 @@ void DFG::Dump_Loop(std::string filename)
   nodeFile.close();
 }
 
-
-void NODE::setBranchIndex(int idx)
-{
-  branchIdx = idx;
-}
-
-
-int NODE::getBranchIndex()
-{
-  return branchIdx;
-}
-
-
-void NODE::setCond(bool ifCond)
-{
-  cond = ifCond;
-}
-
-
-bool NODE::isCond()
-{
-  return cond;
-}
-
-
-void NODE::setBasicBlockIdx(unsigned idx)
-{
-  bbIdx = idx;
-}
-
-
-unsigned NODE::getBasicBlockIdx()
-{
-  return bbIdx;
-}
 ///make a new node from instruction BI and adds it to DFe* namespace llvm */
