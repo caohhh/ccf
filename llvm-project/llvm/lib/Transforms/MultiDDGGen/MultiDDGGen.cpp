@@ -505,17 +505,18 @@ MultiDDGGen::updateBranchInfo(Loop* L, DominatorTree* DT)
     }
     // now find the true block and false block
     // for br inst, successor 0 is true path, successor 1 is false path
-    BasicBlock* trueBlock = brInst->getSuccessor(0);
-    BasicBlock* falseBlock = brInst->getSuccessor(1);
     branchPaths paths;
+    BasicBlockEdge* trueEdge = new BasicBlockEdge(bbs[i], brInst->getSuccessor(0));
+    BasicBlockEdge* falseEdge = new BasicBlockEdge(bbs[i], brInst->getSuccessor(1));
+
     // here we get the blocks that blong to true or false path
     // mabe ii should start at i for efficiency, but just in case
     // here it starts at 0
     for (int ii = 0; ii < (int) bbs.size(); ii++) {
-      if (DT->dominates(trueBlock, bbs[ii])) {
+      if (DT->dominates(*trueEdge, bbs[ii])) {
         paths.truePath.push_back(ii);
         DEBUG("block " << ii << "in true path\n");
-      } else if (DT->dominates(falseBlock, bbs[ii])) {
+      } else if (DT->dominates(*falseEdge, bbs[ii])) {
         paths.falsePath.push_back(ii);
         DEBUG("block " << ii << "in false path\n");
       }
@@ -1214,12 +1215,9 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
         dt = int16;
       else
         dt = int32;
-      if (loopDFG->get_Node(operandVal) == NULL) {
-        nodeFrom = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(constVal), operandVal, bbIdx);
-        nodeFrom->setDatatype(dt);
-        loopDFG->insert_Node(nodeFrom);
-      } else
-        nodeFrom = loopDFG->get_Node(operandVal);
+      nodeFrom = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(constVal), operandVal, bbIdx);
+      nodeFrom->setDatatype(dt);
+      loopDFG->insert_Node(nodeFrom);
       nodeFrom->setDatatype(dt); 
       nodeTo = loopDFG->get_Node(BI);
       // since for store there are 2 nodes, the arc is skipped to later
@@ -1246,14 +1244,9 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
         constVal << cast<ConstantFP>(operandVal)->getValueAPF().convertToDouble();
       else
         constVal << cast<ConstantFP>(operandVal)->getValueAPF().convertToFloat();
-
-      if (loopDFG->get_Node(operandVal) == NULL) {
-        nodeFrom = new NODE(constant, 1, nodeID++, "ConstFP" + constVal.str(), operandVal, bbIdx);
-        nodeFrom->setDatatype(dt);
-        loopDFG->insert_Node(nodeFrom);
-      }
-      else
-        nodeFrom = loopDFG->get_Node(operandVal);
+      nodeFrom = new NODE(constant, 1, nodeID++, "ConstFP" + constVal.str(), operandVal, bbIdx);
+      nodeFrom->setDatatype(dt);
+      loopDFG->insert_Node(nodeFrom);
       nodeFrom->setDatatype(dt);
       nodeTo = loopDFG->get_Node(BI);
       // since for store there are 2 nodes, the arc is skipped to later
@@ -1753,21 +1746,23 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       // now find the true cond node and false cond node
       NODE* trueNode;
       NODE* falseNode;
+      // use edge here
+      BasicBlockEdge* trueEdge = new BasicBlockEdge(commonDom, brInst->getSuccessor(0));
+      BasicBlockEdge* falseEdge = new BasicBlockEdge(commonDom, brInst->getSuccessor(1));
+      BasicBlockEdge* phiEdge0 = new BasicBlockEdge(bbList[0], BI->getParent());
+      BasicBlockEdge* phiEdge1 = new BasicBlockEdge(bbList[1], BI->getParent());
+
       // for br inst, successor 0 is true path, successor 1 is false path
-      if (DT->dominates(brInst->getSuccessor(0), bbList[0]) || 
-          (brInst->getSuccessor(0) == BI->getParent() && bbList[0] == commonDom)) {
-        if (DT->dominates(brInst->getSuccessor(1), bbList[1]) || 
-            (brInst->getSuccessor(1) == BI->getParent() && bbList[1] == commonDom)) {
+      if (DT->dominates(*trueEdge, *phiEdge0)) {
+        if (DT->dominates(*falseEdge, *phiEdge1)) {
           trueNode = loopDFG->get_Node(operandList[0]);
           falseNode = loopDFG->get_Node(operandList[1]);
         } else {
           DEBUG("ERROR, block 0 is true, block 1 is not false\n");
           exit(1);
         }
-      } else if (DT->dominates(brInst->getSuccessor(1), bbList[0]) || 
-          (brInst->getSuccessor(1) == BI->getParent() && bbList[0] == commonDom)) {
-        if (DT->dominates(brInst->getSuccessor(0), bbList[1]) || 
-            (brInst->getSuccessor(0) == BI->getParent() && bbList[1] == commonDom)) {
+      } else if (DT->dominates(*falseEdge, *phiEdge0)) {
+        if (DT->dominates(*trueEdge, *phiEdge1)) {
           trueNode = loopDFG->get_Node(operandList[1]);
           falseNode = loopDFG->get_Node(operandList[0]);
         } else {
@@ -2154,6 +2149,20 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
 
   // here to first update the loop's branching information
   updateBranchInfo(L, DT);
+  mapBrIdPaths;
+  #ifdef DEBUG
+    for (auto const &branch : mapBrIdPaths) {
+      DEBUG("Printing out all the branches\n");
+      DEBUG("BrId: " << branch.first << "\n");
+      DEBUG("true path:\n");
+      for (auto const i : branch.second.truePath)
+        DEBUG(i << "\t");
+      DEBUG("\nfalse path:\n");
+      for (auto const i: branch.second.falsePath)
+        DEBUG(i << "\t");
+      DEBUG("\n");
+    }
+  #endif
 
   // adding in all the instructions of the loop as nodes in the DFG
   for (int i = 0; i < (int) bbs.size(); i++) {
@@ -2241,6 +2250,8 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
 
   // now the output the completed DFG
   // don't know why we use node id here, but left untouched
+
+  // first, the full DFG
   std::ostringstream osNodeID;
   osNodeID << nodeID;
   loopDFG->Dump_Loop("./CGRAExec/L" + osLoopID.str() + "/loop" + osNodeID.str());
