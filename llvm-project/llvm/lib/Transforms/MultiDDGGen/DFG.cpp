@@ -717,40 +717,35 @@ void DFG::Dot_Print_DFG(std::string filename)
   dotFile.open(filename.c_str());
   dotFile << "digraph " << graphname << " { \n{";
 
-  for (int i = 0; i < (int) _node_Set.size(); i++)
-  {
-    if (_node_Set[i]->is_Mem_Operation())
-    {
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [color=blue, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"];\n";
-    }
-    else if (_node_Set[i]->is_Routing_Operation())
-    {
+  for (int i = 0; i < (int) _node_Set.size(); i++) {
+    if (_node_Set[i]->is_Mem_Operation()) {
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [color=blue, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
+    } else if (_node_Set[i]->is_Routing_Operation()) {
       dotFile << "\n" << _node_Set[i]->get_ID() << " [color=green ];\n";
+    } else if (_node_Set[i]->is_Phi_Operation()) {
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=box, color=red, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
+    } else if (_node_Set[i]->is_ConditionalSelect_Operation()) {
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=diamond, color=gray, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
+    } else if(_node_Set[i]->is_Add_Operation() || _node_Set[i]->is_Sub_Operation()) {
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=polygon, color=purple, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
+    } else if(_node_Set[i]->is_Mult_Operation() || _node_Set[i]->is_Div_Operation()) {
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=house, color=purple, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
+    } else if(_node_Set[i]->is_Comp_Operation()){
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=trapezium, color=orange, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
+    } else if(_node_Set[i]->is_Binary_Operation()){
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=triangle, color=purple, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
+    } else {
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [color=black, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
     }
-    else if (_node_Set[i]->is_Phi_Operation())
-    {
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=box, color=red, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"];\n";
+
+    if (_node_Set[i]->getBrPath() == true_path) {
+      dotFile << "style=filled, fillcolor = lightcoral];\n";
+    } else if (_node_Set[i]->getBrPath() == false_path) {
+      dotFile << "style=filled, fillcolor = lightblue];\n";
+    } else {
+      dotFile << "];\n";
     }
-    else if (_node_Set[i]->is_ConditionalSelect_Operation())
-    {
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=diamond, color=gray, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"];\n";
-    }
-    else if(_node_Set[i]->is_Add_Operation() || _node_Set[i]->is_Sub_Operation()){
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=polygon, color=purple, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"];\n";
-    }
-    else if(_node_Set[i]->is_Mult_Operation() || _node_Set[i]->is_Div_Operation()){
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=house, color=purple, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"];\n";
-    }
-    else if(_node_Set[i]->is_Comp_Operation()){
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=trapezium, color=orange, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"];\n";
-    }
-    else if(_node_Set[i]->is_Binary_Operation()){
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=triangle, color=purple, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"];\n";
-    }
-    else
-    {
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [color=black, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"];\n";
-    }
+
   }
 
   for (int i = 0; i < (int) _ARC_Set.size(); i++)

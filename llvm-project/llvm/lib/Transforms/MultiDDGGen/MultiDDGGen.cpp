@@ -1228,6 +1228,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       else
         dt = int32;
       nodeFrom = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(constVal), operandVal, bbIdx);
+      DEBUG("  inserted new constant int id: " << nodeFrom->get_ID() <<"\n");
       nodeFrom->setDatatype(dt);
       loopDFG->insert_Node(nodeFrom);
       nodeFrom->setDatatype(dt); 
@@ -1487,7 +1488,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
           nodeOp = new NODE(constant, 1, nodeID++, operandName, NULL, bbIdx);
           nodeOp->setDatatype(dt);
           loopDFG->insert_Node(nodeOp);
-          loopDFG->make_Arc(nodeOp, nodeGEP, edgeID++, 0, TrueDep, 0);
+          loopDFG->make_Arc(nodeOp, nodeGEP, edgeID++, 0, TrueDep, i);
           DEBUG("  Uncertain behavior: adding nodeOp: " << operandName << " - nodeGEP: " << nodeTo->get_Name() << "\n");
         }
       } else {
@@ -1495,7 +1496,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       }
       if (nodeOp->is_Load_Address_Generator())
         nodeOp = nodeOp->get_Related_Node();
-      DEBUG("  nodeOp: " << nodeOp->get_Name() << "\n");
+      DEBUG("  nodeOp: " << nodeOp->get_Name() << ", id: " << nodeOp->get_ID() <<"\n");
 
       // if this operand of the GEP is multiply
       // set the order of constant and variable multipliers
@@ -1552,16 +1553,28 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
 
         // now for the actual index itself, first prepare the offsets
         if (nodeOp->get_Instruction() == constant) {
-          //first for constants
+          // first for constants
+          // a fix for multiple constants with the same value
+          for (auto nodeOpNew : nodeGEP->Get_Prev_Nodes()) {
+            if (loopDFG->get_Arc(nodeOpNew, nodeGEP)->GetOperandOrder() == i) {
+              if (nodeOpNew->get_LLVM_Instruction() == nodeOp->get_LLVM_Instruction()) {
+                DEBUG("replacing nodeOp:" << nodeOp->get_ID() << " with " << nodeOpNew->get_ID() << "\n");
+                nodeOp = nodeOpNew;
+              }
+              else {
+                DEBUG("ERROR!! replacing constants in GEP, values of the constants does not match\n");
+                exit(1);
+              }
+            }
+          }
           if (nodeOp->get_Name() == "ConstInt0") {
             // for const 0, the node can be deleted
-            DEBUG("this index is constant 0\n");
+            DEBUG("this index is constant 0, nodeid:"<< nodeOp->get_ID() << "\n");
             constIndex = 0;
             // remove this arc
             loopDFG->Remove_Arc(nodeOp, nodeGEP);
-            // delete the constant node if no other refreces
-            if (nodeOp->Get_Next_Nodes().size() == 0)
-              loopDFG->delete_Node(nodeOp);
+            // delete the constant node 
+            loopDFG->delete_Node(nodeOp);
           } else {
             // other constants
             // first get the constant
@@ -1610,9 +1623,10 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
           }
 
           auto [dummyType, size] = getDatatype(nextType, nextType->getPrimitiveSizeInBits()/8); 
-          DEBUG("dynamic index node : " << nodeOp->get_Name() << " with element size of " << size);
+          DEBUG("dynamic index node : " << nodeOp->get_Name() << " with element size of " << size << "\n");
           // now the offset should be a mult node
           NODE* nodeSize = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(size), NULL, bbIdx);
+          DEBUG("inserted offset node id:" << nodeSize->get_ID() << ", size: " << size <<"\n");
           nodeSize->setDatatype(int32);
           loopDFG->insert_Node(nodeSize);
           nodeOffset = new NODE(mult, 1, nodeID++, std::to_string(nodeID-1), NULL, bbIdx);
@@ -1661,7 +1675,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       loopDFG->make_Arc(node1, nodeAdd, edgeID++, 0, TrueDep, 1);
       offsetNodes.push_back(nodeAdd);
       // remove the added two nodes
-      offsetNodes.erase(offsetNodes.begin(), offsetNodes.begin() + 1);
+      offsetNodes.erase(offsetNodes.begin(), offsetNodes.begin() + 2);
     }
     // add arc to gep
     loopDFG->make_Arc(offsetNodes[0], nodeGEP, edgeID++, 0, TrueDep, 1);
