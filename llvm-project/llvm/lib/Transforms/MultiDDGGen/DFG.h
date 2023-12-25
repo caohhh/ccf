@@ -128,8 +128,9 @@ class NODE
     // the index of the branch this node comes from, -1 for phi node
     // from outside of the loop
     int branchIdx;
-    // if this node is used as the condition for a branch
-    bool cond;
+
+    // which branch this node is used as a condition for, -1 for not a cond
+    int condBrId;
     // index of the basic block this node belongs to
     unsigned bbIdx;
     // the branch path this node belongs to
@@ -215,11 +216,11 @@ class NODE
     // get the branch index of the node, -1 for out of loop
     int getBranchIndex();
 
-    // set if this node is used as cond for a br
-    void setCond(bool ifCond);
+    // set if which br this node is used as cond for
+    void setCondBrId(int brId);
 
-    // returns if this node is cond for a br
-    bool isCond();
+    // returns which br this node is used as a cond for, -1 for not a cond
+    int getCondBrId();
 
     // set the basic block this node belongs to
     void setBasicBlockIdx(unsigned basicBlockIdx);

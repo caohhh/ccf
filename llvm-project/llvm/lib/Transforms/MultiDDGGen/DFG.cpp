@@ -110,7 +110,7 @@ NODE::NODE(Instruction_Operation ins, int laten, int id, std::string name, Value
 
   load_alignment = 0;
   branchIdx = -2;
-  cond = false;
+  condBrId = -1;
   bbIdx = basicBlockIdx;
   brPath = none;
 }
@@ -432,15 +432,15 @@ int NODE::getBranchIndex()
 }
 
 
-void NODE::setCond(bool ifCond)
+void NODE::setCondBrId(int brId)
 {
-  cond = ifCond;
+  condBrId = brId;
 }
 
 
-bool NODE::isCond()
+int NODE::getCondBrId()
 {
-  return cond;
+  return condBrId;
 }
 
 

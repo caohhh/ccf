@@ -1814,7 +1814,8 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       NODE* condNode = loopDFG->get_Node(condInst);
       if (condNode->is_Load_Address_Generator())
         condNode = condNode->get_Related_Node();
-      condNode->setCond(true);
+      // here we set the cond node to its corresponding br inst
+      condNode->setCondBrId(domIndex);
 
       // now the 3 edges to a select
       // first fix the order of the 2 operands
