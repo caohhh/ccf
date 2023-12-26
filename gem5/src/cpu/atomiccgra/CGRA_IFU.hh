@@ -18,6 +18,7 @@
 
 #include "cpu/atomiccgra/exec_context.hh"
 #include "cpu/atomiccgra/pred/cgra_pred_unit.hh"
+#include "cpu/atomiccgra/CGRAInstruction.h"
 
 class CGRA_IFU
 {
@@ -28,15 +29,6 @@ class CGRA_IFU
     CGRA_IFU(unsigned int Xdim, unsigned int Ydim, CGRAPredUnit* predictor);
     virtual ~CGRA_IFU();
 
-
-    /**
-     * register this result into the compare history
-     * 
-     * @param PC PC of the CMP instruction
-     * @param outcome the result of this CMP instruction
-    */
-    void recordCMP(Addr PC, bool outcome);
-    
     /**
      * Debug function to print CMP history
     */
@@ -75,10 +67,10 @@ class CGRA_IFU
     void setConditionalReg(bool reg);
 
     /**
-     * After decoding, mark the instruction in the current PE
-     * as a CMP.
+     * Before individule PEs fetch instructions from IFU, mark out
+     * all the cond instructions
     */
-    void markCMP(unsigned peIndex);
+    void markCond();
 
     /**
      * After execution, expose the predication output to the IFU
@@ -120,8 +112,8 @@ class CGRA_IFU
     // False: LE instruction execution indicates should exit loop
     bool conditionalReg;
 
-    // If the instruction in the PE is a CMP
-    bool *isCMP;
+    // If the instruction in the PE is a Cond instruction
+    bool *isCond;
 
     // the predication output of all the PEs
     bool *predOutput;
@@ -132,6 +124,13 @@ class CGRA_IFU
     // with the predication output of the PEs, update the predictor
     void updatePredictor();
 
+    /**
+     * register this result into the compare history
+     * 
+     * @param PC PC of the CMP instruction
+     * @param outcome the result of this CMP instruction
+    */
+    void recordCMP(Addr PC, bool outcome);
 };
 
 #endif

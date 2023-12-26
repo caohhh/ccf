@@ -1009,6 +1009,11 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
         return;
     }
 
+    // mark out all the cond ins
+    // and then predict their outcome
+    cgraIFU->markCond();
+    cgraIFU->predict();
+
     //*********FETCH********************
     for (unsigned i = 0; i < CGRA_XDim; i++) {
         for (unsigned j = 0; j < CGRA_YDim; j++) {
@@ -1028,12 +1033,7 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
     for (unsigned i = 0; i < CGRA_XDim; i++)
         for (unsigned j = 0; j < CGRA_YDim; j++) {
             cgra_PEs[i * CGRA_YDim + j].Decode();
-            // currently the prediction is at here one instruction by one
-            // need to move it so it's done one iteration at a time
-            if (cgra_PEs[i * CGRA_YDim + j].isCMP()) 
-                cgraIFU->markCMP(i* CGRA_YDim + j);
         }
-    cgraIFU->predict();
     //*********EXECUTE********************
     // Support for multiple datatypes added in exec unit.
     for (int i = 0; i < CGRA_XDim; i++) {
@@ -1060,12 +1060,6 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
             
             // output predication to IFU
             cgraIFU->setPred(i * CGRA_YDim + j, cgra_PEs[i * CGRA_YDim + j].getPredOutput());
-
-            // here to extract branching information from cmp instructions
-            if (cgra_PEs[i * CGRA_YDim + j].isCMP()) {
-                DPRINTF(CGRA_Detailed, "Condition Compare @ PE %d\n", i*CGRA_YDim+j);
-                cgraIFU->recordCMP(thread->instAddr() + ((i*CGRA_XDim)+j)*(sizeof(unsigned long)), cgra_PEs[i * CGRA_YDim + j].getPredOutput());
-            }
         }
     }
     /**

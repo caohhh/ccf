@@ -11,1050 +11,823 @@
 #include "CGRAInstruction.h"
 #include "debug/Instruction_Debug.hh"
 
+/************************************CGRA_Instruction************************************/
+
 CGRA_Instruction::CGRA_Instruction()
 {
 }
 
 CGRA_Instruction::CGRA_Instruction(unsigned long Instructionword)
 {
-	InsWord = Instructionword;
-	ENCODE_instruction();
+    InsWord = Instructionword;
+    decodeInstruction();
 }
 
-CGRA_Instruction::CGRA_Instruction(Datatype dt,OPCode opc,bool predic,PEInputMux LMuxSel,  PEInputMux RMuxSel, int RRegAdd1,int RRegAdd2, int WAdd, bool WE, long ImmVal, bool EDMAdd, bool DMData)
+CGRA_Instruction::CGRA_Instruction(Datatype dt,OPCode opc,PEInputMux LMuxSel, PEInputMux RMuxSel, 
+                int RRegAdd1,int RRegAdd2, int WAdd, bool WE, int ImmVal, bool EDMAdd, bool DMData)
 {
-  DType=dt;
-	opCode=opc;
-	Predicator=predic;
-	LeftMuxSelector=LMuxSel;
-	RightMuxSelector=RMuxSel;
-	ReadRegAddress1=RRegAdd1;
-	ReadRegAddress2=RRegAdd2;
-	WriteRegAddress=WAdd;
-	WriteRegisterEnable=WE;
-	ImmediateValue=ImmVal;
-	SelectDataMemoryAddressBus=EDMAdd;
-	SelectDataMemoryDataBus=DMData;
-	LE = 0;
+    DType=dt;
+    opCode=opc;
+    Predicator = false;
+    cond = false;
+    LeftMuxSelector=LMuxSel;
+    RightMuxSelector=RMuxSel;
+    ReadRegAddress1=RRegAdd1;
+    ReadRegAddress2=RRegAdd2;
+    WriteRegAddress=WAdd;
+    WriteRegisterEnable=WE;
+    ImmediateValue=ImmVal;
+    SelectDataMemoryAddressBus=EDMAdd;
+    SelectDataMemoryDataBus=DMData;
+    encodeInstruction();
 }
 
 CGRA_Instruction::~CGRA_Instruction()
 {
 }
 
-unsigned long CGRA_Instruction::getInsWord()
+unsigned long 
+CGRA_Instruction::getInsWord()
 {
-   return InsWord;
+    return InsWord;
 }
 
 
-void CGRA_Instruction::decode_CGRA_Instruction(){
-	ENCODE_instruction();
-}
-
-Datatype CGRA_Instruction::getDatatype()
+Datatype 
+CGRA_Instruction::getDatatype()
 {
-  return DType;
+    return DType;
 }
 
-OPCode CGRA_Instruction::getOpCode()
+
+OPCode 
+CGRA_Instruction::getOpCode()
 {
-  DPRINTF(Instruction_Debug, "Opcode from get: %lx\n", (unsigned long)opCode); 
-	return opCode;
+    DPRINTF(Instruction_Debug, "Opcode from get: %lx\n", (unsigned long)opCode); 
+    return opCode;
 }
 
-bool CGRA_Instruction::getPredicator()
+
+bool 
+CGRA_Instruction::getPredicator()
 {
-	return Predicator;
+    return Predicator;
 }
 
-bool CGRA_Instruction::getLE(){
-        return LE;
-}
 
-PEInputMux CGRA_Instruction::getLeftMuxSelector()
+bool CGRA_Instruction::getCond()
 {
-	return LeftMuxSelector;
+    return cond;
 }
 
-PEInputMux CGRA_Instruction::getRightMuxSelector()
+
+PEInputMux 
+CGRA_Instruction::getLeftMuxSelector()
 {
-	return RightMuxSelector;
+    return LeftMuxSelector;
 }
 
-int CGRA_Instruction::getReadRegAddress1()
+
+PEInputMux 
+CGRA_Instruction::getRightMuxSelector()
 {
-	return ReadRegAddress1;
+    return RightMuxSelector;
 }
 
-int CGRA_Instruction::getReadRegAddress2()
+
+int 
+CGRA_Instruction::getReadRegAddress1()
 {
-	return ReadRegAddress2;
+    return ReadRegAddress1;
 }
 
-int CGRA_Instruction::getWriteRegAddress()
+
+int 
+CGRA_Instruction::getReadRegAddress2()
 {
-	return WriteRegAddress;
+    return ReadRegAddress2;
 }
 
-bool CGRA_Instruction::getWriteRegisterEnable()
+
+int 
+CGRA_Instruction::getWriteRegAddress()
 {
-	return WriteRegisterEnable;
+    return WriteRegAddress;
 }
 
-int CGRA_Instruction::getImmediateValue()
+
+bool 
+CGRA_Instruction::getWriteRegisterEnable()
 {
-	return ImmediateValue;
+    return WriteRegisterEnable;
 }
 
-bool CGRA_Instruction::getSelectDataMemoryAddressBus()
+
+int 
+CGRA_Instruction::getImmediateValue()
 {
-	return SelectDataMemoryAddressBus;
+    return ImmediateValue;
 }
 
-bool CGRA_Instruction::getSelectDataMemoryDataBus()
+
+bool 
+CGRA_Instruction::getSelectDataMemoryAddressBus()
 {
-	return SelectDataMemoryDataBus;
+    return SelectDataMemoryAddressBus;
 }
+
+
+bool 
+CGRA_Instruction::getSelectDataMemoryDataBus()
+{
+    return SelectDataMemoryDataBus;
+}
+
 
 void 
-CGRA_Instruction::ENCODE_instruction()
+CGRA_Instruction::decodeInstruction()
 {
-    unsigned long ins_trunc= InsWord & 0x1fffffffffffffffUL;
-    /*DPRINTF(Instruction_Debug, "InsWord: %lx\n", (InsWord));
-    DPRINTF(Instruction_Debug, "InsWord: %lx\n", (InsWord & 0xffffffff));
-    DPRINTF(Instruction_Debug, "INSOPCODE: %lx\n", ((INS_OPCODE)));
-    DPRINTF(Instruction_Debug, "SHIFT Opcode: %lx\n", SHIFT_OPCODE);
-    DPRINTF(Instruction_Debug, "unsigned Opcode: %lx\n",((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
-    exit(1);
-    DPRINTF(Instruction_Debug, "long Opcode: %lx\n", (long) ((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
-    DPRINTF(Instruction_Debug, "int Opcode: %ld\n", (int) ((InsWord & INS_OPCODE) >> SHIFT_OPCODE));
-    DPRINTF(Instruction_Debug, "Datatype: %lx\n", (unsigned long) (InsWord & INS_DATATYPE)>>SHIFT_DATATYPE);*/
     switch (((unsigned long)(InsWord & INS_DATATYPE))>>SHIFT_DATATYPE) {
-        case character:
-          DType = character;
-          break;
-        case int32:
-          DType = int32;
-          break;
-        case int16:
-          DType = int16;
-          break;
-        case float32:
-          DType = float32;
-          break;
-        case float64:
-          DType = float64;
-          break;
-        case float16:
-          DType = float16;
-          break;
-        case empty1:
-          DType = empty1;
-          break;
-        case empty2:
-          DType = empty2;
-          break;
+      case character:
+        DType = character;
+        break;
+      case int32:
+        DType = int32;
+        break;
+      case int16:
+        DType = int16;
+        break;
+      case float32:
+        DType = float32;
+        break;
+      case float64:
+        DType = float64;
+        break;
+      case float16:
+        DType = float16;
+        break;
+      case empty1:
+        DType = empty1;
+        break;
+      case empty2:
+        DType = empty2;
+        break;
     } // DType
 
-    switch ((ins_trunc & INS_OPCODE) >> SHIFT_OPCODE) {
-        case Add:
-          opCode = Add;
-          break;
-        case Sub:
-          opCode = Sub;
-          break;
-        case Mult:
-          opCode = Mult;
-          break;
-        case AND:
-          opCode = AND;
-          break;
-        case OR:
-          opCode = OR;
-          break;
-        case XOR:
-          opCode = XOR;
-          break;
-        case cgraASR:
-          opCode = cgraASR;
-          break;
-        case cgraASL:
-          opCode = cgraASL;
-          break;
-        case NOOP:
-          opCode= NOOP;
-          break;
-        case GT:
-          opCode= GT;
-          break;
-        case LT:
-          opCode= LT;
-          break;
-        case EQ:
-          opCode= EQ;
-          break;
-        case NEQ:
-          opCode= NEQ;
-          break;
-        case Div:
-          opCode= Div;
-          break;
-        case Rem:
-          opCode= Rem;
-          break;
-        //case Sqrt:
-        case LSHR:
-          opCode= LSHR;
-          break;
+    switch ((InsWord & INS_OPCODE) >> SHIFT_OPCODE) {
+      case Add:
+        opCode = Add;
+        break;
+      case Sub:
+        opCode = Sub;
+        break;
+      case Mult:
+        opCode = Mult;
+        break;
+      case AND:
+        opCode = AND;
+        break;
+      case OR:
+        opCode = OR;
+        break;
+      case XOR:
+        opCode = XOR;
+        break;
+      case cgraASR:
+        opCode = cgraASR;
+        break;
+      case cgraASL:
+        opCode = cgraASL;
+        break;
+      case NOOP:
+        opCode= NOOP;
+        break;
+      case GT:
+        opCode= GT;
+        break;
+      case LT:
+        opCode= LT;
+        break;
+      case EQ:
+        opCode= EQ;
+        break;
+      case NEQ:
+        opCode= NEQ;
+        break;
+      case Div:
+        opCode= Div;
+        break;
+      case Rem:
+        opCode= Rem;
+        break;
+      //case Sqrt:
+      case LSHR:
+        opCode= LSHR;
+        break;
     } // opCode
   
     Predicator= (InsWord & INS_PREDICT )>>SHIFT_PREDICT;
-    LE= (InsWord & INS_LE) >> SHIFT_LE;
+    cond= (InsWord & INS_COND) >> SHIFT_COND;
   
     switch ((InsWord & INS_LMUX ) >> SHIFT_LMUX) {
-        case Register:
-          LeftMuxSelector = Register;
-          break;
-        case Left:
-          LeftMuxSelector = Left;
-          break;
-        case Right:
-          LeftMuxSelector = Right;
-          break;
-        case Up:
-          LeftMuxSelector = Up;
-          break;
-        case Down:
-          LeftMuxSelector = Down;
-          break;
-        case DataBus:
-          LeftMuxSelector = DataBus;
-          break;
-        case Immediate:
-          LeftMuxSelector = Immediate;
-          break;
-        case Self:
-          LeftMuxSelector= Self;
-          break;
+      case Register:
+        LeftMuxSelector = Register;
+        break;
+      case Left:
+        LeftMuxSelector = Left;
+        break;
+      case Right:
+        LeftMuxSelector = Right;
+        break;
+      case Up:
+        LeftMuxSelector = Up;
+        break;
+      case Down:
+        LeftMuxSelector = Down;
+        break;
+      case DataBus:
+        LeftMuxSelector = DataBus;
+        break;
+      case Immediate:
+        LeftMuxSelector = Immediate;
+        break;
+      case Self:
+        LeftMuxSelector= Self;
+        break;
     } // LMUX
 
     switch ((InsWord & INS_RMUX ) >> SHIFT_RMUX) {
-        case Register:
-          RightMuxSelector = Register;
-          break;
-        case Left:
-          RightMuxSelector = Left;
-          break;
-        case Right:
-          RightMuxSelector = Right;
-          break;
-        case Up:
-          RightMuxSelector = Up;
-          break;
-        case Down:
-          RightMuxSelector = Down;
-          break;
-        case DataBus:
-          RightMuxSelector = DataBus;
-          break;
-        case Immediate:
-          RightMuxSelector = Immediate;
-          break;
-        case Self:
-          RightMuxSelector= Self;
-          break;
+      case Register:
+        RightMuxSelector = Register;
+        break;
+      case Left:
+        RightMuxSelector = Left;
+        break;
+      case Right:
+        RightMuxSelector = Right;
+        break;
+      case Up:
+        RightMuxSelector = Up;
+        break;
+      case Down:
+        RightMuxSelector = Down;
+        break;
+      case DataBus:
+        RightMuxSelector = DataBus;
+        break;
+      case Immediate:
+        RightMuxSelector = Immediate;
+        break;
+      case Self:
+        RightMuxSelector= Self;
+        break;
     } //RMUX
 
     ReadRegAddress1= (InsWord & INS_R1 )>>SHIFT_R1 ;
     ReadRegAddress2= (InsWord & INS_R2 )>>SHIFT_R2 ;
     WriteRegAddress= (InsWord & INS_RW )>>SHIFT_RW ;
     WriteRegisterEnable= (InsWord & INS_WE )>>SHIFT_WE ;
-    ImmediateValue= ((LE)? (InsWord & INS_LE_IMMEDIATE):(InsWord & INS_IMMEDIATE)) >> SHIFT_IMMEDIATE;
+    ImmediateValue= (InsWord & INS_IMMEDIATE) >> SHIFT_IMMEDIATE;
     SelectDataMemoryAddressBus= (InsWord & INS_AB )>>SHIFT_ABUS ;
     SelectDataMemoryDataBus= (InsWord & INS_DB )>>SHIFT_DBUS ;
 }
 
-unsigned long CGRA_Instruction::getOpCode_DECODE()
+
+void 
+CGRA_Instruction::encodeInstruction()
 {
-	unsigned long InsWord = 0;
-	InsWord |=opCode;
-	InsWord <<= SHIFT_OPCODE;
-	InsWord &= INS_OPCODE;
-	return InsWord;
+    InsWord = 0;
+    InsWord |= ((0UL | DType) << SHIFT_DATATYPE) & INS_DATATYPE;
+    InsWord |= ((0UL | opCode) << SHIFT_OPCODE) & INS_OPCODE;
+    InsWord |= ((0UL | Predicator) << SHIFT_PREDICT) & INS_PREDICT;
+    InsWord |= ((0UL | cond) << SHIFT_COND) & INS_COND;
+    InsWord |= ((0UL | LeftMuxSelector) << SHIFT_LMUX) & INS_LMUX;
+    InsWord |= ((0UL | RightMuxSelector) << SHIFT_RMUX) & INS_RMUX;
+    InsWord |= ((0UL | ReadRegAddress1) << SHIFT_R1) & INS_R1;
+    InsWord |= ((0UL | ReadRegAddress2) << SHIFT_R2) & INS_R2;
+    InsWord |= ((0UL | WriteRegAddress) << SHIFT_RW) & INS_RW;
+    InsWord |= ((0UL | WriteRegisterEnable) << SHIFT_WE) & INS_WE;
+    InsWord |= ((0UL | SelectDataMemoryAddressBus) << SHIFT_ABUS) & INS_AB;
+    InsWord |= ((0UL | SelectDataMemoryDataBus) << SHIFT_DBUS) & INS_DB;
+    InsWord |= ((0UL | ImmediateValue) << SHIFT_IMMEDIATE) & INS_IMMEDIATE;
 }
 
-unsigned long CGRA_Instruction::getPredicator_DECODE()
-{
-	unsigned long InsWord = 0;
-	InsWord |=Predicator;
-	InsWord <<= SHIFT_PREDICT;
-	InsWord &= INS_PREDICT;
-	return InsWord;
-}
 
-unsigned long CGRA_Instruction::getLeftMuxSelector_DECODE()
-{
-	unsigned long InsWord = 0;
-	InsWord |=LeftMuxSelector;
-	InsWord <<= SHIFT_LMUX;
-	InsWord &= INS_LMUX;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getRightMuxSelector_DECODE()
-{
-	unsigned long InsWord = 0;
-	InsWord |=RightMuxSelector;
-	InsWord <<= SHIFT_RMUX;
-	InsWord &= INS_RMUX;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getReadRegAddress1_DECODE()
-{ 
-	unsigned long InsWord = 0;
-	InsWord |= ReadRegAddress1;
-	InsWord <<= SHIFT_R1;
-	InsWord &= INS_R1;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getReadRegAddress2_DECODE()
-{
-	unsigned long InsWord = 0;
-	InsWord |= ReadRegAddress2;
-	InsWord <<= SHIFT_R2;
-	InsWord &= INS_R2;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getWriteRegAddress_DECODE()
-{
-	unsigned long InsWord = 0;
-	InsWord |= WriteRegAddress;
-	InsWord <<= SHIFT_RW;
-	InsWord &= INS_RW;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getWriteRegisterEnable_DECODE()
-{
-	unsigned long InsWord = 0;
-	InsWord |= WriteRegisterEnable;
-	InsWord <<= SHIFT_WE;
-	InsWord &= INS_WE;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getImmediateValue_DECODE()
-{
-	unsigned long InsWord = 0;
-	if(ImmediateValue > 0x3ffffffffUL){
-		printf("ERROR: CAN'T HOLD IMMEDIATE VALUE, SETTING VALUE = 0x3ffffffffUL\n");
-		ImmediateValue = 0x3ffffffffUL;
-	}
-	InsWord |= ImmediateValue;
-	InsWord <<= SHIFT_IMMEDIATE;
-	InsWord &= INS_IMMEDIATE;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getSelectDataMemoryAddressBus_DECODE()
-{
-	unsigned long InsWord = 0;
-	InsWord |= SelectDataMemoryAddressBus;
-	InsWord <<= SHIFT_ABUS;
-	InsWord &= INS_AB;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getSelectDataMemoryDataBus_DECODE()
-{
-	unsigned long InsWord = 0;
-	InsWord |= SelectDataMemoryDataBus;
-	InsWord <<= SHIFT_DBUS;
-	InsWord &= INS_DB;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::getLE_DECODE(){
-        unsigned long InsWord = 0;
-	InsWord |= LE;
-	InsWord <<=SHIFT_LE;
-	InsWord &= INS_LE;
-	return InsWord;
-}
-
-unsigned long CGRA_Instruction::DecodeInstruction(CGRA_Instruction* Ins)
-{
-	unsigned long InsWord =0;
-	InsWord |= Ins->getOpCode_DECODE();
-	InsWord |= Ins->getPredicator_DECODE();
-	InsWord |= Ins->getLE_DECODE();
-	InsWord |= Ins->getLeftMuxSelector_DECODE();
-	InsWord |= Ins->getRightMuxSelector_DECODE();
-	InsWord |= Ins->getReadRegAddress1_DECODE();
-	InsWord |= Ins->getReadRegAddress2_DECODE();
-	InsWord |= Ins->getWriteRegAddress_DECODE();
-	InsWord |= Ins->getWriteRegisterEnable_DECODE();
-	InsWord |= Ins->getSelectDataMemoryAddressBus_DECODE();
-	InsWord |= Ins->getSelectDataMemoryDataBus_DECODE();
-	InsWord |= Ins->getImmediateValue_DECODE();
-	return InsWord;
-}
-
-// Predicated Instruction Format Defined
+/************************************Pred_Instruction************************************/
 Pred_Instruction::Pred_Instruction()
 {
 }
 
+
 Pred_Instruction::Pred_Instruction(unsigned long Instructionword)
 {
-	PredInsWord = Instructionword;
-	ENCODE_Pred_instruction();
+    PredInsWord = Instructionword;
+    decodePredInstruction();
 }
 
-Pred_Instruction::Pred_Instruction(Datatype dt,PredOPCode popc,PEInputMux LMuxSel, PEInputMux RMuxSel, PEInputMux PMuxSel, int RRegAdd1,int RRegAdd2, int RRegAddP, long ImmVal)
+
+Pred_Instruction::Pred_Instruction(Datatype dt, PredOPCode popc, PEInputMux LMuxSel, PEInputMux RMuxSel, 
+        PEInputMux PMuxSel, int RRegAdd1,int RRegAdd2, int RRegAddP, int ImmVal)
 {
-  DType=dt;
-	popCode=popc;
-	LeftMuxSelector=LMuxSel;
-	RightMuxSelector=RMuxSel;
-	PredMuxSelector=PMuxSel;
-	ReadRegAddress1=RRegAdd1;
-	ReadRegAddress2=RRegAdd2;
-	ReadRegAddressP=RRegAddP;
-	ImmediateValue=ImmVal;
+    DType = dt;
+    popCode = popc;
+    LeftMuxSelector = LMuxSel;
+    RightMuxSelector = RMuxSel;
+    PredMuxSelector = PMuxSel;
+    ReadRegAddress1 = RRegAdd1;
+    ReadRegAddress2 = RRegAdd2;
+    ReadRegAddressP = RRegAddP;
+    ImmediateValue = ImmVal;
+    encodePredInstruction();
 }
+
 
 Pred_Instruction::~Pred_Instruction()
 {
 }
 
-Datatype Pred_Instruction::getDatatype()
+
+unsigned long
+Pred_Instruction::getPredInsWord()
 {
-  return DType;
+    return PredInsWord;
 }
 
-PredOPCode Pred_Instruction::getPredOpCode()
+
+Datatype 
+Pred_Instruction::getDatatype()
 {
-	return popCode;
+    return DType;
 }
 
-PEInputMux Pred_Instruction::getLeftMuxSelector()
+PredOPCode 
+Pred_Instruction::getPredOpCode()
 {
-	return LeftMuxSelector;
+    return popCode;
 }
 
-PEInputMux Pred_Instruction::getRightMuxSelector()
+
+PEInputMux 
+Pred_Instruction::getLeftMuxSelector()
 {
-	return RightMuxSelector;
+    return LeftMuxSelector;
 }
 
-PEInputMux Pred_Instruction::getPredMuxSelector()
+
+PEInputMux 
+Pred_Instruction::getRightMuxSelector()
 {
-	return PredMuxSelector;
+    return RightMuxSelector;
 }
 
-int Pred_Instruction::getReadRegAddress1()
+
+PEInputMux 
+Pred_Instruction::getPredMuxSelector()
 {
-	return ReadRegAddress1;
+    return PredMuxSelector;
 }
 
-int Pred_Instruction::getReadRegAddress2()
+
+int 
+Pred_Instruction::getReadRegAddress1()
 {
-	return ReadRegAddress2;
+    return ReadRegAddress1;
 }
 
-int Pred_Instruction::getReadRegAddressP()
+
+int 
+Pred_Instruction::getReadRegAddress2()
 {
-	return ReadRegAddressP;
+    return ReadRegAddress2;
 }
 
-int Pred_Instruction::getImmediateValue()
+
+int 
+Pred_Instruction::getReadRegAddressP()
 {
-	return ImmediateValue;
+    return ReadRegAddressP;
 }
 
-void Pred_Instruction::ENCODE_Pred_instruction()
+
+int 
+Pred_Instruction::getImmediateValue()
 {
-  unsigned long pred_trunc=PredInsWord & 0x1fffffffffffffffUL; 
-  switch(((unsigned long)(PredInsWord & INS_PDATATYPE))>>SHIFT_PDATATYPE)
-  {
-    case character:
-      DType = character;
-      break;
-    case int32:
-      DType = int32;
-      break;
-    case int16:
-      DType = int16;
-      break;
-    case float32:
-      DType = float32;
-      break;
-    case float64:
-      DType = float64;
-      break;
-    case float16:
-      DType = float16;
-      break;
-    case empty1:
-      DType = empty1;
-      break;
-    case empty2:
-      DType = empty2;
-      break;
-  }
-	switch((pred_trunc & INS_POPCODE) >> SHIFT_POPCODE){
-		case setConfigBoundry:
-		popCode = setConfigBoundry;
-		break;
-		case LDi:
-		popCode = LDi;
-		break;
-		case LDMi:
-		popCode = LDMi;
-		break;
-		case LDUi:
-		popCode = LDUi;
-		break;
-		case sel:
-		popCode = sel;
-		break;
-		case address_generator:
-		popCode = address_generator;
-	}
-
-	switch((PredInsWord & INS_PLMUX ) >> SHIFT_PLMUX){
-		case Register:
-		LeftMuxSelector = Register;
-		break;
-		case Left:
-		LeftMuxSelector = Left;
-		break;
-		case Right:
-		LeftMuxSelector = Right;
-		break;
-		case Up:
-		LeftMuxSelector = Up;
-		break;
-		case Down:
-		LeftMuxSelector = Down;
-		break;
-		case DataBus:
-		LeftMuxSelector = DataBus;
-		break;
-		case Immediate:
-		LeftMuxSelector = Immediate;
-		break;
-		case Self:
-		LeftMuxSelector= Self;
-		break;
-	}
-	switch((PredInsWord & INS_PRMUX ) >> SHIFT_PRMUX){
-		case Register:
-		RightMuxSelector = Register;
-		break;
-		case Left:
-		RightMuxSelector = Left;
-		break;
-		case Right:
-		RightMuxSelector = Right;
-		break;
-		case Up:
-		RightMuxSelector = Up;
-		break;
-		case Down:
-		RightMuxSelector = Down;
-		break;
-		case DataBus:
-		RightMuxSelector = DataBus;
-		break;
-		case Immediate:
-		RightMuxSelector = Immediate;
-		break;
-		case Self:
-		RightMuxSelector= Self;
-		break;
-	}
-	switch((PredInsWord & INS_PPMUX ) >> SHIFT_PPMUX){
-		case Register:
-		PredMuxSelector = Register;
-		break;
-		case Left:
-		PredMuxSelector = Left;
-		break;
-		case Right:
-		PredMuxSelector = Right;
-		break;
-		case Up:
-		PredMuxSelector = Up;
-		break;
-		case Down:
-		PredMuxSelector = Down;
-		break;
-		case DataBus:
-		PredMuxSelector = DataBus;
-		break;
-		case Immediate:
-		PredMuxSelector = Immediate;
-		break;
-		case Self:
-		PredMuxSelector= Self;
-		break;
-	}
-
-	ReadRegAddress1= (PredInsWord & INS_PR1 )>>SHIFT_PR1 ;
-	ReadRegAddress2= (PredInsWord & INS_PR2 )>>SHIFT_PR2 ;
-	ReadRegAddressP= (PredInsWord & INS_PRP )>>SHIFT_PRP ;
-	ImmediateValue= (PredInsWord & INS_IMMEDIATE )>>SHIFT_IMMEDIATE ;
+    return ImmediateValue;
 }
 
-unsigned long Pred_Instruction::getPredOpCode_DECODE()
+
+void 
+Pred_Instruction::decodePredInstruction()
 {
-	unsigned long PredInsWord = 0;
-	PredInsWord |=popCode;
-	PredInsWord <<= SHIFT_POPCODE;
-	PredInsWord &= INS_POPCODE;
-	return PredInsWord;
+    switch(((unsigned long)(PredInsWord & INS_P_DATATYPE)) >> SHIFT_P_DATATYPE) {
+      case character:
+        DType = character;
+        break;
+      case int32:
+        DType = int32;
+        break;
+      case int16:
+        DType = int16;
+        break;
+      case float32:
+        DType = float32;
+        break;
+      case float64:
+        DType = float64;
+        break;
+      case float16:
+        DType = float16;
+        break;
+      case empty1:
+        DType = empty1;
+        break;
+      case empty2:
+        DType = empty2;
+        break;
+    }
+    switch((PredInsWord & INS_P_OPCODE) >> SHIFT_P_OPCODE) {
+      case setConfigBoundry:
+        popCode = setConfigBoundry;
+        break;
+      case LDi:
+        popCode = LDi;
+        break;
+      case LDMi:
+        popCode = LDMi;
+        break;
+      case LDUi:
+        popCode = LDUi;
+        break;
+      case sel:
+        popCode = sel;
+        break;
+      case address_generator:
+        popCode = address_generator;
+        break;
+      case loopexit:
+        popCode = loopexit;
+        break;
+      case nop:
+        popCode = nop;
+        break;
+      case signExtend:
+        popCode = signExtend;
+        break;
+    }
+
+    switch((PredInsWord & INS_P_LMUX ) >> SHIFT_P_LMUX) {
+      case Register:
+        LeftMuxSelector = Register;
+        break;
+      case Left:
+        LeftMuxSelector = Left;
+        break;
+      case Right:
+        LeftMuxSelector = Right;
+        break;
+      case Up:
+        LeftMuxSelector = Up;
+        break;
+      case Down:
+        LeftMuxSelector = Down;
+        break;
+      case DataBus:
+        LeftMuxSelector = DataBus;
+        break;
+      case Immediate:
+        LeftMuxSelector = Immediate;
+        break;
+      case Self:
+        LeftMuxSelector= Self;
+        break;
+    }
+    switch((PredInsWord & INS_P_RMUX ) >> SHIFT_P_RMUX) {
+      case Register:
+        RightMuxSelector = Register;
+        break;
+      case Left:
+        RightMuxSelector = Left;
+        break;
+      case Right:
+        RightMuxSelector = Right;
+        break;
+      case Up:
+        RightMuxSelector = Up;
+        break;
+      case Down:
+        RightMuxSelector = Down;
+        break;
+      case DataBus:
+        RightMuxSelector = DataBus;
+        break;
+      case Immediate:
+        RightMuxSelector = Immediate;
+        break;
+      case Self:
+        RightMuxSelector= Self;
+        break;
+    }
+    switch((PredInsWord & INS_P_PMUX ) >> SHIFT_P_PMUX) {
+      case Register:
+        PredMuxSelector = Register;
+        break;
+      case Left:
+        PredMuxSelector = Left;
+        break;
+      case Right:
+        PredMuxSelector = Right;
+        break;
+      case Up:
+        PredMuxSelector = Up;
+        break;
+      case Down:
+        PredMuxSelector = Down;
+        break;
+      case DataBus:
+        PredMuxSelector = DataBus;
+        break;
+      case Immediate:
+        PredMuxSelector = Immediate;
+        break;
+      case Self:
+        PredMuxSelector= Self;
+        break;
+    }
+
+    ReadRegAddress1= (PredInsWord & INS_P_R1) >> SHIFT_P_R1;
+    ReadRegAddress2= (PredInsWord & INS_P_R2) >> SHIFT_P_R2;
+    ReadRegAddressP= (PredInsWord & INS_P_RP) >> SHIFT_P_RP;
+    ImmediateValue= (PredInsWord & INS_P_IMMEDIATE) >> SHIFT_P_IMMEDIATE;
 }
 
-unsigned long Pred_Instruction::getLE_DECODE(){
-        unsigned long PredInsWord = 0;
-        PredInsWord |= 0;
-	PredInsWord <<=SHIFT_LE;
-        PredInsWord &= INS_LE;
-        return PredInsWord;
-}
 
-unsigned long Pred_Instruction::getPredicator_DECODE()
+void 
+Pred_Instruction::encodePredInstruction()
 {
-	unsigned long PredInsWord = 0;
-	PredInsWord |= 1;
-	PredInsWord <<= SHIFT_PREDICT;
-	PredInsWord &= INS_PREDICT;
-	return PredInsWord;
+    PredInsWord = 0;
+    PredInsWord |= ((0UL | DType) << SHIFT_P_DATATYPE) & INS_P_DATATYPE;
+    PredInsWord |= ((0UL | popCode) << SHIFT_P_OPCODE) & INS_P_OPCODE;
+    PredInsWord |= ((0UL | 1UL) << SHIFT_PREDICT) & INS_PREDICT;
+    PredInsWord |= ((0UL | 0UL) << SHIFT_COND) & INS_COND;
+    PredInsWord |= ((0UL | LeftMuxSelector) << SHIFT_P_LMUX) & INS_P_LMUX;
+    PredInsWord |= ((0UL | RightMuxSelector) << SHIFT_P_RMUX) & INS_P_RMUX;
+    PredInsWord |= ((0UL | ReadRegAddress1) << SHIFT_P_R1) & INS_P_R1;
+    PredInsWord |= ((0UL | ReadRegAddress2) << SHIFT_P_R2) & INS_P_R2;
+    PredInsWord |= ((0UL | ReadRegAddressP) << SHIFT_P_RP) & INS_P_RP;
+    PredInsWord |= ((0UL | PredMuxSelector) << SHIFT_P_PMUX) & INS_P_PMUX;
+    PredInsWord |= ((0UL | ImmediateValue) << SHIFT_P_IMMEDIATE) & INS_P_IMMEDIATE;
 }
 
-unsigned long Pred_Instruction::getLeftMuxSelector_DECODE()
+
+
+/************************************Cond_Instruction************************************/
+Cond_Instruction::Cond_Instruction()
 {
-	unsigned long PredInsWord = 0;
-	PredInsWord |=LeftMuxSelector;
-	PredInsWord <<= SHIFT_PLMUX;
-	PredInsWord &= INS_PLMUX;
-	return PredInsWord;
 }
 
-unsigned long Pred_Instruction::getRightMuxSelector_DECODE()
+
+Cond_Instruction::Cond_Instruction(unsigned long Instructionword)
 {
-	unsigned long PredInsWord = 0;
-	PredInsWord |=RightMuxSelector;
-	PredInsWord <<= SHIFT_PRMUX;
-	PredInsWord &= INS_PRMUX;
-	return PredInsWord;
+    condInsWord = Instructionword;
+    decodeCondInstruction();
 }
 
-unsigned long Pred_Instruction::getPredMuxSelector_DECODE()
+
+Cond_Instruction::Cond_Instruction(Datatype dt, CondOpCode opc, PEInputMux LMuxSel, PEInputMux RMuxSel,
+        int RRegAdd1,int RRegAdd2, int WAdd, bool WE, int ImmVal, int BranchOffset, 
+        bool splitDirectionBit, bool loopExitEn) 
 {
-	unsigned long PredInsWord = 0;
-	PredInsWord |=PredMuxSelector;
-	PredInsWord <<= SHIFT_PPMUX;
-	PredInsWord &= INS_PPMUX;
-	return PredInsWord;
+    DType = dt;
+    condOpCode = opc;
+    splitDirection = splitDirectionBit;
+    loopExitEnable = loopExitEn;
+    LeftMuxSelector =LMuxSel;
+    RightMuxSelector = RMuxSel;
+    ReadRegAddress1 = RRegAdd1;
+    ReadRegAddress2 = RRegAdd2;
+    WriteRegAddress = WAdd;
+    WriteRegisterEnable = WE;
+    branchOffset = BranchOffset;
+    ImmediateValue = ImmVal;
+    encodeCondInstruction();
 }
 
-unsigned long Pred_Instruction::getReadRegAddress1_DECODE()
+
+Cond_Instruction::~Cond_Instruction() 
 {
-	unsigned long PredInsWord = 0;
-	PredInsWord |= ReadRegAddress1;
-	PredInsWord <<= SHIFT_PR1;
-	PredInsWord &= INS_PR1;
-	return PredInsWord;
 }
 
-unsigned long Pred_Instruction::getReadRegAddress2_DECODE()
+
+Datatype 
+Cond_Instruction::getDatatype() 
 {
-	unsigned long PredInsWord = 0;
-	PredInsWord |= ReadRegAddress2;
-	PredInsWord <<= SHIFT_PR2;
-	PredInsWord &= INS_PR2;
-	return PredInsWord;
+    return DType;
 }
 
-unsigned long Pred_Instruction::getReadRegAddressP_DECODE()
+
+CondOpCode 
+Cond_Instruction::getOpCode() 
 {
-	unsigned long PredInsWord = 0;
-	PredInsWord |= ReadRegAddressP;
-	PredInsWord <<= SHIFT_PRP;
-	PredInsWord &= INS_PRP;
-	return PredInsWord;
+    return condOpCode;
 }
 
-unsigned long Pred_Instruction::getImmediateValue_DECODE()
+
+PEInputMux 
+Cond_Instruction::getLeftMuxSelector()
 {
-	unsigned long PredInsWord = 0;
-	if(ImmediateValue > 0x3ffffffffUL){
-		ImmediateValue = 0x3ffffffffUL;
-	}
-	PredInsWord |= ImmediateValue;
-	PredInsWord <<= SHIFT_IMMEDIATE;
-	PredInsWord &= INS_IMMEDIATE;
-	return PredInsWord;
+    return LeftMuxSelector;
 }
 
-unsigned long Pred_Instruction::DecodePredInstruction(Pred_Instruction* Ins)
+
+PEInputMux 
+Cond_Instruction::getRightMuxSelector()
 {
-	unsigned long PredInsWord =0;
-	PredInsWord |= Ins->getPredOpCode_DECODE();
-	PredInsWord |= Ins->getPredicator_DECODE();
-	PredInsWord |= Ins->getLE_DECODE();
-	PredInsWord |= Ins->getLeftMuxSelector_DECODE();
-	PredInsWord |= Ins->getRightMuxSelector_DECODE();
-	PredInsWord |= Ins->getPredMuxSelector_DECODE();
-	PredInsWord |= Ins->getReadRegAddress1_DECODE();
-	PredInsWord |= Ins->getReadRegAddress2_DECODE();
-	PredInsWord |= Ins->getReadRegAddressP_DECODE();
-	PredInsWord |= Ins->getImmediateValue_DECODE();
-	return PredInsWord;
+    return RightMuxSelector;
 }
 
 
-
-// LE Instruction Definitions
-LE_Instruction::LE_Instruction(){
-
-}
-
-LE_Instruction::LE_Instruction(unsigned long Instructionword)
+int 
+Cond_Instruction::getReadRegAddress1()
 {
-        LEInsWord = Instructionword;
-        ENCODE_LE_instruction();
+    return ReadRegAddress1;
 }
 
-LE_Instruction::LE_Instruction(Datatype dt,OPCode opc,PEInputMux LMuxSel,PEInputMux RMuxSel,int RRegAdd1,int RRegAdd2, int WAdd, bool WE, long ImmVal, int BranchOffset){
-  DType=dt;
-        opCode=opc;
-        LeftMuxSelector=LMuxSel;
-        RightMuxSelector=RMuxSel;
-	ReadRegAddress1=RRegAdd1;
-        ReadRegAddress2=RRegAdd2;
-        WriteRegAddress=WAdd;
-        WriteRegisterEnable=WE;
-	branchOffset = BranchOffset;
-        ImmediateValue=ImmVal;
-}
 
-LE_Instruction::~LE_Instruction(){
-}
-
-Datatype LE_Instruction::getDatatype(){
-  return DType;
-}
-
-OPCode LE_Instruction::getOpCode(){
- 	return opCode;
-}
-
-PEInputMux LE_Instruction::getLeftMuxSelector(){
-  return LeftMuxSelector;
-}
-
-PEInputMux LE_Instruction::getRightMuxSelector(){
-  return RightMuxSelector;
-}
-
-int LE_Instruction::getReadRegAddress1(){
-  return ReadRegAddress1;
-}
-
-int LE_Instruction::getReadRegAddress2(){
-  return ReadRegAddress2;
-}
-
-int LE_Instruction::getWriteRegAddress(){
-  return WriteRegAddress;
-}
-
-bool LE_Instruction::getWriteRegisterEnable(){
-  return WriteRegisterEnable;
-}
-
-unsigned LE_Instruction::getBranchOffset(){
-  return branchOffset;
-}
-
-int LE_Instruction::getImmediateValue(){
-  return ImmediateValue;
-}
-
-bool LE_Instruction::getPredicator()
+int 
+Cond_Instruction::getReadRegAddress2()
 {
-    return Predicator;
+    return ReadRegAddress2;
 }
 
-void LE_Instruction::ENCODE_LE_instruction(){
-  unsigned long ins_trunc= LEInsWord & 0x1fffffffffffffffUL;
 
-  switch(((unsigned long)(LEInsWord & INS_DATATYPE))>>SHIFT_DATATYPE)
-  {
-    case character:
-      DType = character;
-      break;
-    case int32:
-      DType = int32;
-      break;
-    case int16:
-      DType = int16;
-      break;
-    case float32:
-      DType = float32;
-      break;
-    case float64:
-      DType = float64;
-      break;
-    case float16:
-      DType = float16;
-      break;
-    case empty1:
-      DType = empty1;
-      break;
-    case empty2:
-      DType = empty2;
-      break;
-  }
-
-  switch((ins_trunc & INS_OPCODE) >> SHIFT_OPCODE){
-    case Add:
-      opCode = Add;
-      break;
-    case Sub:
-      opCode = Sub;
-      break;
-    case Mult:
-      opCode = Mult;
-      break;
-    case AND:
-      opCode = AND;
-      break;
-    case OR:
-      opCode = OR;
-      break;
-    case XOR:
-      opCode = XOR;
-      break;
-    case cgraASR:
-      opCode = cgraASR;
-      break;
-    case cgraASL:
-      opCode = cgraASL;
-      break;
-    case NOOP:
-      opCode= NOOP;
-      break;
-    case GT:
-      opCode= GT;
-      break;
-    case LT:
-      opCode= LT;
-      break;
-    case EQ:
-      opCode= EQ;
-      break;
-    case NEQ:
-      opCode= NEQ;
-      break;
-    case Div:
-      opCode= Div;
-      break;
-    case Rem:
-      opCode= Rem;
-      break;
-    case LSHR:
-      opCode= LSHR;
-      break;
-  }
-
-  switch((LEInsWord & INS_LMUX ) >> SHIFT_LMUX){
-    case Register:
-      LeftMuxSelector = Register;
-      break;
-    case Left:
-      LeftMuxSelector = Left;
-      break;
-    case Right:
-      LeftMuxSelector = Right;
-      break;
-    case Up:
-      LeftMuxSelector = Up;
-      break;
-    case Down:
-      LeftMuxSelector = Down;
-      break;
-    case DataBus:
-      LeftMuxSelector = DataBus;
-      break;
-    case Immediate:
-      LeftMuxSelector = Immediate;
-      break;
-    case Self:
-      LeftMuxSelector= Self;
-      break;
-  }
-
-  switch((LEInsWord & INS_RMUX ) >> SHIFT_RMUX){
-    case Register:
-      RightMuxSelector = Register;
-      break;
-    case Left:
-      RightMuxSelector = Left;
-      break;
-    case Right:
-      RightMuxSelector = Right;
-      break;
-    case Up:
-      RightMuxSelector = Up;
-      break;
-    case Down:
-      RightMuxSelector = Down;
-      break;
-    case DataBus:
-      RightMuxSelector = DataBus;
-      break;
-    case Immediate:
-      RightMuxSelector = Immediate;
-      break;
-    case Self:
-      RightMuxSelector= Self;
-      break;
-  }
-
-  Predicator = (LEInsWord & INS_PREDICT) >> SHIFT_PREDICT;
-  ReadRegAddress1 = (LEInsWord & INS_R1 )>>SHIFT_R1 ;
-  ReadRegAddress2 = (LEInsWord & INS_R2 )>>SHIFT_R2 ;
-  WriteRegAddress = (LEInsWord & INS_RW )>>SHIFT_RW ;
-  WriteRegisterEnable = (LEInsWord & INS_WE )>>SHIFT_WE ;
-  branchOffset = (LEInsWord & INS_BRANCH_OFFSET)>>SHIFT_BRANCH_OFFSET;
-  ImmediateValue = (LEInsWord & INS_LE_IMMEDIATE)>>SHIFT_IMMEDIATE ;
-}
-
-unsigned long LE_Instruction::getOpCode_DECODE()
+int 
+Cond_Instruction::getWriteRegAddress()
 {
-        unsigned long InsWord = 0;
-        InsWord |=opCode;
-        InsWord <<= SHIFT_OPCODE;
-        InsWord &= INS_OPCODE;
-        return InsWord;
+    return WriteRegAddress;
 }
 
-unsigned long LE_Instruction::getPredicator_DECODE(){
-        unsigned long InsWord = 0;
-        InsWord |= 0;
-        InsWord <<= SHIFT_PREDICT;
-        InsWord &= INS_PREDICT;
-	return InsWord;
 
-}
-
-unsigned long LE_Instruction::getLE_DECODE(){
-        unsigned long InsWord = 0;
-        InsWord |= 1;
-        InsWord <<= SHIFT_LE;
-        InsWord &= INS_LE;
-        return InsWord;
-}
-
-unsigned long LE_Instruction::getLeftMuxSelector_DECODE()
+bool 
+Cond_Instruction::getWriteRegisterEnable()
 {
-        unsigned long InsWord = 0;
-        InsWord |=LeftMuxSelector;
-        InsWord <<= SHIFT_LMUX;
-        InsWord &= INS_LMUX;
-        return InsWord;
+    return WriteRegisterEnable;
 }
 
-unsigned long LE_Instruction::getRightMuxSelector_DECODE()
+
+unsigned 
+Cond_Instruction::getBranchOffset()
 {
-        unsigned long InsWord = 0;
-        InsWord |=RightMuxSelector;
-        InsWord <<= SHIFT_RMUX;
-        InsWord &= INS_RMUX;
-        return InsWord;
+    return branchOffset;
 }
 
-unsigned long LE_Instruction::getReadRegAddress1_DECODE()
+
+int 
+Cond_Instruction::getImmediateValue()
 {
-        unsigned long InsWord = 0;
-	InsWord |= ReadRegAddress1;
-        InsWord <<= SHIFT_R1;
-        InsWord &= INS_R1;
-        return InsWord;
+    return ImmediateValue;
 }
 
-unsigned long LE_Instruction::getReadRegAddress2_DECODE()
+
+bool
+Cond_Instruction::getSplitDirection()
 {
-        unsigned long InsWord = 0;
-        InsWord |= ReadRegAddress2;
-        InsWord <<= SHIFT_R2;
-        InsWord &= INS_R2;
-        return InsWord;
+    return splitDirection;
 }
 
-unsigned long LE_Instruction::getWriteRegAddress_DECODE()
+
+bool
+Cond_Instruction::getloopExitEnable()
 {
-        unsigned long InsWord = 0;
-	InsWord |= WriteRegAddress;
-        InsWord <<= SHIFT_RW;
-        InsWord &= INS_RW;
- 	return InsWord;
+    return loopExitEnable;
 }
 
-unsigned long LE_Instruction::getWriteRegisterEnable_DECODE()
+
+void 
+Cond_Instruction::decodeCondInstruction()
 {
-        unsigned long InsWord = 0;
-        InsWord |= WriteRegisterEnable;
-        InsWord <<= SHIFT_WE;
-        InsWord &= INS_WE;
-        return InsWord;
+    switch(((unsigned long)(condInsWord & INS_C_DATATYPE)) >> SHIFT_C_DATATYPE) {
+      case character:
+        DType = character;
+        break;
+      case int32:
+        DType = int32;
+        break;
+      case int16:
+        DType = int16;
+        break;
+      case float32:
+        DType = float32;
+        break;
+      case float64:
+        DType = float64;
+        break;
+      case float16:
+        DType = float16;
+        break;
+      case empty1:
+        DType = empty1;
+        break;
+      case empty2:
+        DType = empty2;
+        break;
+    }
+
+    switch((condInsWord & INS_C_OPCODE) >> SHIFT_C_OPCODE) {
+      case CMPGT:
+        condOpCode= CMPGT;
+        break;
+      case CMPLT:
+        condOpCode= CMPLT;
+        break;
+      case CMPEQ:
+        condOpCode= CMPEQ;
+        break;
+      case CMPNEQ:
+        condOpCode= CMPNEQ;
+        break;
+    }
+
+    switch((condInsWord & INS_C_LMUX ) >> SHIFT_C_LMUX) {
+      case Register:
+        LeftMuxSelector = Register;
+        break;
+      case Left:
+        LeftMuxSelector = Left;
+        break;
+      case Right:
+        LeftMuxSelector = Right;
+        break;
+      case Up:
+        LeftMuxSelector = Up;
+        break;
+      case Down:
+        LeftMuxSelector = Down;
+        break;
+      case DataBus:
+        LeftMuxSelector = DataBus;
+        break;
+      case Immediate:
+        LeftMuxSelector = Immediate;
+        break;
+      case Self:
+        LeftMuxSelector= Self;
+        break;
+    }
+
+    switch((condInsWord & INS_C_RMUX ) >> SHIFT_C_RMUX) {
+      case Register:
+        RightMuxSelector = Register;
+        break;
+      case Left:
+        RightMuxSelector = Left;
+        break;
+      case Right:
+        RightMuxSelector = Right;
+        break;
+      case Up:
+        RightMuxSelector = Up;
+        break;
+      case Down:
+        RightMuxSelector = Down;
+        break;
+      case DataBus:
+        RightMuxSelector = DataBus;
+        break;
+      case Immediate:
+        RightMuxSelector = Immediate;
+        break;
+      case Self:
+        RightMuxSelector= Self;
+        break;
+    }
+
+    ReadRegAddress1 = (condInsWord & INS_C_R1) >> SHIFT_C_R1;
+    ReadRegAddress2 = (condInsWord & INS_C_R2) >> SHIFT_C_R2;
+    WriteRegAddress = (condInsWord & INS_C_RW) >> SHIFT_C_RW;
+    WriteRegisterEnable = (condInsWord & INS_C_WE) >> SHIFT_C_WE;
+    branchOffset = (condInsWord & INS_C_BROFFSET) >> SHIFT_C_BROFFSET;
+    ImmediateValue = (condInsWord & INS_C_IMMEDIATE) >> SHIFT_C_IMMEDIATE;
+    splitDirection = (condInsWord & INS_C_SP) >> SHIFT_C_SP;
+    loopExitEnable = (condInsWord & INS_C_LE) >> SHIFT_C_LE;
 }
 
-unsigned long LE_Instruction::getBranchOffset_DECODE()
-{
-        unsigned long InsWord = 0;
-	InsWord |= branchOffset;
-	InsWord <<= SHIFT_BRANCH_OFFSET;
-	InsWord &= INS_BRANCH_OFFSET;
-	return InsWord;
-}
 
-unsigned long LE_Instruction::getImmediateValue_DECODE()
+void
+Cond_Instruction::encodeCondInstruction()
 {
-        unsigned long InsWord = 0;
-        if(ImmediateValue > WIDTH_LE_IMMEDIATE){
-                printf("ERROR: CAN'T HOLD IMMEDIATE VALUE, SETTING VALUE = 0x3ffffffUL\n");
-                ImmediateValue = WIDTH_LE_IMMEDIATE;
-        }
-        InsWord |= ImmediateValue;
-        InsWord <<= SHIFT_IMMEDIATE;
-        InsWord &= INS_LE_IMMEDIATE;
-        return InsWord;
-}
-
-unsigned long DecodeLEInstruction(LE_Instruction* Ins)
-{
-        unsigned long InsWord =0;
-        InsWord |= Ins->getOpCode_DECODE();
-        InsWord |= Ins->getPredicator_DECODE();
-        InsWord |= Ins->getLE_DECODE();
-        InsWord |= Ins->getLeftMuxSelector_DECODE();
-        InsWord |= Ins->getRightMuxSelector_DECODE();
-        InsWord |= Ins->getReadRegAddress1_DECODE();
-        InsWord |= Ins->getReadRegAddress2_DECODE();
-        InsWord |= Ins->getWriteRegAddress_DECODE();
-	InsWord |= Ins->getWriteRegisterEnable_DECODE();
-	InsWord |= Ins->getBranchOffset_DECODE();
-        InsWord |= Ins->getImmediateValue_DECODE();
-        return InsWord;
+    condInsWord = 0;
+    condInsWord |= ((0UL | DType) << SHIFT_C_DATATYPE) & INS_C_DATATYPE;
+    condInsWord |= ((0UL | condOpCode) << SHIFT_C_OPCODE) & INS_C_OPCODE;
+    condInsWord |= ((0UL | splitDirection) << SHIFT_C_SP) & INS_C_SP;
+    condInsWord |= ((0UL | loopExitEnable) << SHIFT_C_LE) & INS_C_LE;
+    condInsWord |= ((0UL | 1UL) << SHIFT_COND) & INS_COND;
+    condInsWord |= ((0UL | LeftMuxSelector) << SHIFT_C_LMUX) & INS_C_LMUX;
+    condInsWord |= ((0UL | RightMuxSelector) << SHIFT_C_RMUX) & INS_C_RMUX;
+    condInsWord |= ((0UL | ReadRegAddress1) << SHIFT_C_R1) & INS_C_R1;
+    condInsWord |= ((0UL | ReadRegAddress2) << SHIFT_C_R2) & INS_C_R2;
+    condInsWord |= ((0UL | WriteRegAddress) << SHIFT_C_RW) & INS_C_RW;
+    condInsWord |= ((0UL | WriteRegisterEnable) << SHIFT_C_WE) & INS_C_WE;
+    condInsWord |= ((0UL | branchOffset) << SHIFT_C_BROFFSET) & INS_C_BROFFSET;
+    condInsWord |= ((0UL | ImmediateValue) << SHIFT_C_IMMEDIATE) & INS_C_IMMEDIATE;
 }
 

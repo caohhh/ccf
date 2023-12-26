@@ -24,7 +24,7 @@ CGRA_IFU::CGRA_IFU(unsigned int Xdim, unsigned int Ydim)
     cgraXDim = Xdim;
     cgraYDim = Ydim;
     cgraInstructions = new uint64_t[Xdim * Ydim];
-    isCMP = new bool[Xdim * Ydim];
+    isCond = new bool[Xdim * Ydim];
     predOutput = new bool[Xdim * Ydim];
     predPredicted = new bool[Xdim * Ydim];
 }
@@ -36,7 +36,7 @@ CGRA_IFU::CGRA_IFU(unsigned int Xdim, unsigned int Ydim, CGRAPredUnit* predictor
     cgraYDim = Ydim;
     cgraInstructions = new uint64_t[Xdim * Ydim];
     cgraPred = predictor;
-    isCMP = new bool[Xdim * Ydim];
+    isCond = new bool[Xdim * Ydim];
     predOutput = new bool[Xdim * Ydim];
     predPredicted = new bool[Xdim * Ydim];
 }
@@ -98,7 +98,7 @@ CGRA_IFU::setupExec(SimpleThread *thread, int loopID)
     cgraPC = prologPC;
 
     for (unsigned i = 0; i < cgraXDim * cgraYDim; i++)
-        isCMP[i] = false;
+        isCond[i] = false;
 
     DPRINTF(CGRA_IFU,"CGRA PARAMETERS: PROLOG=%d, EPILOG=%d, II=%d, PROLOG_VERSION_LEN=%d\n",
             prologLen, epilogLen, II, prologVersionCycle);
@@ -160,7 +160,7 @@ CGRA_IFU::advancePC(SimpleThread *thread)
     }
     thread->pcState((Addr) cgraPC);
     for (unsigned i = 0; i < cgraXDim * cgraYDim; i++)
-        isCMP[i] = false;
+        isCond[i] = false;
 
     DPRINTF(CGRA_IFU,"state after advance PC: %u\n", state);
 }
@@ -219,9 +219,13 @@ CGRA_IFU::setConditionalReg(bool reg)
 
 
 void 
-CGRA_IFU::markCMP(unsigned peIndex)
+CGRA_IFU::markCond()
 {
-    isCMP[peIndex] = true;
+    for (unsigned i = 0; i < cgraXDim * cgraYDim; i++) {
+        CGRA_Instruction* ins = new CGRA_Instruction(cgraInstructions[i]);
+        if (ins->getCond())
+            isCond[i] = true;
+    }
 }
 
 
@@ -237,8 +241,9 @@ CGRA_IFU::updatePredictor()
 {
     if (cgraPred) {
         for (unsigned i = 0; i < cgraXDim * cgraYDim; i++) {
-            if (isCMP[i]) {
+            if (isCond[i]) {
                 Addr PC = cgraPC + i * sizeof(long);
+                recordCMP(PC, predOutput[i]);
                 if (predOutput[i] != predPredicted[i])
                     cgraPred->squash();
                 cgraPred->update(PC, predOutput[i]);
@@ -253,7 +258,7 @@ CGRA_IFU::predict()
 {
     if (cgraPred) {
         for (unsigned i = 0; i < cgraXDim * cgraYDim; i++) {
-            if (isCMP[i]) {
+            if (isCond[i]) {
                 Addr PC = cgraPC + i * sizeof(long);
                 predPredicted[i] = cgraPred->predict(PC);
             }
