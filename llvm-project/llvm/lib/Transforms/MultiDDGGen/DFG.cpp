@@ -745,7 +745,6 @@ void DFG::Dot_Print_DFG(std::string filename)
     } else {
       dotFile << "];\n";
     }
-
   }
 
   for (int i = 0; i < (int) _ARC_Set.size(); i++)
@@ -868,14 +867,14 @@ void DFG::Dump_Loop(std::string filename)
     if((_node_Set[i]->get_Instruction() == cgra_select) && (_node_Set[i]->get_Number_of_Pred() > 3))
     {
       if(debug) errs() << "nodefile node: " << _node_Set[i]->get_ID() << "\tpred:" << _node_Set[i]->get_Number_of_Pred() << "\n";
-      nodeFile << _node_Set[i]->get_ID() << "\t" << cond_select << "\t" << _node_Set[i]->get_Name() << "\t" << alignment << "\t" << _node_Set[i]->getDatatype() << "\n";
+      nodeFile << _node_Set[i]->get_ID() << "\t" << cond_select << "\t" << _node_Set[i]->get_Name() << "\t" << alignment << "\t" << _node_Set[i]->getDatatype() << "\t" << _node_Set[i]->getBrPath() << "\t" << _node_Set[i]->getCondBrId() << "\n";
     }
     else
     {
       // if([i]->get_Instruction() == constant)
       //  nodeFile << [i]->get_ID() << "\t" << _node_Set[i]->get_Instruction() << "\t" << _node_Set[i]->get_Name() << "\t" << alignment << "\t0" << "\n";
       //else
-      nodeFile << _node_Set[i]->get_ID() << "\t" << _node_Set[i]->get_Instruction() << "\t" << _node_Set[i]->get_Name() << "\t" << alignment << "\t" << _node_Set[i]->getDatatype() << "\n";
+      nodeFile << _node_Set[i]->get_ID() << "\t" << _node_Set[i]->get_Instruction() << "\t" << _node_Set[i]->get_Name() << "\t" << alignment << "\t" << _node_Set[i]->getDatatype() << "\t" << _node_Set[i]->getBrPath() << "\t" << _node_Set[i]->getCondBrId() << "\n";
     }
   }
 

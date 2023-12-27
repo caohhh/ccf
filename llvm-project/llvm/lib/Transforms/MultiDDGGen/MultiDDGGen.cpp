@@ -2346,6 +2346,7 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   LoopCtrlNodeFile.open(filename.c_str());
   LoopCtrlNodeFile << loopCtrlNode->get_Name() << "\n";
   LoopCtrlNodeFile << loopExitCond << "\n";
+  LoopCtrlNodeFile << splitBr << "\n";
   LoopCtrlNodeFile.close();
   DEBUG("Done updating loop control\n");
   
