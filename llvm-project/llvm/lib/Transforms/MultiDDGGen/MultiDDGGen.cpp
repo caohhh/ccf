@@ -458,6 +458,12 @@ class MultiDDGGen : public LoopPass {
     */
     void splitDFG(DFG* loopDFG, int splitBrId);
 
+    /**
+     * Given a split DFG, as in there are nodes assigned to true or
+     * false path, fuse the nodes of the true and false path 
+     * together, leaving only one path.
+    */
+    void fuseNodes(DFG* loopDFG);
 }; // end of class MultiDDGGen
 
 } // end of anonymous namespace
@@ -2124,12 +2130,10 @@ MultiDDGGen::splitDFG(DFG* loopDFG, int splitBrId)
     for (auto nodeIT: loopDFG->getSetOfVertices()) {
       if (std::find(truePath.begin(), truePath.end(), nodeIT->getBasicBlockIdx()) != truePath.end()) {
         // node is part of true path
-        // placeholder now
         nodeIT->setBrPath(true_path);
         DEBUG("node " << nodeIT->get_Name() <<" set to true path\n");
       } else if (std::find(falsePath.begin(), falsePath.end(), nodeIT->getBasicBlockIdx()) != falsePath.end()) {
         // node is part of false path
-        // placeholder now
         nodeIT->setBrPath(false_path);
         DEBUG("node " << nodeIT->get_Name() <<" set to false path\n");
       }
@@ -2162,7 +2166,7 @@ MultiDDGGen::splitDFG(DFG* loopDFG, int splitBrId)
         }
         DEBUG("previous true node is " << trueNode->get_Name() << ", ");
         DEBUG("false node is: " << falseNode->get_Name() <<"\n");
-        // now connect both to the succ nodes
+        // now connect both to the succ nodes     
         for (auto succNode : nodeIT->Get_Next_Nodes()) {
           DEBUG("successor node of phi node: " << succNode->get_Name() << "\n");
           ARC* arcPhi = loopDFG->get_Arc(nodeIT, succNode);
@@ -2174,9 +2178,106 @@ MultiDDGGen::splitDFG(DFG* loopDFG, int splitBrId)
         }
         // safe to delete the phi node now
         loopDFG->delete_Node(nodeIT);
+        nodeIT->setOperation(cond_select);
       }
     }
   }
+  // last, mark the cond node
+  for (auto nodeIT: loopDFG->getSetOfVertices()) {
+    if (nodeIT->getCondBrId() >= 0) {
+      // node is a cond
+      if (nodeIT->getCondBrId() == splitBr) {
+        nodeIT->setSplitCond(true);
+      }
+    }
+  }
+}
+
+
+void
+MultiDDGGen::fuseNodes(DFG* loopDFG)
+{
+  // for now we can start with the phi node (remember to change 
+  // split and save this info), from bottom up traverse the two 
+  // path of the DFG tree -> first fuse the two select ops
+  // later: for each fused node, fuse based on operand order,
+  // if no op to fuse, fuse with noop
+  // don't think this is the most optimized method, but it should 
+  // work for now
+  /****************************************/
+  /**
+   * from bottom up, give each node a level
+   * basically a subgraph technique
+  */
+  /****************************************/
+
+  // or maybe we could even fuse all nodes in the same level
+  // while traversing
+
+  // for a fused node, what it means is that when mapping they exist
+  // in the same location (cycle and pe)
+  // use scalar evolution to analyse which node to fuse?
+
+  // in the end of this, we are producing a single part of DFG representing
+  // both true and false path
+  DEBUG("fusing nodes now, not doing anything now, may delete\n");
+  // first get the phi node as the base of the split
+  NODE* splitBaseNode;
+  for (auto nodeIT: loopDFG->getSetOfVertices()) {
+    if (nodeIT->get_Instruction() == cgra_select && nodeIT->getBranchIndex() != -1) {
+      // phi nodes inside loop
+      if (nodeIT->getBranchIndex() == splitBr) {
+        // first get the split phi node
+        splitBaseNode = nodeIT;
+        break;
+      }
+    }
+  }
+  // now fuse nodes from bottom up
+  // true nodes to be fused
+  std::vector<NODE*> trueNodeSet;
+  // false nodes to be fused
+  std::vector<NODE*> falseNodeSet;
+  for (auto prevNode : splitBaseNode->Get_Prev_Nodes()) {
+    if (loopDFG->get_Arc(prevNode, splitBaseNode)->GetOperandOrder() == 0)
+      trueNodeSet.push_back(prevNode);
+    else if (loopDFG->get_Arc(prevNode, splitBaseNode)->GetOperandOrder() == 1)
+      falseNodeSet.push_back(prevNode);
+  }
+  
+  // first remove nodes not in path
+  for (auto nodeIT = trueNodeSet.begin(); nodeIT != trueNodeSet.end();) {
+    if ((*nodeIT)->getBrPath() != true_path) 
+      nodeIT = trueNodeSet.erase(nodeIT);
+    else
+      ++nodeIT;
+  }
+  for (auto nodeIT = falseNodeSet.begin(); nodeIT != falseNodeSet.end();) {
+    if ((*nodeIT)->getBrPath() != false_path) 
+      nodeIT = falseNodeSet.erase(nodeIT);
+    else
+      ++nodeIT;
+  }
+  //  or we can first map...
+  #ifdef DEBUG
+    DEBUG("true nodes to be fused include:\n");
+    for (auto nodeIT : trueNodeSet) {
+      DEBUG(nodeIT->get_Name() << ", " << nodeIT->get_ID() << "\n");
+    }
+    DEBUG("false nodes to be fused include:\n");
+    for (auto nodeIT : falseNodeSet) {
+      DEBUG(nodeIT->get_Name() << ", " << nodeIT->get_ID() << "\n");
+    }
+  #endif
+  // when choosing which nodes to fuse, we prioritize minimizing the 
+  // total arcs to a fused node
+
+  // arn arc to represent they are fused, 
+  // TODO: also consider address generator
+
+  
+  // now iterate through the connecting nodes (operands)
+  // until not in true or false path 
 }
 
 
@@ -2354,6 +2455,9 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   splitDFG(loopDFG, splitBr);
   DEBUG("Done splitting the DFG\n");
   
+  // after splitting the DFG, we need to fuse the nodes of the two paths
+  fuseNodes(loopDFG);
+
   std::ostringstream osNodeID;
   osNodeID << nodeID;
   loopDFG->Dump_Loop("./CGRAExec/L" + osLoopID.str() + "/loop" + osNodeID.str());

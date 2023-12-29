@@ -113,6 +113,7 @@ NODE::NODE(Instruction_Operation ins, int laten, int id, std::string name, Value
   condBrId = -1;
   bbIdx = basicBlockIdx;
   brPath = none;
+  splitCond = false;
 }
 
 void NODE::set_self_loop(ARC* s_loop)
@@ -473,6 +474,18 @@ nodePath NODE::getBrPath()
   return brPath;
 }
 
+
+void NODE::setSplitCond(bool isSplitCond)
+{
+  splitCond = isSplitCond;
+}
+
+
+bool NODE::isSplitCond()
+{
+  return splitCond;
+}
+
 /*************************************DFG*************************************/
 DFG::~DFG()
 {
@@ -700,14 +713,27 @@ ARC* DFG::get_Arc(NODE *pNode, NODE *nNode)
   return NULL;
 }
 
+
 std::vector<ARC*> DFG::getSetOfArcs()
 {
   return _ARC_Set;
 }
 
-std::vector<NODE*> DFG::getSetOfVertices(){
+
+std::vector<NODE*> DFG::getSetOfVertices()
+{
   return _node_Set;
 }
+
+
+void DFG::addFusedNode(NODE* trueNode, NODE* falseNode)
+{
+  fusedNode fuse;
+  fuse.trueNode = trueNode;
+  fuse.falseNode = falseNode;
+  fusedNodeSet.push_back(fuse);
+}
+
 
 void DFG::Dot_Print_DFG(std::string filename)
 {
@@ -738,7 +764,10 @@ void DFG::Dot_Print_DFG(std::string filename)
       dotFile << "\n" << _node_Set[i]->get_ID() << " [color=black, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
     }
 
-    if (_node_Set[i]->getBrPath() == true_path) {
+    if (_node_Set[i]->isSplitCond()) {
+      dotFile << "style=filled, fillcolor = orange];\n";
+    }
+    else if (_node_Set[i]->getBrPath() == true_path) {
       dotFile << "style=filled, fillcolor = lightcoral];\n";
     } else if (_node_Set[i]->getBrPath() == false_path) {
       dotFile << "style=filled, fillcolor = lightblue];\n";

@@ -135,6 +135,8 @@ class NODE
     unsigned bbIdx;
     // the branch path this node belongs to
     nodePath brPath;
+    // if this node is used as the splitting cond
+    bool splitCond; 
 
   public:
     virtual ~NODE();
@@ -237,6 +239,8 @@ class NODE
     // get the branch path of this node
     nodePath getBrPath();
 
+    void setSplitCond(bool isSplitCond);
+    bool isSplitCond();
 };
 
 class ARC
@@ -286,6 +290,15 @@ class DFG
     std::vector<NODE*> _node_Set;
     //set of edges in the graph
     std::vector<ARC*> _ARC_Set;
+
+    // struct to hold a fused node
+    struct fusedNode
+    {
+      NODE* trueNode;
+      NODE* falseNode;
+    };
+    // vector of the fused nodes
+    std::vector<fusedNode> fusedNodeSet;
 
   public:
     int CGRA_Y_Dim;
@@ -339,6 +352,9 @@ class DFG
     void Dot_Print_DFG(std::string filename);
 
     void Dump_Loop(std::string filename);
+
+    // add a fused node to the fused nodes set
+    void addFusedNode(NODE* trueNode, NODE* falseNode);
 };
 
 } /* namespace llvm */
