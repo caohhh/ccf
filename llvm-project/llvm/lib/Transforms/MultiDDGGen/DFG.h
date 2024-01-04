@@ -96,9 +96,9 @@ enum Datatype
 
 enum nodePath
 {
+  none,
   true_path,
-  false_path,
-  none
+  false_path
 };
 
 const unsigned DT_Size[6] = {1,4,2,4,8,2};
