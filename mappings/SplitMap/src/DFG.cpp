@@ -124,7 +124,7 @@ DFG::getArc(Node* nodeFrom, Node* nodeTo)
 
 
 void
-DFG::removeArc(unsigned arcId)
+DFG::removeArc(int arcId)
 {
   for (auto arcIt = arcSet.begin(); arcIt != arcSet.end(); arcIt++) {
     if ((*arcIt)->getId() == arcId) {
@@ -227,7 +227,7 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
           // connect it to the prev node
           makeArc(nodeIt, newRouteNode, 0, TrueDep, 0);
           // since the next nodes won't be large, just shuffle the whole vec will be ok
-          std::random_shuffle(nextNoneNodes.begin(), nextNoneNodes.end(), rng);
+          std::shuffle(nextNoneNodes.begin(), nextNoneNodes.end(), rng);
           // pick out the nodes and move it to the route node
           for (unsigned i = 0; i < removeNumNone; i++) {
             // disconnect
@@ -245,7 +245,7 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
           // connect it to the prev node
           makeArc(nodeIt, newRouteNode, 0, TrueDep, 0);
           // since the next nodes won't be large, just shuffle the whole vec will be ok
-          std::random_shuffle(nextPathNodes.begin(), nextPathNodes.end(), rng);
+          std::shuffle(nextPathNodes.begin(), nextPathNodes.end(), rng);
           // pick out the nodes and move it to the route node
           for (unsigned i = 0; i < removeNumPath; i++) {
             // disconnect
@@ -326,7 +326,10 @@ DFG::calculateRecMII()
         Node* toNode = arcIt->getToNode();
         std::set<Node*> path;
         path.insert(fromNode);
-        auto [pathFound, pathLatency, pathDist] = getPathMaxII(fromNode, toNode, path, fromNode->getLatency(), arcIt->getDistance());
+        bool pathFound;
+        int pathLatency;
+        int pathDist;
+        std::tie(pathFound, pathLatency, pathDist) = getPathMaxII(fromNode, toNode, path, fromNode->getLatency(), arcIt->getDistance());
         if (pathFound)
           currRecMII = ceil((float) pathLatency / pathDist);
       }

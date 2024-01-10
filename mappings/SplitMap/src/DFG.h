@@ -42,7 +42,7 @@ class DFG
     Arc* getArc(Node* nodeFrom, Node* nodeTo);
 
     // remove the arc of the given Id
-    void removeArc(unsigned arcId);
+    void removeArc(int arcId);
     
     // applies in-degree and and outdegree constraints to the DFG
     void preProcess(unsigned maxInDegree, unsigned maxOutDegree);
@@ -58,7 +58,7 @@ class DFG
 
     // return the number of store nodes
     int getStoreOpCount();
-    
+
   private:
     // set of nodes in the graph
     std::vector<Node*> nodeSet;
@@ -71,9 +71,9 @@ class DFG
     // count of all the paths in this split DFG
     unsigned pathCount;
     // maximum of the node IDs in the graph
-    unsigned nodeMaxId;
+    int nodeMaxId;
     // maximum of the arc IDs in the graph
-    unsigned arcMaxId;
+    int arcMaxId;
     // rng
     std::mt19937 rng;
 

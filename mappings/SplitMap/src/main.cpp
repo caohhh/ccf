@@ -70,6 +70,8 @@ int main(int argc, char *argv[])
       } 
     }
   }
+  if (node_file.size() == 0 || edge_file.size() == 0)
+    FATAL("ERROR!! Must include node file and edge file");
   DEBUG("Parsed all arguments");
   if(cgraInfo.X_Dim == 1 && cgraInfo.Y_Dim == 1) {
     cgraInfo.MAX_PE_INDEGREE = 1; 
