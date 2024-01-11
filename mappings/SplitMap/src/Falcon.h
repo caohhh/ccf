@@ -27,6 +27,13 @@ class Falcon
     CGRA_Architecture cgraInfo;
     // mapping related restrictions and policies
     Mapping_Policy mappingPolicy;
+
+    /**
+     * Schedule operations as soon as all predecessors are completed
+     * @param myDFG the DFG to be scheduled
+     * @return the length of the schedule
+    */
+    int scheduleASAP(DFG* myDFG);
 };
 
 #endif

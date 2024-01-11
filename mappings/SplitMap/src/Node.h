@@ -106,6 +106,13 @@ class Node
     // return if the node is a store write node
     bool isStoreDataBusWrite();
 
+    // get all predecessor nodes of the same iteration
+    std::vector<Node*> getPrevSameIter();
+
+    //return predecessors of the same iteration excluding load store address dependencies 
+    std::vector<Node*> getPrevSameIterExMemDep();
+
+
   private:
     // unique id of Node in DFG
     int uid;

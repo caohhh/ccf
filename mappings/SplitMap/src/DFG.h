@@ -10,7 +10,6 @@
 #include <vector>
 #include <random>
 #include <set>
-#include <stack>
 #include "Node.h"
 #include "Arc.h"
 
@@ -58,6 +57,12 @@ class DFG
 
     // return the number of store nodes
     int getStoreOpCount();
+
+    // returns set of nodes with no parent from current cycle
+    std::vector<Node*> getStartNodes();
+
+    // returns set of node indexes of this DFG
+    std::set<int> getNodeIdSet();
 
   private:
     // set of nodes in the graph

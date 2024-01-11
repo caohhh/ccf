@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
   }
   if (node_file.size() == 0 || edge_file.size() == 0)
     FATAL("ERROR!! Must include node file and edge file");
-  DEBUG("Parsed all arguments");
+  DEBUG("[main]Parsed all arguments");
   if(cgraInfo.X_Dim == 1 && cgraInfo.Y_Dim == 1) {
     cgraInfo.MAX_PE_INDEGREE = 1; 
     cgraInfo.MAX_PE_OUTDEGREE = 1;
@@ -87,14 +87,14 @@ int main(int argc, char *argv[])
   //Parser processes input files
   Parser* myParser = new Parser(node_file.c_str(), edge_file.c_str());
 
-  DEBUG("Mapping has started");
+  DEBUG("[main]Mapping has started");
   bool mapSuccess = false;
   Falcon* falconMapper = new Falcon(cgraInfo, mappingPolicy);
   mapSuccess = falconMapper->generateMap(myParser);
   
   if (mapSuccess)
-    DEBUG("Mapping is completed and successfull");
+    DEBUG("[main]Mapping is completed and successfull");
   else
-    FATAL("Sorry no mapping was found for max II " << mappingPolicy.MAX_II); 
+    FATAL("[main]Sorry no mapping was found for max II " << mappingPolicy.MAX_II); 
   return 0;
 }

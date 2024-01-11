@@ -308,6 +308,33 @@ Node::isStoreDataBusWrite()
 }
 
 
+std::vector<Node*>
+Node::getPrevSameIter()
+{
+  std::vector<Node*> prevNodes;
+  for (auto edge : incommingArcs) {
+    if (edge->getDistance() == 0)
+      prevNodes.push_back(edge->getFromNode());
+  }
+  return prevNodes;
+}
+
+
+std::vector<Node*> 
+Node::getPrevSameIterExMemDep()
+{
+  std::vector<Node*> prevNodes;
+  for (auto arc : incommingArcs) {
+    if (arc->getDependency() != LoadDep && 
+        arc->getDependency() != StoreDep &&
+        arc->getDistance() == 0) {
+      prevNodes.push_back(arc->getFromNode());
+    }
+  }
+  return prevNodes;
+}
+
+
 /***********************routeNode********************************/
 routeNode::routeNode(int uid, Node* prevNode, nodePath path) :
 Node(route, prevNode->getDataType(), 1, uid, "route", path, -1)

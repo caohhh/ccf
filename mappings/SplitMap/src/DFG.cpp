@@ -370,3 +370,28 @@ DFG::getStoreOpCount()
   }
   return count;
 }
+
+
+std::vector<Node*> 
+DFG::getStartNodes()
+{
+  std::vector<Node*> startNodes;
+  for (auto node : nodeSet) {
+    if (node->getPrevSameIter().size() == 0)
+      startNodes.push_back(node);
+  }
+  return startNodes;
+}
+
+
+std::set<int> 
+DFG::getNodeIdSet()
+{
+  std::set<int> idSet;
+  for (auto node : nodeSet) {
+    if (idSet.find(node->getId()) != idSet.end())
+      FATAL("ERROR: Nodes with the same id exist in this DFG");
+    idSet.insert(node->getId());
+  }
+  return idSet;
+}
