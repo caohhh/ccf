@@ -395,3 +395,16 @@ DFG::getNodeIdSet()
   }
   return idSet;
 }
+
+
+std::vector<Node*> 
+DFG::getEndNodes()
+{
+  std::vector<Node*> endNodes;
+  for (Node* node : nodeSet) {
+    if (node->getNextSameIter().size() == 0) {
+      endNodes.push_back(node);
+    }
+  }
+  return endNodes;
+}

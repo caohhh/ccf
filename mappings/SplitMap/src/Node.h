@@ -112,6 +112,11 @@ class Node
     //return predecessors of the same iteration excluding load store address dependencies 
     std::vector<Node*> getPrevSameIterExMemDep();
 
+    // get all successor nodes of the same iteration
+    std::vector<Node*> getNextSameIter();
+
+    //return successors with distance = 0 excluding load store address dependency
+    std::vector<Node*> getSuccSameIterExMemDep();
 
   private:
     // unique id of Node in DFG

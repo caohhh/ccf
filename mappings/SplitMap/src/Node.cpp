@@ -335,6 +335,36 @@ Node::getPrevSameIterExMemDep()
 }
 
 
+std::vector<Node*> 
+Node::getNextSameIter()
+{
+  std::vector<Node*> nextNodes;
+  for (Arc* arc : outgoingArcs) {
+    if (arc->getDistance() == 0)
+      nextNodes.push_back(arc->getToNode());
+  }
+  return nextNodes;
+}
+
+
+//return successors with distance = 0 excluding load store address dependency
+std::vector<Node*> 
+Node::getSuccSameIterExMemDep()
+{
+  std::vector<Node*> nextNodes;
+  /*if (loadOutputAddressBus) 
+    return relatedNode->getNextNodes();*/
+  for (Arc* arc : outgoingArcs) {
+    if (arc->getDependency() != LoadDep &&
+        arc->getDependency() != StoreDep &&
+        arc->getDistance() == 0) {
+      nextNodes.push_back(arc->getToNode());
+    }
+  }
+  return nextNodes;
+}
+
+
 /***********************routeNode********************************/
 routeNode::routeNode(int uid, Node* prevNode, nodePath path) :
 Node(route, prevNode->getDataType(), 1, uid, "route", path, -1)

@@ -53,6 +53,10 @@ Falcon::generateMap(Parser* myParser)
   int length = scheduleASAP(originalDFG);
   DEBUG("[Falcon]ASAP schedule successful with length of " << length);
 
+  // ALAP schedule
+  scheduleALAP(originalDFG, length);
+  DEBUG("[Falcon]ALAP schedule successful");
+
   return true;
 }
 
@@ -60,7 +64,7 @@ Falcon::generateMap(Parser* myParser)
 int 
 Falcon::scheduleASAP(DFG* myDFG)
 {
-  DEBUG("[ASAP schedule]started");
+  DEBUG("[ASAP]started");
   // the asap schedule
   std::map<int, int> asapSchedule;
   // set of nodes to be scheduled
@@ -74,7 +78,7 @@ Falcon::scheduleASAP(DFG* myDFG)
   // start nodes are scheduled at time 0
   for (int node : toSchedule) {
     asapSchedule[node] = 0;
-    DEBUG("[ASAP schedule]node: " << node << " scheduled at 0" );
+    DEBUG("[ASAP]node: " << node << " scheduled at 0" );
   }
   
   // nodes left to be scheduled
@@ -88,12 +92,11 @@ Falcon::scheduleASAP(DFG* myDFG)
 
   while (rest.size() > 0) {
     // while there are still unscheduled nodes
-    // note down the size of nodes left
     for (int nodeId : rest) {
       // first check if node of nodeId is ready to be asap scheduled
       bool canSchedule = true;
       int scheduleTime = 0;
-      std::vector<Node*> prevNodes = myDFG->getNode(nodeId)->getPrevSameIterExMemDep();
+      std::vector<Node*> prevNodes = myDFG->getNode(nodeId)->getPrevSameIter();
       for (Node* prevNode : prevNodes) {
         if (asapSchedule.find(prevNode->getId()) == asapSchedule.end()) {
           // prev node not scheduled, this node not ready
@@ -109,7 +112,7 @@ Falcon::scheduleASAP(DFG* myDFG)
       if (canSchedule) {
         // node can be scheduled
         asapSchedule[nodeId] = scheduleTime;
-        DEBUG("[ASAP schedule]node: " << nodeId << " scheduled at " << scheduleTime);
+        DEBUG("[ASAP]node: " << nodeId << " scheduled at " << scheduleTime);
         toSchedule.push_back(nodeId);
         if (latestTime < scheduleTime)
           latestTime = scheduleTime;
@@ -117,12 +120,78 @@ Falcon::scheduleASAP(DFG* myDFG)
     } // after a iteration over all the nodes left
     if (toSchedule.size() == 0) {
       // no node has been scheduled
-      FATAL("[ASAP schedule]ERROR: ASAP schedule not successful");
+      FATAL("[ASAP]ERROR: ASAP schedule not successful");
     }
     for (int nodeId : toSchedule)
       rest.erase(nodeId);
     toSchedule.clear();
   }
   // all nodes scheduled
-  return latestTime;
+  return latestTime + 1;
+}
+
+
+void 
+Falcon::scheduleALAP(DFG* myDFG, int length)
+{
+  DEBUG("[ALAP]Started");
+  // the ALAP schedule
+  std::map<int, int> alapSchedule;
+  // set of nodes to be scheduled
+  std::vector<int> toSchedule;
+
+  // start with nodes with no successor in same iter
+  for (auto node: myDFG->getEndNodes()) 
+    toSchedule.push_back(node->getId());
+
+  // end nodes are scheduled at latest time (length - 1)
+  for (int node : toSchedule) {
+    alapSchedule[node] = length - 1;
+    DEBUG("[ALAP]node: " << node << " scheduled at " << length - 1);
+  }
+
+  // nodes left to be scheduled
+  std::set<int> rest;
+  rest = myDFG->getNodeIdSet();
+
+  // remove the nodes that have just been scheduled
+  for (int nodeId : toSchedule)
+    rest.erase(nodeId);
+  toSchedule.clear();
+
+  while (rest.size() > 0) {
+    // while there are still unscheduled nodes
+    for (int nodeId : rest) {
+      // first check if node of nodeId is ready to be ALAP scheduled
+      bool canSchedule = true;
+      int scheduleTime = length;
+      std::vector<Node*> nextNodes = myDFG->getNode(nodeId)->getNextSameIter();
+      for (Node* nextNode : nextNodes) {
+        if (alapSchedule.find(nextNode->getId()) == alapSchedule.end()) {
+          // next node not scheduled, this node not ready
+          canSchedule = false;
+          break;
+        } else {
+          // get the latest time for this node limited by nextNode
+          int ristrictTime = alapSchedule[nextNode->getId()] - myDFG->getNode(nodeId)->getLatency();
+          if (scheduleTime > ristrictTime)
+            scheduleTime = ristrictTime;
+        }
+      }
+      if (canSchedule) {
+        // node can be scheduled
+        alapSchedule[nodeId] = scheduleTime;
+        DEBUG("[ALAP]node: " << nodeId << " scheduled at " << scheduleTime);
+        toSchedule.push_back(nodeId);
+      }
+    } // after a iteration over all the nodes left
+    if (toSchedule.size() == 0) {
+      // no node has been scheduled
+      FATAL("[ALAP]ERROR: ALAP schedule not successful");
+    }
+    for (int nodeId : toSchedule)
+      rest.erase(nodeId);
+    toSchedule.clear();
+  }
+  // all nodes scheduled
 }

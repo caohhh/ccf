@@ -34,6 +34,13 @@ class Falcon
      * @return the length of the schedule
     */
     int scheduleASAP(DFG* myDFG);
+
+    /**
+     * Schedule operations as late as all successors are luanched
+     * @param myDFG the DFG to be scheduled
+     * @param length 
+    */
+    void scheduleALAP(DFG* myDFG, int length);
 };
 
 #endif

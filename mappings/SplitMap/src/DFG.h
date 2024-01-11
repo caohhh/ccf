@@ -64,6 +64,9 @@ class DFG
     // returns set of node indexes of this DFG
     std::set<int> getNodeIdSet();
 
+    // return a set of nodes without any child in current iteration
+    std::vector<Node*> getEndNodes();
+
   private:
     // set of nodes in the graph
     std::vector<Node*> nodeSet;
