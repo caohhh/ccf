@@ -52,6 +52,9 @@ class Mapper
     
     // the ASAP schedule considering resources available
     schedule asapFeasible;
+    // the ALAP schedule considering resources available
+    schedule alapFeasible;
+
 
     /**
      * Schedule operations as soon as all predecessors are completed
@@ -74,6 +77,9 @@ class Mapper
     */
     int scheduleASAPFeasible(DFG* myDFG);
 
+    // schedule operations in ALAP manner considering number of available resources
+    void scheduleALAPFeasible(DFG* myDFG, int II);
+
     // returns if the given schedule has enough memory resources for a load at given time 
     bool memLdResAvailable(int time, schedule sch);
 
@@ -88,11 +94,20 @@ class Mapper
 
     /**
      * check if a node is ready for asap scheduling, as in all
-     * previous nodes have been scheduled
+     * predecessors  have been scheduled
      * @return tuple of if the given node is ready to be scheduled
      * and the scheduled time
     */
-    std::tuple<bool, int> checkASAP(Node* node, schedule asapSchedule);
+    std::tuple<bool, int> checkASAP(Node* node);
+
+    /**
+     * check if a node is ready for alap scheduling, as in all
+     * succssors have been scheduled
+     * @return tuple of if the given node is ready to be scheduled
+     * and the scheduled time
+    */
+    std::tuple<bool, int> checkALAP(Node* node, int II);
+
 };
 
 #endif

@@ -61,6 +61,9 @@ Mapper::generateMap(Parser* myParser)
   length = scheduleASAPFeasible(originalDFG);
   DEBUG("[Mapper]ASAP Feasible schedule successful with length of " << length);
 
+  scheduleALAPFeasible(originalDFG, MII);
+  DEBUG("[Mapper]ALAP Feasible schedule successful");
+
   return true;
 }
 
@@ -240,18 +243,18 @@ Mapper::memStResAvailable(int time, schedule sch)
 
 
 std::tuple<bool, int> 
-Mapper::checkASAP(Node* node, schedule asapSchedule)
+Mapper::checkASAP(Node* node)
 {
   bool canSchedule = true;
   int scheduleTime = 0;
   for (Node* prevNode : node->getPrevSameIterExMemDep()) {
-    if (asapSchedule.nodeSchedule.find(prevNode->getId()) == asapSchedule.nodeSchedule.end()) {
+    if (asapFeasible.nodeSchedule.find(prevNode->getId()) == asapFeasible.nodeSchedule.end()) {
       // prev node not scheduled, this node not ready
       canSchedule = false;
       return std::make_tuple(canSchedule, scheduleTime);
     } else {
       // get the earliest time for this node limited by prevNode
-      int ristrictTime = asapSchedule.nodeSchedule[prevNode->getId()] + prevNode->getLatency();
+      int ristrictTime = asapFeasible.nodeSchedule[prevNode->getId()] + prevNode->getLatency();
       if (scheduleTime < ristrictTime)
         scheduleTime = ristrictTime;
     }
@@ -394,13 +397,13 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       Node* node = myDFG->getNode(nodeId);
       bool canSchedule = true;
       int scheduleTime = 0;
-      std::tie(canSchedule, scheduleTime) = checkASAP(node, asapFeasible);
+      std::tie(canSchedule, scheduleTime) = checkASAP(node);
 
       // also check related node
       Node* relatedNode = node->getMemRelatedNode();
       bool canScheduleRel = true;
       int scheduleTimeRel = 0;
-      std::tie(canScheduleRel, scheduleTimeRel) = checkASAP(relatedNode, asapFeasible);
+      std::tie(canScheduleRel, scheduleTimeRel) = checkASAP(relatedNode);
       // make sure both nodes are ready
       if (canSchedule && canScheduleRel) {
         // latest time of the 2
@@ -473,7 +476,7 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       bool canSchedule = true;
       int scheduleTime = 0;
       // check the earliest time to schedule the node
-      std::tie(canSchedule, scheduleTime) = checkASAP(node, asapFeasible);
+      std::tie(canSchedule, scheduleTime) = checkASAP(node);
       if (canSchedule) {
         for (int t = scheduleTime; t < mappingPolicy.MAX_LATENCY; t++) {
           if (hasInterIterConfilct(node, t, asapFeasible))
@@ -540,11 +543,11 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       }
       bool canScheduleAdd = true;
       int scheduleTimeAdd = 0;
-      std::tie(canScheduleAdd, scheduleTimeAdd) = checkASAP(addNode, asapFeasible);
+      std::tie(canScheduleAdd, scheduleTimeAdd) = checkASAP(addNode);
 
       bool canScheduleData = true;
       int scheduleTimeData = 0;
-      std::tie(canScheduleData, scheduleTimeData) = checkASAP(dataNode, asapFeasible);
+      std::tie(canScheduleData, scheduleTimeData) = checkASAP(dataNode);
       
       if (canScheduleAdd && canScheduleData) {
         int startTime = (scheduleTimeAdd < (scheduleTimeData - 1)) ? (scheduleTimeData - 1) : scheduleTimeAdd;
@@ -595,3 +598,274 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
   return latestTime + 1;
 }
 
+
+std::tuple<bool, int> 
+Mapper::checkALAP(Node* node, int II)
+{
+  bool canSchedule = true;
+  int scheduleTime = INT32_MAX;
+  // first check succ nodes
+  std::vector<Node*> succNodes = node->getSuccSameIterExMemDep();
+  if (succNodes.size() > 0) {
+    for (Node* succNode : node->getSuccSameIterExMemDep()) {
+      if (alapFeasible.nodeSchedule.find(succNode->getId()) == alapFeasible.nodeSchedule.end()) {
+        canSchedule = false;
+        return std::make_tuple(canSchedule, scheduleTime);
+      } else {
+        int restrictTime = alapFeasible.nodeSchedule[succNode->getId()] - node->getLatency();
+        if (restrictTime < scheduleTime)
+          scheduleTime = restrictTime;
+      }
+    }
+  } else {
+    // maybe this is not needed since we use this func after all end nodes are scheduled
+    scheduleTime = asapFeasible.nodeSchedule[node->getId()] + II - node->getLatency();
+  }
+  return std::make_tuple(canSchedule, scheduleTime);
+}
+
+
+
+void
+Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
+{
+  DEBUG("[ALAP Feasible]start");
+  // nodes left to be scheduled
+  std::set<int> rest = myDFG->getNodeIdSet();
+  // start with nodes without succ in same iter
+  for (Node* node : myDFG->getEndNodes()) {
+    // if there are nodes scheduled through an iter
+    bool scheduled = false;
+    // the last time this node can be scheduled at
+    int lastTime = asapFeasible.nodeSchedule[node->getId()] + II - node->getLatency();
+    if (node->isLoadDataBusRead()) {
+      Node* addNode = node->getMemRelatedNode();
+      for (int t = lastTime; t > -1; t--) {
+        if (hasInterIterConfilct(addNode, t - 1, alapFeasible))
+          continue;
+        if (hasInterIterConfilct(node, t, alapFeasible))
+          continue;
+        if (memLdResAvailable(t - 1, alapFeasible)) {
+          // enough resources
+          //allocate resources
+          alapFeasible.timeSchedule[t - 1].addBusUsed++;
+          alapFeasible.timeSchedule[t].dataBusUsed++;
+          alapFeasible.timeSchedule[t - 1].peUsed++;
+          alapFeasible.timeSchedule[t].peUsed++;
+          //schedule operations
+          alapFeasible.nodeSchedule[addNode->getId()] = t - 1;
+          alapFeasible.nodeSchedule[node->getId()] = t;
+          alapFeasible.timeSchedule[t - 1].nodes.push_back(addNode->getId());
+          alapFeasible.timeSchedule[t].nodes.push_back(node->getId());
+          DEBUG("[ALAP Feasible]load add node: " << addNode->getId() << " scheduled at " << t - 1);
+          DEBUG("[ALAP Feasible]load data node: " << node->getId() << " scheduled at " << t);
+          rest.erase(node->getId());
+          rest.erase(addNode->getId());
+          scheduled = true;
+          break;
+        }
+      } // end of iterating through time
+    } else if (node->isStoreDataBusWrite()) {
+      Node* addNode = node->getMemRelatedNode();
+      for (int t = lastTime; t > -1; t--) {
+        if (hasInterIterConfilct(addNode, t, alapFeasible))
+          continue;
+        if (hasInterIterConfilct(node, t, alapFeasible))
+          continue;
+        if (memStResAvailable(t, alapFeasible)) {
+          //allocate resources
+          alapFeasible.timeSchedule[t].addBusUsed++;
+          alapFeasible.timeSchedule[t].dataBusUsed++;
+          alapFeasible.timeSchedule[t].peUsed += 2;
+          //schedule both operations
+          alapFeasible.nodeSchedule[node->getId()] = t;
+          alapFeasible.nodeSchedule[addNode->getId()] = t;
+          alapFeasible.timeSchedule[t].nodes.push_back(node->getId());
+          alapFeasible.timeSchedule[t].nodes.push_back(addNode->getId());
+          DEBUG("[ALAP Feasible]store add node: " << addNode->getId() << " scheduled at " << t);
+          DEBUG("[ALAP Feasible]store data node: " << node->getId() << " scheduled at " << t);
+          //successfully scheduled an operation
+          rest.erase(node->getId());
+          rest.erase(addNode->getId());
+          scheduled = true;
+          break;
+        }
+      } // end of iterating through time
+    } else {
+      for (int t = lastTime; t > -1; t--) {
+        if (hasInterIterConfilct(node, t, alapFeasible))
+          continue;
+        if (node->isLoopCtrl()) {
+          // loop control node shoud be before live out nodes
+          std::vector<Node*> liveOutNodes = myDFG->getLiveOutNodes();
+          bool constrained = false;
+          for (Node* liveOutNode : liveOutNodes) {
+            if (!(asapFeasible.nodeSchedule[liveOutNode->getId()] > t)) {
+              constrained = true;
+              break;
+            }
+          } // end of iterating through live out nodes
+          if (constrained)
+            continue;
+          else
+            DEBUG("[ALAP Feasible]loop ctrl node: " << node->getId());
+        }
+        if (alapFeasible.timeSchedule[t].peUsed < cgraSize) {
+          //allocate resource
+          alapFeasible.timeSchedule[t].peUsed ++;
+          //schedule node
+          alapFeasible.nodeSchedule[node->getId()] = t;
+          alapFeasible.timeSchedule[t].nodes.push_back(node->getId());
+          DEBUG("[ALAP Feasible]node: " << node->getId() << " scheduled at " << t);
+          //successfully scheduled an operation
+          rest.erase(node->getId());
+          scheduled = true;
+          break;
+        }
+      } // end of iterating through time
+    }
+    if (!scheduled)
+      FATAL("[ALAP Feasible]ERROR! Node " << node->getId() << " can't be scheduled");
+  } // end of iterating through end nodes
+
+  // now schedule rest of the nodes
+  while (rest.size() > 0) {
+    // while nodes left
+    std::set<int> scheduledNodes;
+    for (int nodeId : rest) {
+      // skip scheduled nodes
+      if (scheduledNodes.find(nodeId) != scheduledNodes.end())
+        continue;
+      Node* node = myDFG->getNode(nodeId);
+      if (node->isStoreAddressGenerator() || node->isStoreDataBusWrite()) {
+        // store node
+        Node* relatedNode = node->getMemRelatedNode();
+        bool canSchedule = true;
+        int scheduleTime = 0;
+        std::tie(canSchedule, scheduleTime) = checkALAP(node, II);
+
+        // also check related node
+        bool canScheduleRel = true;
+        int scheduleTimeRel = 0;
+        std::tie(canScheduleRel, scheduleTimeRel) = checkALAP(relatedNode, II);
+
+        if (canSchedule & canScheduleRel) {
+          // earlier of the two
+          int lasttTime = (scheduleTime < scheduleTimeRel) ? scheduleTime : scheduleTimeRel;
+          for (int t = lasttTime; t > -1; t--) {
+            if (hasInterIterConfilct(node, t, alapFeasible))
+              continue;
+            if (hasInterIterConfilct(relatedNode, t, alapFeasible))
+              continue;
+            if (memStResAvailable(t, alapFeasible)) {
+              //allocate resources
+              alapFeasible.timeSchedule[t].addBusUsed++;
+              alapFeasible.timeSchedule[t].dataBusUsed++;
+              alapFeasible.timeSchedule[t].peUsed += 2;
+              //schedule both operations
+              alapFeasible.nodeSchedule[node->getId()] = t;
+              alapFeasible.nodeSchedule[relatedNode->getId()] = t;
+              alapFeasible.timeSchedule[t].nodes.push_back(node->getId());
+              alapFeasible.timeSchedule[t].nodes.push_back(relatedNode->getId());
+              DEBUG("[ALAP Feasible]store node: " << relatedNode->getId() << " scheduled at " << t);
+              DEBUG("[ALAP Feasible]store node: " << node->getId() << " scheduled at " << t);
+              //successfully scheduled an operation
+              scheduledNodes.insert(nodeId);
+              scheduledNodes.insert(relatedNode->getId());
+              break;
+            }
+          }// end of iterating through time
+        }
+      } else if (node->isLoadAddressGenerator() || node->isLoadDataBusRead()) {
+        // load node
+        Node* addNode;
+        Node* dataNode;
+        if (node->isLoadAddressGenerator()) {
+          addNode = node;
+          dataNode = node->getMemRelatedNode();
+        } else {
+          addNode = node->getMemRelatedNode();
+          dataNode = node;
+        }
+        bool canScheduleAdd = true;
+        int scheduleTimeAdd = 0;
+        std::tie(canScheduleAdd, scheduleTimeAdd) = checkALAP(addNode, II);
+
+        bool canScheduleData = true;
+        int scheduleTimeData = 0;
+        std::tie(canScheduleData, scheduleTimeData) = checkALAP(dataNode, II);
+        
+        if (canScheduleAdd && canScheduleData) {
+          int lastTime = (scheduleTimeAdd < (scheduleTimeData - 1)) ? scheduleTimeAdd : (scheduleTimeData - 1);
+          for (int t = lastTime; t > -1; t--) {
+            if (hasInterIterConfilct(addNode, t, alapFeasible))
+              continue;
+            if (hasInterIterConfilct(dataNode, t + 1, alapFeasible))
+              continue;
+            if (memLdResAvailable(t, alapFeasible)) {
+              // enough resources
+              //allocate resources
+              alapFeasible.timeSchedule[t].addBusUsed++;
+              alapFeasible.timeSchedule[t + 1].dataBusUsed++;
+              alapFeasible.timeSchedule[t].peUsed++;
+              alapFeasible.timeSchedule[t + 1].peUsed++;
+              //schedule operations
+              alapFeasible.nodeSchedule[addNode->getId()] = t;
+              alapFeasible.nodeSchedule[dataNode->getId()] = t + 1;
+              alapFeasible.timeSchedule[t].nodes.push_back(addNode->getId());
+              alapFeasible.timeSchedule[t + 1].nodes.push_back(dataNode->getId());
+              DEBUG("[ALAP Feasible]load add node: " << addNode->getId() << " scheduled at " << t);
+              DEBUG("[ALAP Feasible]load data node: " << dataNode->getId() << " scheduled at " << t + 1);
+              scheduledNodes.insert(dataNode->getId());
+              scheduledNodes.insert(addNode->getId());
+              break;
+            }
+          } // end of iterating through time
+        }
+      } else {
+        //regular node
+        bool canSchedule = true;
+        int scheduleTime = 0;
+        std::tie(canSchedule, scheduleTime) = checkALAP(node, II);
+        if (canSchedule) {
+          for (int t = scheduleTime; t > -1; t--) {
+            if (hasInterIterConfilct(node, t, alapFeasible))
+              continue;
+            if (node->isLoopCtrl()) {
+              // make sure loop control is before all live out nodes
+              std::vector<Node*> liveOutNodes = myDFG->getLiveOutNodes();
+              bool constrained = false;
+              for (Node* liveOutNode : liveOutNodes) {
+                if (!(asapFeasible.nodeSchedule[liveOutNode->getId()] > t)) {
+                  constrained = true;
+                  break;
+                }
+              } // end of iterating through live out nodes
+              if (constrained)
+                continue;
+              else
+                DEBUG("[ALAP Feasible]loop ctrl node: " << node->getId());
+            }
+            if (alapFeasible.timeSchedule[t].peUsed < cgraSize) {
+              //allocate resource
+              alapFeasible.timeSchedule[t].peUsed ++;
+              //schedule node
+              alapFeasible.nodeSchedule[node->getId()] = t;
+              alapFeasible.timeSchedule[t].nodes.push_back(nodeId);
+              DEBUG("[ALAP Feasible]node: " << nodeId << " scheduled at " << t);
+              //successfully scheduled an operation
+              scheduledNodes.insert(nodeId);
+              break;
+            }
+          } // end of iterating through time
+        }
+      }
+    } // end of iterating throug rest
+    if (scheduledNodes.size() > 0) {
+      for (int nodeId : scheduledNodes)
+        rest.erase(nodeId);
+      scheduledNodes.clear();
+    } else
+      FATAL("[ALAP Feasible]ERROR! " << rest.size() << " nodes can't be scheduled");
+  } // end of rest.size() > 0
+}

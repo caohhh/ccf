@@ -419,3 +419,15 @@ DFG::getLoopCtrlNode()
   }
   return nullptr;
 }
+
+
+std::vector<Node*>
+DFG::getLiveOutNodes()
+{
+  std::vector<Node*> liveOutNodes;
+  for (Node* node : nodeSet) {
+    if (node->isLiveOut())
+      liveOutNodes.push_back(node);
+  }
+  return liveOutNodes;
+}

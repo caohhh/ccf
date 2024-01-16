@@ -70,6 +70,9 @@ class DFG
     // return the loop control node
     Node* getLoopCtrlNode();
 
+    // return all the live out nodes
+    std::vector<Node*> getLiveOutNodes();
+
   private:
     // set of nodes in the graph
     std::vector<Node*> nodeSet;
