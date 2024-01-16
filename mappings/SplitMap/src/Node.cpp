@@ -4,6 +4,7 @@
 
 #include "Node.h"
 #include <algorithm>
+#include <set>
 
 Node::Node(Instruction_Operation ins, Datatype dt, int laten, int id, std::string nodeName, nodePath brPath, int condBrId)
 {
@@ -141,7 +142,7 @@ void
 Node::setLoadAddressGenerator(Node* readNode)
 {
   loadOutputAddressBus = true;
-  relatedNode = readNode;
+  memRelatedNode = readNode;
   latency = 1;
 }
 
@@ -150,7 +151,7 @@ void
 Node::setLoadDataBusRead(Node* addressNode)
 {
   inputDataBus = true;
-  relatedNode = addressNode;
+  memRelatedNode = addressNode;
   latency = 1;
 }
 
@@ -159,7 +160,7 @@ void
 Node::setStoreAddressGenerator(Node* writeNode)
 {
   storeOutputAddressBus = true;
-  relatedNode = writeNode;
+  memRelatedNode = writeNode;
   latency = 0;
 }
 
@@ -168,7 +169,7 @@ void
 Node::setStoreDataBusWrite(Node* addressNode)
 {
   outputDataBus = true;
-  relatedNode = addressNode;
+  memRelatedNode = addressNode;
   latency = 1;
 }
 
@@ -302,6 +303,14 @@ Node::isLoadAddressGenerator()
 
 
 bool 
+Node::isStoreAddressGenerator()
+{
+  return storeOutputAddressBus;
+}
+
+
+
+bool 
 Node::isStoreDataBusWrite()
 {
   return outputDataBus;
@@ -347,7 +356,6 @@ Node::getNextSameIter()
 }
 
 
-//return successors with distance = 0 excluding load store address dependency
 std::vector<Node*> 
 Node::getSuccSameIterExMemDep()
 {
@@ -362,6 +370,99 @@ Node::getSuccSameIterExMemDep()
     }
   }
   return nextNodes;
+}
+
+
+std::vector<Node*> 
+Node::getExDepPredPrevIter()
+{
+  std::vector<Node*> predNodes;
+  for (auto arc : incommingArcs) {
+    if (arc->getDependency() == TrueDep || arc->getDependency() == PredDep) {
+      if (arc->getDistance() > 0)
+        predNodes.push_back(arc->getFromNode());
+    }
+  }
+  return predNodes;
+}
+
+
+std::vector<Node*> 
+Node::getExDepSuccNextIter()
+{
+  std::vector<Node*> succNodes;
+  for (auto arc : outgoingArcs) {
+    if (arc->getDependency() == TrueDep || arc->getDependency() == PredDep) {
+      if (arc->getDistance() > 0)
+        succNodes.push_back(arc->getToNode());
+    }
+  }
+  return succNodes;
+}
+
+
+std::vector<Node*>
+Node::getInterIterRelatedNodes()
+{
+  std::set<Node*> interIterRelatedNodes;
+  // pred nodes
+  for (Node* node : this->getExDepPredPrevIter()) 
+    interIterRelatedNodes.insert(node);
+  
+  // succ nodes
+  for (Node* node : this->getExDepSuccNextIter())
+    interIterRelatedNodes.insert(node);
+  // new nodes to iterate through, start with all nodes
+  std::vector<Node*> newNodes(interIterRelatedNodes.begin(), interIterRelatedNodes.end());
+  
+  while (newNodes.size() > 0) {
+    // still have new nodes to iterate through
+    std::vector<Node*> newNodesTemp;
+    for (Node* node : newNodes) {
+      for (Node* predNode : node->getExDepPredPrevIter()) {
+        if (interIterRelatedNodes.find(predNode) != interIterRelatedNodes.end()) {
+          // pred is a new node
+          newNodesTemp.push_back(predNode);
+          interIterRelatedNodes.insert(predNode);
+        }
+      }
+      for (Node* succNode : node->getExDepSuccNextIter()) {
+        if (interIterRelatedNodes.find(succNode) != interIterRelatedNodes.end()) {
+          // succ is a new node
+          newNodesTemp.push_back(succNode);
+          interIterRelatedNodes.insert(succNode);
+        }
+      }
+    } // end of iterating through newNodes
+    newNodes = newNodesTemp;
+  } // no new nodes left
+
+  std::vector<Node*> ret(interIterRelatedNodes.begin(), interIterRelatedNodes.end());
+  return ret;
+}
+
+
+Node*
+Node::getMemRelatedNode()
+{
+  if (loadOutputAddressBus || inputDataBus || storeOutputAddressBus || outputDataBus)
+    return memRelatedNode;
+  else
+    return nullptr;
+}
+
+
+bool
+Node::isLiveOut()
+{
+  return liveOut;
+}
+
+
+bool
+Node::isLoopCtrl()
+{
+  return this->loopCtrl;
 }
 
 

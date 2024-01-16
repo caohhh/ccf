@@ -11,7 +11,7 @@
 #include <cstring>
 #include "definitions.h"
 #include "Parser.h"
-#include "Falcon.h"
+#include "Mapper.h"
 
 int main(int argc, char *argv[])
 {
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 
   DEBUG("[main]Mapping has started");
   bool mapSuccess = false;
-  Falcon* falconMapper = new Falcon(cgraInfo, mappingPolicy);
+  Mapper* falconMapper = new Mapper(cgraInfo, mappingPolicy);
   mapSuccess = falconMapper->generateMap(myParser);
   
   if (mapSuccess)

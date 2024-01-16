@@ -103,6 +103,9 @@ class Node
     // return if the node is load address generator
     bool isLoadAddressGenerator();
 
+    // return if the node is store address generator
+    bool isStoreAddressGenerator();
+
     // return if the node is a store write node
     bool isStoreDataBusWrite();
 
@@ -117,6 +120,24 @@ class Node
 
     //return successors with distance = 0 excluding load store address dependency
     std::vector<Node*> getSuccSameIterExMemDep();
+
+    // return predecessors with true + pred dependency and distance
+    std::vector<Node*> getExDepPredPrevIter();
+
+    // return predecessors with true + pred dependency and distance
+    std::vector<Node*> getExDepSuccNextIter();
+
+    // get all nodes connected with inter-iter dependency arc
+    std::vector<Node*> getInterIterRelatedNodes();
+
+    // get the store or load memory related node
+    Node* getMemRelatedNode();
+
+    // return if the node is a live out node
+    bool isLiveOut();
+
+    // return if the node is a loop control node
+    bool isLoopCtrl();
 
   private:
     // unique id of Node in DFG
@@ -150,7 +171,7 @@ class Node
     // this node is used as store data write, writes data bus output
     bool outputDataBus;
     // for load or store, the address bus or data bus node related
-    Node* relatedNode;
+    Node* memRelatedNode;
     // if this node is a live out node
     bool liveOut;
     // if this node is a loop control node

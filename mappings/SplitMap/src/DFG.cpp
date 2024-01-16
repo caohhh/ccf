@@ -408,3 +408,14 @@ DFG::getEndNodes()
   }
   return endNodes;
 }
+
+
+Node*
+DFG::getLoopCtrlNode()
+{
+  for (Node* node : nodeSet) {
+    if (node->isLoopCtrl())
+      return node;
+  }
+  return nullptr;
+}

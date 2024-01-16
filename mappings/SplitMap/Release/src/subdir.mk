@@ -5,7 +5,7 @@ CPP_SRCS += \
 ../src/DFG.cpp \
 ../src/main.cpp \
 ../src/Node.cpp \
-../src/Falcon.cpp
+../src/Mapper.cpp
 
 OBJS += \
 ./src/Parser.o \
@@ -13,7 +13,7 @@ OBJS += \
 ./src/DFG.o \
 ./src/main.o \
 ./src/Node.o \
-./src/Falcon.o
+./src/Mapper.o
 
 
 CPP_DEPS += \
@@ -22,7 +22,7 @@ CPP_DEPS += \
 ./src/DFG.d \
 ./src/main.d \
 ./src/Node.d \
-./src/Falcon.d
+./src/Mapper.d
 
 
 # Each subdirectory must supply rules for building sources it contributes

@@ -67,6 +67,9 @@ class DFG
     // return a set of nodes without any child in current iteration
     std::vector<Node*> getEndNodes();
 
+    // return the loop control node
+    Node* getLoopCtrlNode();
+
   private:
     // set of nodes in the graph
     std::vector<Node*> nodeSet;

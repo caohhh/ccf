@@ -7,15 +7,15 @@
 
 struct CGRA_Architecture
 {
-  int X_Dim;
-  int Y_Dim;
+  unsigned X_Dim;
+  unsigned Y_Dim;
   unsigned int R_Size;
-  int MAX_NODE_INDEGREE;
-  int MAX_NODE_OUTDEGREE;
-  int PER_ROW_MEM_AVAILABLE;
-  int MAX_PE_INDEGREE; 
-  int MAX_PE_OUTDEGREE;
-  int MAX_DATA_PER_TIMESLOT;  
+  unsigned MAX_NODE_INDEGREE;
+  unsigned MAX_NODE_OUTDEGREE;
+  unsigned PER_ROW_MEM_AVAILABLE;
+  unsigned MAX_PE_INDEGREE; 
+  unsigned MAX_PE_OUTDEGREE;
+  unsigned MAX_DATA_PER_TIMESLOT;  
 };
 
 struct Mapping_Policy

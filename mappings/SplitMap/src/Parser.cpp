@@ -86,7 +86,7 @@ Parser::ParseDFG(DFG* myDFG)
           nodeFrom->setStoreAddressGenerator(nodeTo);
           nodeTo->setStoreDataBusWrite(nodeFrom);
           myDFG->makeArc(nodeFrom, nodeTo, 0, StoreDep, 0);
-        } else if (edgeType.compare("PRE")) {
+        } else if (edgeType.compare("PRE") == 0) {
           // predication dependency
           myDFG->makeArc(nodeFrom, nodeTo, distance, PredDep, operandOrder);
         } else if (edgeType.compare("MEM") == 0) {
