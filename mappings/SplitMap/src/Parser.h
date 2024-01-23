@@ -22,7 +22,6 @@ class Parser
   private:
     std::string nodeFile;
     std::string edgeFile;
-
 };
 
 #endif //__SPLITMAP_PARSER_H__

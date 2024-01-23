@@ -26,7 +26,9 @@ int main(int argc, char *argv[])
   mappingPolicy.MAX_LATENCY = 2000;
   mappingPolicy.ENABLE_REGISTERS = true;
   mappingPolicy.MAX_SCHED_TRY = 1;
-  mappingPolicy.IMS = 0;
+  mappingPolicy.MAX_II = 50;
+  mappingPolicy.LAMBDA = 0.02;
+  mappingPolicy.MODULO_SCHEDULING_ATTEMPTS = 1000;
 
   // Default inputs and settings
   cgraInfo.X_Dim = 4;

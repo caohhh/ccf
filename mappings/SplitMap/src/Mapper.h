@@ -12,6 +12,7 @@
 #define __SPLITMAP_MAPPER_H__
 
 #include "Parser.h"
+#include "Schedule.h"
 
 class Mapper
 {
@@ -33,28 +34,15 @@ class Mapper
     std::map<int, int> asapSchedule;
     // the ALAP schedule of nodeId:time
     std::map<int, int> alapSchedule;
-
-    struct schedule
-    {
-      // schedule of nodeID : time
-      std::map<int, int> nodeSchedule;
-      struct ts
-      {
-        // id of nodes scheduled at time
-        std::vector<int> nodes;
-        unsigned peUsed = 0;
-        unsigned addBusUsed = 0;
-        unsigned dataBusUsed = 0;
-      };
-      // schedule of given time
-      std::map<int, ts> timeSchedule;
-    };
+    // rng
+    std::mt19937 rng;
     
     // the ASAP schedule considering resources available
-    schedule asapFeasible;
+    schedule* asapFeasible;
     // the ALAP schedule considering resources available
-    schedule alapFeasible;
-
+    schedule* alapFeasible;
+    // the modulo schedule
+    moduloSchedule* modSchedule;
 
     /**
      * Schedule operations as soon as all predecessors are completed
@@ -80,18 +68,6 @@ class Mapper
     // schedule operations in ALAP manner considering number of available resources
     void scheduleALAPFeasible(DFG* myDFG, int II);
 
-    // returns if the given schedule has enough memory resources for a load at given time 
-    bool memLdResAvailable(int time, schedule sch);
-
-    // returns if the given schedule has enough memory resources for a store at given time 
-    bool memStResAvailable(int time, schedule sch);
-
-    /**
-     * For a given schedule, return if the given node has inter
-     * iteration related nodes mapped at the same time
-    */
-    bool hasInterIterConfilct(Node* node, int time, schedule sch);
-
     /**
      * check if a node is ready for asap scheduling, as in all
      * predecessors  have been scheduled
@@ -107,6 +83,28 @@ class Mapper
      * and the scheduled time
     */
     std::tuple<bool, int> checkALAP(Node* node, int II);
+
+    // returns all the nodes in the DFG sorted in priority of mapping
+    // as in longer cycles -> shorter cycles -> nodes not in cycle
+    std::vector<Node*> getSortedNodes(DFG* myDFG);
+
+    /**
+     * check if a node is ready for modulo scheduling, as in all
+     * successor  have been scheduled
+     * @return tuple of if the given node is ready to be scheduled
+     * and the scheduled time
+    */
+    std::tuple<bool, int> checkModulo(Node* node);
+
+
+    // returnes the earliest time slot this node can be placed in modulo scheduling
+    int getModConstrainedTime(Node* node);
+
+    // returns if source node is constrained by its given predcessor in modulo scheduling
+    bool isModConstrainedBy(Node* source, Node* pred);
+
+    // modulo scheduling of the DFG
+    bool scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II);
 
 };
 

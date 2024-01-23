@@ -73,6 +73,9 @@ class DFG
     // return all the live out nodes
     std::vector<Node*> getLiveOutNodes();
 
+    // return all the cycles in this DFG
+    std::vector<std::set<Node*>> getCycles();
+
   private:
     // set of nodes in the graph
     std::vector<Node*> nodeSet;
@@ -90,6 +93,8 @@ class DFG
     int arcMaxId;
     // rng
     std::mt19937 rng;
+    // a list of all the cycles with their II, sorted from highest II to lowest
+    std::vector<std::tuple<std::set<Node*>, float>> cycles;
 
     /**
      * recurssively get a path the produces the maximum II

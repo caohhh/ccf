@@ -3,6 +3,134 @@
 */
 
 #include "Mapper.h"
+#include <queue>
+#include <algorithm>
+
+namespace 
+{
+
+// if the node through succ iteration can reach dest
+bool
+downReachable(Node* source, std::set<Node*> dest) {
+  std::set<Node*> visited;
+  std::queue<Node*> toVisit;
+  toVisit.push(source);
+  while (!toVisit.empty()) {
+    Node* node = toVisit.front();
+    toVisit.pop();
+    // skip visited nodes
+    if (visited.find(node) != visited.end()) 
+      continue;
+    visited.insert(node);
+    for (Node* succ : node->getNextSameIter()) {
+      // skip visited nodes
+      if (visited.find(succ) != visited.end()) 
+        continue;
+      if (dest.find(succ) != dest.end())
+          return true;
+      toVisit.push(succ);
+    }
+  }
+  return false;
+}
+
+
+bool
+upReachable(Node* source, std::set<Node*> dest) {
+  std::set<Node*> visited;
+  std::queue<Node*> toVisit;
+  toVisit.push(source);
+  while (!toVisit.empty()) {
+    Node* node = toVisit.front();
+    toVisit.pop();
+    // skip visited nodes
+    if (visited.find(node) != visited.end()) 
+      continue;
+    visited.insert(node);
+    for (Node* pred : node->getPrevSameIter()) {
+      // skip visited nodes
+      if (visited.find(pred) != visited.end()) 
+        continue;
+      if (dest.find(pred) != dest.end())
+          return true;
+      toVisit.push(pred);
+    }
+  }
+  return false;
+}
+
+
+// get the nodes between source and dest
+std::set<Node*>
+getNodesBetween(std::set<Node*> source, std::set<Node*> dest) {
+  std::set<Node*> nodesBetween;
+
+  // first downward search
+  std::queue<Node*> downToVisit;
+  std::set<Node*> downVisited;
+  for (Node* node : source) {
+    if (downReachable(node, dest))
+      downToVisit.push(node);
+  }
+  while (!downToVisit.empty()) {
+    Node* node = downToVisit.front();
+    downToVisit.pop();
+    // skip visited nodes
+    if (downVisited.find(node) != downVisited.end()) 
+      continue;
+    downVisited.insert(node);
+    for (Node* succ : node->getNextSameIter()) {
+      // skip visited
+      if (downVisited.find(succ) != downVisited.end())
+        continue;
+      // skip nodes in dest
+      if (dest.find(succ) != dest.end()) 
+        continue;
+      // skip nodes in source
+      if (source.find(succ) != source.end())
+        continue;
+      if (downReachable(succ, dest)) {
+        nodesBetween.insert(succ);
+        downToVisit.push(succ);
+      }
+    } // end of iterating through succs
+  } // end of !downToVisit.empty()
+
+  // next upward search
+  std::queue<Node*> upToVisit;
+  std::set<Node*> upVisited;
+  for (Node* node : source) {
+    if (upReachable(node, dest))
+      upToVisit.push(node);
+  }
+  while (!upToVisit.empty()) {
+    Node* node = upToVisit.front();
+    upToVisit.pop();
+    // skip visited nodes
+    if (upVisited.find(node) != upVisited.end()) 
+      continue;
+    upVisited.insert(node);
+    for (Node* pred : node->getPrevSameIter()) {
+      // skip visited
+      if (upVisited.find(pred) != upVisited.end())
+        continue;
+      // skip nodes in dest
+      if (dest.find(pred) != dest.end()) 
+        continue;
+      // skip nodes in source
+      if (source.find(pred) != source.end())
+        continue;
+      if (upReachable(pred, dest)) {
+        nodesBetween.insert(pred);
+        upToVisit.push(pred);
+      }
+    } // end of iterating through preds
+  } // end of !upToVisit.empty()
+  return nodesBetween;
+}
+
+
+} // end of anonymous namespace
 
 
 Mapper::Mapper(CGRA_Architecture cgraInfo, Mapping_Policy mappingPolicy)
@@ -10,6 +138,12 @@ Mapper::Mapper(CGRA_Architecture cgraInfo, Mapping_Policy mappingPolicy)
   this->cgraInfo = cgraInfo;
   this->mappingPolicy = mappingPolicy;
   cgraSize = cgraInfo.X_Dim * cgraInfo.Y_Dim;
+  // rng here at construction
+  std::random_device rd;
+  rng = std::mt19937(rd());
+  asapFeasible = new schedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
+  alapFeasible = new schedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
+  modSchedule = new moduloSchedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
 }
 
 
@@ -61,10 +195,299 @@ Mapper::generateMap(Parser* myParser)
   length = scheduleASAPFeasible(originalDFG);
   DEBUG("[Mapper]ASAP Feasible schedule successful with length of " << length);
 
+  // ALAP Feasible
   scheduleALAPFeasible(originalDFG, MII);
   DEBUG("[Mapper]ALAP Feasible schedule successful");
 
+  DEBUG("[Mapper]Done premapping with II of " << MII);
+
+  // get nodes sorted
+  std::vector<Node*> sortedNodes = getSortedNodes(originalDFG);
+
+  int currentII = MII;
+  while (currentII <= mappingPolicy.MAX_II) {
+    DEBUG("[Mapper]Mapping for II: " << currentII);
+    // Fraction of scheduling space based on user input.
+    int lambda =  mappingPolicy.LAMBDA * cgraSize * currentII * originalDFG->getNodeSize();
+    // attempt count for current II
+    int attempt = 0;
+    for (int attemp = 0; attempt < lambda; attemp++) {
+      DEBUG("[Mapper]attempt: " << attempt << "/" << lambda << "");
+      bool modScheduleSuccess = false;
+      // here we do modulo schedule
+      for (int modAttempt = 0; modAttempt < mappingPolicy.MODULO_SCHEDULING_ATTEMPTS; modAttempt++) {
+        DEBUG("[Mapper]modulo schedule attempt " << modAttempt << " of " << mappingPolicy.MODULO_SCHEDULING_ATTEMPTS);
+        if (scheduleModulo(originalDFG, sortedNodes, currentII)) {
+          DEBUG("[Mapper]Modulo schedule complete and successful");
+          modScheduleSuccess = true;
+          break;
+        }
+      }
+      if (!modScheduleSuccess) {
+        DEBUG("[Mapper]Failed to generate modulo schedule for current II, increasing II");
+        currentII++;
+        break;
+      }
+      modSchedule->print();
+      exit(0);
+    } // end of iterating through attempts
+    break;
+  } // end of while current II <= maxII
+
   return true;
+}
+
+
+std::tuple<bool, int>
+Mapper::checkModulo(Node* node)
+{
+  bool canSchedule = true;
+  int scheduleTime = alapFeasible->getScheduleTime(node);
+  // check succ nodes
+  for (Node* succ : node->getSuccSameIterExMemDep()) {
+    if (!modSchedule->isScheduled(succ)) {
+      canSchedule = false;
+      return std::make_tuple(canSchedule, scheduleTime);
+    } else {
+      int restrictTime = modSchedule->getScheduleTime(succ) - node->getLatency();
+      if (restrictTime < scheduleTime)
+        scheduleTime = restrictTime;
+    }
+  }
+  return std::make_tuple(canSchedule, scheduleTime);
+}
+
+
+bool
+Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
+{
+  DEBUG("[Modulo]Start");
+  modSchedule->clear();
+  modSchedule->setII(II);
+  // nodes to schedule, which is all the sorted nodes
+  std::vector<Node*> toSchedule = sortedNodes;
+
+  while (!toSchedule.empty()) {
+    // get the node to schedule int he priority of:
+    // lowest slack -> position in sorted nodes(longest cycle -> latest in alap)
+    Node* scheduleNode = nullptr;
+    int lowestSlack = INT32_MAX;
+    // first get all the nodes ready to schedule
+    for (Node* node : toSchedule) {
+      // skip add gen
+      if (node->isLoadAddressGenerator() || node->isStoreAddressGenerator())
+        continue;
+      if (node->isLoadDataBusRead() || node->isStoreDataBusWrite()) {
+        // check if mem related node is ready for scheduling
+        if (!(std::get<0>(checkModulo(node->getMemRelatedNode()))))
+          continue;
+      }
+      if (std::get<0>(checkModulo(node))) {
+        // node ready for modulo scheduling
+        // update slack
+        int slack = std::get<1>(checkModulo(node)) - asapFeasible->getScheduleTime(node);
+        if (slack < lowestSlack) {
+          lowestSlack = slack;
+          scheduleNode = node;
+        }
+      }
+    }
+    if (scheduleNode == nullptr) {
+      #ifdef DEBUG
+        DEBUG("[Modulo]No node to schedule with " << toSchedule.size() << " nodes left: ");
+        for (Node* node : toSchedule)
+          DEBUG("[Modulo]node: " << node->getId() << " not scheduled");
+      #endif
+      return false;
+    }
+    DEBUG("[Modulo]Scheduling node: " << scheduleNode->getId());
+    // now we check the time this node can be scheduled at
+    int startTime = getModConstrainedTime(scheduleNode);
+    // check loop carried dependencies of the node to schedule
+    // as in, the node should start after LCD node is finished
+    for(Node* pred : scheduleNode->getExDepPredPrevIter()) {
+      if (!modSchedule->isScheduled(pred))
+        FATAL("[Modulo]ERROR!Loop carried preds should be scheduled first");
+      int distance = myDFG->getArc(pred, scheduleNode)->getDistance();
+      int earliestStart = modSchedule->getScheduleTime(pred) - distance * II + pred->getLatency();
+      if (earliestStart > startTime)
+        startTime = earliestStart;
+    }
+    int endTime = alapFeasible->getScheduleTime(scheduleNode);
+    DEBUG("[Modulo]start time: " << startTime <<", end time: " << endTime);
+    if (startTime > endTime) {
+      DEBUG("[Modulo]Failed: startTime > endTime");
+      return false;
+    }
+    // random times to try and schedule the node
+    std::vector<int> tryTime(endTime - startTime + 1);
+    std::iota(tryTime.begin(), tryTime.end(), startTime);
+    // a rand time between start and end to schedule the node
+    std::shuffle(tryTime.begin(), tryTime.end(), rng);
+    bool scheduled = false;
+
+    // now to schedule the node at a tryTime
+    for (int scheduleTime : tryTime) {
+      int modScheduleTime = scheduleTime % II;
+      DEBUG("[Modulo]schedule time: " << scheduleTime << ", modulo schedule time: " << modScheduleTime);
+      if (scheduleNode->isLoadDataBusRead()) {
+        // first deal with loads, since we've skipped address generators already
+        Node* addNode;
+        addNode = scheduleNode->getMemRelatedNode();
+        // we've made sure related node is also ready earlier
+        // add node should be scheduled a cycle earlier than data node for load
+        int latestAdd = std::get<1>(checkModulo(addNode));
+        if (latestAdd < (scheduleTime - 1)) {
+          // latest address node schedule time earlier than intended, try another time
+          continue;
+        } else {
+          // lateset address node schedule time later than intended, can be scheduled
+          if (modSchedule->memLdResAvailable(scheduleTime - 1)) {
+            // enough resources, schedule both nodes
+            modSchedule->scheduleLd(addNode, scheduleNode, scheduleTime - 1);
+            scheduled = true;
+            for (auto it = toSchedule.begin(); it != toSchedule.end();) {
+              if (*it == scheduleNode || *it == addNode) {
+                it = toSchedule.erase(it);
+              } else
+                ++it;
+            } // end of iterating through toSchedule
+            DEBUG("[Modulo]Success in scheduling load data node");
+            DEBUG("[Modulo]With the load address node: " << addNode->getId() 
+                  << " at time: " << scheduleTime - 1 << " mod: " << (scheduleTime - 1) % II);
+            break;
+          } else {
+            // not enough resources, try another time
+            continue;
+          }
+        }
+
+      } else if (scheduleNode->isStoreDataBusWrite()) {
+        // with stores, note that we've skipped address generators earlier
+        Node* addNode = scheduleNode->getMemRelatedNode();
+        int latestAdd = std::get<1>(checkModulo(addNode));
+        // for store, both address node and data node are scheduled at time
+        if (latestAdd < scheduleTime) {
+          // latest address node schedule time earlier than intended, try another time
+          continue;
+        } else {
+          // lateset address node schedule time later than intended, can be scheduled
+          if (modSchedule->memStResAvailable(scheduleTime)) {
+            // enough resources, schedule both nodes
+            modSchedule->scheduleSt(addNode, scheduleNode, scheduleTime);
+            scheduled = true;
+            for (auto it = toSchedule.begin(); it != toSchedule.end();) {
+              if (*it == scheduleNode || *it == addNode) {
+                it = toSchedule.erase(it);
+              } else
+                ++it;
+            } // end of iterating through toSchedule
+            DEBUG("[Modulo]Success in scheduling store data node");
+            DEBUG("[Modulo]With the store address node: " << addNode->getId() 
+                  << " at time: " << scheduleTime - 1 << " mod: " << (scheduleTime - 1) % II);
+            break;
+          } else {
+            // not enough resources, try another time
+            continue;
+          }
+        }
+
+      } else {
+        // regular nodes
+        if (modSchedule->resAvailable(scheduleTime)) {
+          modSchedule->scheduleOp(scheduleNode, scheduleTime);
+          DEBUG("[Modulo]Schedule successful");
+          scheduled = true;
+          for (auto it = toSchedule.begin(); it != toSchedule.end(); ++it) {
+            if (*(it) == scheduleNode) {
+              toSchedule.erase(it);
+              break;
+            }
+          } // end of iterating through toSchedule
+          break;
+        } else {
+          DEBUG("[Modulo]Failed, to next try time");
+          continue;
+        }
+      }
+    } // end of iterating through tryTime
+    if (!scheduled) {
+      DEBUG("[Modulo]FAILED!!!!Can't schedule the node");
+      return false;
+    }
+  } // end of !toSchedule.empty()
+  return true;
+}
+
+
+int
+Mapper::getModConstrainedTime(Node* node)
+{
+  bool constrained = false;
+  int constrainedTime = INT32_MAX;
+  for (Node* pred : node->getPrevSameIter()) {
+    if (modSchedule->isScheduled(pred)) {
+      // if node is constrained by pred
+      if (isModConstrainedBy(node, pred)) {
+        int earliestTime = modSchedule->getScheduleTime(pred) + pred->getLatency();
+        if (earliestTime < constrainedTime) {
+          constrained = true;
+          constrainedTime = earliestTime;
+        }
+      }
+    }
+  } // end of iterating preds
+  if (!constrained)
+    constrainedTime = asapFeasible->getScheduleTime(node);
+  return constrainedTime;
+}
+
+
+bool
+Mapper::isModConstrainedBy(Node* source, Node* pred) {
+  std::set<Node*> visited;
+  std::queue<Node*> toVisit;
+  toVisit.push(source);
+  while (!toVisit.empty()) {
+    Node* node = toVisit.front();
+    toVisit.pop();
+    // skip visited nodes
+    if (visited.find(node) != visited.end()) 
+      continue;
+    visited.insert(node);
+    if (!modSchedule->isScheduled(node))
+      continue;
+    // nodes in same iter
+    if (node != source) {
+      for (Node* succ : node->getSuccSameIterExMemDep()) {
+        // skip visited nodes
+        if (visited.find(succ) != visited.end()) 
+          continue;
+        // skip not mod scheduled
+        if (!modSchedule->isScheduled(succ))
+          continue;
+        // also check if node constrains the succ
+        if (modSchedule->getScheduleTime(node) + node->getLatency() < modSchedule->getScheduleTime(succ)) {
+          if (succ == pred)
+            return true;
+        }
+        toVisit.push(succ);
+      }
+    }
+    // nodes in next iter
+    for (Node* succ : node->getExDepSuccNextIter()) {
+      // skip visited nodes
+      if (visited.find(succ) != visited.end()) 
+        continue;
+      // skip not mod scheduled
+      if (!modSchedule->isScheduled(succ))
+        continue;
+      if (succ == pred)
+        return true;
+      toVisit.push(succ);
+    }
+  }
+  return false;
 }
 
 
@@ -200,68 +623,25 @@ Mapper::scheduleALAP(DFG* myDFG, int length)
 }
 
 
-bool
-Mapper::hasInterIterConfilct(Node* node, int time, schedule sch)
-{
-  for (auto relatedNode : node->getInterIterRelatedNodes()) {
-    if (sch.nodeSchedule.find(relatedNode->getId()) != sch.nodeSchedule.end()) {
-      if (sch.nodeSchedule[relatedNode->getId()] == time)
-        return true;
-    }
-  }
-  return false;
-}
-
-
-bool
-Mapper::memLdResAvailable(int time, schedule sch)
-{
-  if (!(sch.timeSchedule[time].addBusUsed < cgraInfo.PER_ROW_MEM_AVAILABLE * cgraInfo.X_Dim))
-    return false;
-  if (!(sch.timeSchedule[time + 1].dataBusUsed < cgraInfo.PER_ROW_MEM_AVAILABLE * cgraInfo.X_Dim))
-    return false;
-  if (!(sch.timeSchedule[time].peUsed < cgraSize))
-    return false;
-  if (!(sch.timeSchedule[time + 1].peUsed < cgraSize))
-    return false;
-  return true;
-}
-
-
-bool 
-Mapper::memStResAvailable(int time, schedule sch)
-{
-  if (!(sch.timeSchedule[time].addBusUsed < cgraInfo.PER_ROW_MEM_AVAILABLE * cgraInfo.X_Dim))
-    return false;
-  if (!(sch.timeSchedule[time].dataBusUsed < cgraInfo.PER_ROW_MEM_AVAILABLE * cgraInfo.X_Dim))
-    return false;
-  // 2 pe at same time for a store
-  if (!(sch.timeSchedule[time].peUsed < cgraSize - 1))
-    return false;
-  return true;
-}
-
-
 std::tuple<bool, int> 
 Mapper::checkASAP(Node* node)
 {
   bool canSchedule = true;
   int scheduleTime = 0;
   for (Node* prevNode : node->getPrevSameIterExMemDep()) {
-    if (asapFeasible.nodeSchedule.find(prevNode->getId()) == asapFeasible.nodeSchedule.end()) {
+    if (!asapFeasible->isScheduled(prevNode)) {
       // prev node not scheduled, this node not ready
       canSchedule = false;
       return std::make_tuple(canSchedule, scheduleTime);
     } else {
       // get the earliest time for this node limited by prevNode
-      int ristrictTime = asapFeasible.nodeSchedule[prevNode->getId()] + prevNode->getLatency();
+      int ristrictTime = asapFeasible->getScheduleTime(prevNode) + prevNode->getLatency();
       if (scheduleTime < ristrictTime)
         scheduleTime = ristrictTime;
     }
   }
   return std::make_tuple(canSchedule, scheduleTime);
 }
-
 
 
 int 
@@ -290,35 +670,22 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       // if the node to be scheduled is load address generator
       Node* dataNode = node->getMemRelatedNode();
       // dataNode cannot be scheduled
-      if (asapFeasible.nodeSchedule.find(dataNode->getId()) != asapFeasible.nodeSchedule.end())
+      if (asapFeasible->isScheduled(dataNode))
         FATAL("[ASAP Feasible]ERROR! Data node " << dataNode->getId() << "scheduled before address node " << nodeId);
 
       for (int t = 0; t < mappingPolicy.MAX_LATENCY; t++) {
         // find a time slot
-        if (!(asapFeasible.timeSchedule[t].peUsed < cgraSize)) {
-          // all pe used at time slot t
-          continue;
-        }
         // since we want to place nodes with inter iter dependency
         // in the same physical PE
-        if (hasInterIterConfilct(node, t, asapFeasible)) {
+        if (asapFeasible->hasInterIterConfilct(node, t)) {
           continue;
         }
-        if (hasInterIterConfilct(dataNode, t+1, asapFeasible)) {
+        if (asapFeasible->hasInterIterConfilct(dataNode, t + 1)) {
           continue;
         }
         // now to check mem resources
-        if (memLdResAvailable(t, asapFeasible)) {
-          //if so, allocate those resources
-          asapFeasible.timeSchedule[t].addBusUsed++;
-          asapFeasible.timeSchedule[t + 1].dataBusUsed++;
-          asapFeasible.timeSchedule[t].peUsed++;
-          asapFeasible.timeSchedule[t + 1].peUsed++;
-          //schedule operations
-          asapFeasible.nodeSchedule[nodeId] = t;
-          asapFeasible.nodeSchedule[dataNode->getId()] = t + 1;
-          asapFeasible.timeSchedule[t].nodes.push_back(nodeId);
-          asapFeasible.timeSchedule[t + 1].nodes.push_back(dataNode->getId());
+        if (asapFeasible->memLdResAvailable(t)) {
+          asapFeasible->scheduleLd(node, dataNode, t);
           DEBUG("[ASAP Feasible]load add node: " << nodeId << " scheduled at " << t);
           DEBUG("[ASAP Feasible]load data node: " << dataNode->getId() << " scheduled at " << t + 1);
           //successfully scheduled an operation
@@ -343,18 +710,14 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
     } else {
       //find a time slot
       for (int t = 0; t < mappingPolicy.MAX_LATENCY; t++) {
-        if (!(asapFeasible.timeSchedule[t].peUsed < cgraSize)) {
+        if (!asapFeasible->resAvailable(t)) {
           // all pe used at time slot t
           continue;
         }
-        if (hasInterIterConfilct(node, t, asapFeasible)) {
+        if (asapFeasible->hasInterIterConfilct(node, t)) {
           continue;
         }
-        //allocate resource
-        asapFeasible.timeSchedule[t].peUsed++;
-        // schedule the node
-        asapFeasible.nodeSchedule[nodeId] = t;
-        asapFeasible.timeSchedule[t].nodes.push_back(nodeId);
+        asapFeasible->scheduleOp(node, t);
         DEBUG("[ASAP Feasible]node: " << nodeId << " scheduled at " << t);
         //successfully schedule the operations
         scheduledNodes.insert(nodeId);
@@ -410,38 +773,29 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
         int startTime = (scheduleTime < scheduleTimeRel) ? scheduleTimeRel : scheduleTime;
         for (int t = startTime; t < mappingPolicy.MAX_LATENCY; t++) {
           // start from lastest time
-          if (hasInterIterConfilct(node, t, asapFeasible)) {
+          if (asapFeasible->hasInterIterConfilct(node, t)) {
             continue;
           }
-          if (hasInterIterConfilct(relatedNode, t, asapFeasible)) {
+          if (asapFeasible->hasInterIterConfilct(relatedNode, t)) {
             continue;
           }
           if (node->isLiveOut()) {
             // for live out node, we need to schedule it after loop control node
             Node* loopCtrlNode = myDFG->getLoopCtrlNode();
             // skip node if loop control not scheduled yet
-            if (asapFeasible.nodeSchedule.find(loopCtrlNode->getId()) == asapFeasible.nodeSchedule.end()) {
+            if (!asapFeasible->isScheduled(loopCtrlNode)) {
               // loop control node not scheduled
               break;
             } else {
               // loop control node scheduled
               // need to skip to until after lc node is scheduled 
-              if (!(t > asapFeasible.nodeSchedule[loopCtrlNode->getId()]))
+              if (!(t > asapFeasible->getScheduleTime(loopCtrlNode)))
                 continue;
             }
             DEBUG("[ASAP Feasible]" << nodeId << " live out, with ctrl " << loopCtrlNode->getId());
           }
-          if (memStResAvailable(t, asapFeasible)) {
-            //allocate resources
-            asapFeasible.timeSchedule[t].addBusUsed++;
-            asapFeasible.timeSchedule[t].dataBusUsed++;
-            asapFeasible.timeSchedule[t].peUsed += 2;
-
-            //schedule both operations
-            asapFeasible.nodeSchedule[nodeId] = t;
-            asapFeasible.nodeSchedule[relatedNode->getId()] = t;
-            asapFeasible.timeSchedule[t].nodes.push_back(nodeId);
-            asapFeasible.timeSchedule[t].nodes.push_back(relatedNode->getId());
+          if (asapFeasible->memStResAvailable(t)) {
+            asapFeasible->scheduleSt(node, relatedNode, t);
             DEBUG("[ASAP Feasible]store node: " << nodeId << " scheduled at " << t);
             DEBUG("[ASAP Feasible]store node: " << relatedNode->getId() << " scheduled at " << t);
             //successfully scheduled an operation
@@ -479,30 +833,26 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       std::tie(canSchedule, scheduleTime) = checkASAP(node);
       if (canSchedule) {
         for (int t = scheduleTime; t < mappingPolicy.MAX_LATENCY; t++) {
-          if (hasInterIterConfilct(node, t, asapFeasible))
+          if (asapFeasible->hasInterIterConfilct(node, t))
             continue;
           if (node->isLiveOut()) {
             // for live out node, we need to schedule it after loop control node
             Node* loopCtrlNode = myDFG->getLoopCtrlNode();
             // skip node if loop control not scheduled yet
-            if (asapFeasible.nodeSchedule.find(loopCtrlNode->getId()) == asapFeasible.nodeSchedule.end()) {
+            if (!asapFeasible->isScheduled(loopCtrlNode)) {
               // loop control node not scheduled
               break;
             } else {
               // loop control node scheduled
               // need to skip to until after lc node is scheduled 
-              if (!(t > asapFeasible.nodeSchedule[loopCtrlNode->getId()]))
+              if (!(t > asapFeasible->getScheduleTime(loopCtrlNode)))
                 continue;
             }
             DEBUG("[ASAP Feasible]live out node: " << nodeId << ", ctrl node: " << loopCtrlNode->getId());
           }
           // check resource available
-          if (asapFeasible.timeSchedule[t].peUsed < cgraSize) {
-            //allocate resource
-            asapFeasible.timeSchedule[t].peUsed ++;
-            //schedule node
-            asapFeasible.nodeSchedule[nodeId] = t;
-            asapFeasible.timeSchedule[t].nodes.push_back(nodeId);
+          if (asapFeasible->resAvailable(t)) {
+            asapFeasible->scheduleOp(node, t);
             DEBUG("[ASAP Feasible]node: " << nodeId << " scheduled at " << t);
             //successfully scheduled an operation
             scheduledNodes.insert(nodeId);
@@ -552,21 +902,12 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       if (canScheduleAdd && canScheduleData) {
         int startTime = (scheduleTimeAdd < (scheduleTimeData - 1)) ? (scheduleTimeData - 1) : scheduleTimeAdd;
         for (int t = startTime; t < mappingPolicy.MAX_LATENCY; t++) {
-          if (hasInterIterConfilct(addNode, t, asapFeasible))
+          if (asapFeasible->hasInterIterConfilct(addNode, t))
             continue;
-          if (hasInterIterConfilct(dataNode, t + 1, asapFeasible))
+          if (asapFeasible->hasInterIterConfilct(dataNode, t + 1))
             continue;
-          if (memLdResAvailable(t, asapFeasible)) {
-            //allocate resources
-            asapFeasible.timeSchedule[t].addBusUsed++;
-            asapFeasible.timeSchedule[t + 1].dataBusUsed++;
-            asapFeasible.timeSchedule[t].peUsed++;
-            asapFeasible.timeSchedule[t + 1].peUsed++;
-            //schedule operations
-            asapFeasible.nodeSchedule[addNode->getId()] = t;
-            asapFeasible.nodeSchedule[dataNode->getId()] = t + 1;
-            asapFeasible.timeSchedule[t].nodes.push_back(addNode->getId());
-            asapFeasible.timeSchedule[t + 1].nodes.push_back(dataNode->getId());
+          if (asapFeasible->memLdResAvailable(t)) {
+            asapFeasible->scheduleLd(addNode, dataNode, t);
             DEBUG("[ASAP Feasible]load add node: " << addNode->getId() << " scheduled at " << t);
             DEBUG("[ASAP Feasible]load data node: " << dataNode->getId() << " scheduled at " << t + 1);
 
@@ -608,22 +949,21 @@ Mapper::checkALAP(Node* node, int II)
   std::vector<Node*> succNodes = node->getSuccSameIterExMemDep();
   if (succNodes.size() > 0) {
     for (Node* succNode : node->getSuccSameIterExMemDep()) {
-      if (alapFeasible.nodeSchedule.find(succNode->getId()) == alapFeasible.nodeSchedule.end()) {
+      if (!alapFeasible->isScheduled(succNode)) {
         canSchedule = false;
         return std::make_tuple(canSchedule, scheduleTime);
       } else {
-        int restrictTime = alapFeasible.nodeSchedule[succNode->getId()] - node->getLatency();
+        int restrictTime = alapFeasible->getScheduleTime(succNode) - node->getLatency();
         if (restrictTime < scheduleTime)
           scheduleTime = restrictTime;
       }
     }
   } else {
-    // maybe this is not needed since we use this func after all end nodes are scheduled
-    scheduleTime = asapFeasible.nodeSchedule[node->getId()] + II - node->getLatency();
+    // this is before the next apprearance of the node
+    scheduleTime = asapFeasible->getScheduleTime(node) + II - node->getLatency();
   }
   return std::make_tuple(canSchedule, scheduleTime);
 }
-
 
 
 void
@@ -637,26 +977,17 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
     // if there are nodes scheduled through an iter
     bool scheduled = false;
     // the last time this node can be scheduled at
-    int lastTime = asapFeasible.nodeSchedule[node->getId()] + II - node->getLatency();
+    int lastTime = asapFeasible->getScheduleTime(node) + II - node->getLatency();
     if (node->isLoadDataBusRead()) {
       Node* addNode = node->getMemRelatedNode();
       for (int t = lastTime; t > -1; t--) {
-        if (hasInterIterConfilct(addNode, t - 1, alapFeasible))
+        if (alapFeasible->hasInterIterConfilct(addNode, t - 1))
           continue;
-        if (hasInterIterConfilct(node, t, alapFeasible))
+        if (alapFeasible->hasInterIterConfilct(node, t))
           continue;
-        if (memLdResAvailable(t - 1, alapFeasible)) {
+        if (alapFeasible->memLdResAvailable(t - 1)) {
           // enough resources
-          //allocate resources
-          alapFeasible.timeSchedule[t - 1].addBusUsed++;
-          alapFeasible.timeSchedule[t].dataBusUsed++;
-          alapFeasible.timeSchedule[t - 1].peUsed++;
-          alapFeasible.timeSchedule[t].peUsed++;
-          //schedule operations
-          alapFeasible.nodeSchedule[addNode->getId()] = t - 1;
-          alapFeasible.nodeSchedule[node->getId()] = t;
-          alapFeasible.timeSchedule[t - 1].nodes.push_back(addNode->getId());
-          alapFeasible.timeSchedule[t].nodes.push_back(node->getId());
+          alapFeasible->scheduleLd(addNode, node, t - 1);
           DEBUG("[ALAP Feasible]load add node: " << addNode->getId() << " scheduled at " << t - 1);
           DEBUG("[ALAP Feasible]load data node: " << node->getId() << " scheduled at " << t);
           rest.erase(node->getId());
@@ -668,20 +999,12 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
     } else if (node->isStoreDataBusWrite()) {
       Node* addNode = node->getMemRelatedNode();
       for (int t = lastTime; t > -1; t--) {
-        if (hasInterIterConfilct(addNode, t, alapFeasible))
+        if (alapFeasible->hasInterIterConfilct(addNode, t))
           continue;
-        if (hasInterIterConfilct(node, t, alapFeasible))
+        if (alapFeasible->hasInterIterConfilct(node, t))
           continue;
-        if (memStResAvailable(t, alapFeasible)) {
-          //allocate resources
-          alapFeasible.timeSchedule[t].addBusUsed++;
-          alapFeasible.timeSchedule[t].dataBusUsed++;
-          alapFeasible.timeSchedule[t].peUsed += 2;
-          //schedule both operations
-          alapFeasible.nodeSchedule[node->getId()] = t;
-          alapFeasible.nodeSchedule[addNode->getId()] = t;
-          alapFeasible.timeSchedule[t].nodes.push_back(node->getId());
-          alapFeasible.timeSchedule[t].nodes.push_back(addNode->getId());
+        if (alapFeasible->memStResAvailable(t)) {
+          alapFeasible->scheduleSt(addNode, node, t);
           DEBUG("[ALAP Feasible]store add node: " << addNode->getId() << " scheduled at " << t);
           DEBUG("[ALAP Feasible]store data node: " << node->getId() << " scheduled at " << t);
           //successfully scheduled an operation
@@ -693,14 +1016,14 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
       } // end of iterating through time
     } else {
       for (int t = lastTime; t > -1; t--) {
-        if (hasInterIterConfilct(node, t, alapFeasible))
+        if (alapFeasible->hasInterIterConfilct(node, t))
           continue;
         if (node->isLoopCtrl()) {
           // loop control node shoud be before live out nodes
           std::vector<Node*> liveOutNodes = myDFG->getLiveOutNodes();
           bool constrained = false;
           for (Node* liveOutNode : liveOutNodes) {
-            if (!(asapFeasible.nodeSchedule[liveOutNode->getId()] > t)) {
+            if (!(asapFeasible->getScheduleTime(liveOutNode) > t)) {
               constrained = true;
               break;
             }
@@ -710,12 +1033,8 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
           else
             DEBUG("[ALAP Feasible]loop ctrl node: " << node->getId());
         }
-        if (alapFeasible.timeSchedule[t].peUsed < cgraSize) {
-          //allocate resource
-          alapFeasible.timeSchedule[t].peUsed ++;
-          //schedule node
-          alapFeasible.nodeSchedule[node->getId()] = t;
-          alapFeasible.timeSchedule[t].nodes.push_back(node->getId());
+        if (alapFeasible->resAvailable(t)) {
+          alapFeasible->scheduleOp(node, t);
           DEBUG("[ALAP Feasible]node: " << node->getId() << " scheduled at " << t);
           //successfully scheduled an operation
           rest.erase(node->getId());
@@ -753,20 +1072,12 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
           // earlier of the two
           int lasttTime = (scheduleTime < scheduleTimeRel) ? scheduleTime : scheduleTimeRel;
           for (int t = lasttTime; t > -1; t--) {
-            if (hasInterIterConfilct(node, t, alapFeasible))
+            if (alapFeasible->hasInterIterConfilct(node, t))
               continue;
-            if (hasInterIterConfilct(relatedNode, t, alapFeasible))
+            if (alapFeasible->hasInterIterConfilct(relatedNode, t))
               continue;
-            if (memStResAvailable(t, alapFeasible)) {
-              //allocate resources
-              alapFeasible.timeSchedule[t].addBusUsed++;
-              alapFeasible.timeSchedule[t].dataBusUsed++;
-              alapFeasible.timeSchedule[t].peUsed += 2;
-              //schedule both operations
-              alapFeasible.nodeSchedule[node->getId()] = t;
-              alapFeasible.nodeSchedule[relatedNode->getId()] = t;
-              alapFeasible.timeSchedule[t].nodes.push_back(node->getId());
-              alapFeasible.timeSchedule[t].nodes.push_back(relatedNode->getId());
+            if (alapFeasible->memStResAvailable(t)) {
+              alapFeasible->scheduleSt(node, relatedNode, t);
               DEBUG("[ALAP Feasible]store node: " << relatedNode->getId() << " scheduled at " << t);
               DEBUG("[ALAP Feasible]store node: " << node->getId() << " scheduled at " << t);
               //successfully scheduled an operation
@@ -798,22 +1109,13 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
         if (canScheduleAdd && canScheduleData) {
           int lastTime = (scheduleTimeAdd < (scheduleTimeData - 1)) ? scheduleTimeAdd : (scheduleTimeData - 1);
           for (int t = lastTime; t > -1; t--) {
-            if (hasInterIterConfilct(addNode, t, alapFeasible))
+            if (alapFeasible->hasInterIterConfilct(addNode, t))
               continue;
-            if (hasInterIterConfilct(dataNode, t + 1, alapFeasible))
+            if (alapFeasible->hasInterIterConfilct(dataNode, t + 1))
               continue;
-            if (memLdResAvailable(t, alapFeasible)) {
+            if (alapFeasible->memLdResAvailable(t)) {
               // enough resources
-              //allocate resources
-              alapFeasible.timeSchedule[t].addBusUsed++;
-              alapFeasible.timeSchedule[t + 1].dataBusUsed++;
-              alapFeasible.timeSchedule[t].peUsed++;
-              alapFeasible.timeSchedule[t + 1].peUsed++;
-              //schedule operations
-              alapFeasible.nodeSchedule[addNode->getId()] = t;
-              alapFeasible.nodeSchedule[dataNode->getId()] = t + 1;
-              alapFeasible.timeSchedule[t].nodes.push_back(addNode->getId());
-              alapFeasible.timeSchedule[t + 1].nodes.push_back(dataNode->getId());
+              alapFeasible->scheduleLd(addNode, dataNode, t);
               DEBUG("[ALAP Feasible]load add node: " << addNode->getId() << " scheduled at " << t);
               DEBUG("[ALAP Feasible]load data node: " << dataNode->getId() << " scheduled at " << t + 1);
               scheduledNodes.insert(dataNode->getId());
@@ -829,14 +1131,14 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
         std::tie(canSchedule, scheduleTime) = checkALAP(node, II);
         if (canSchedule) {
           for (int t = scheduleTime; t > -1; t--) {
-            if (hasInterIterConfilct(node, t, alapFeasible))
+            if (alapFeasible->hasInterIterConfilct(node, t))
               continue;
             if (node->isLoopCtrl()) {
               // make sure loop control is before all live out nodes
               std::vector<Node*> liveOutNodes = myDFG->getLiveOutNodes();
               bool constrained = false;
               for (Node* liveOutNode : liveOutNodes) {
-                if (!(asapFeasible.nodeSchedule[liveOutNode->getId()] > t)) {
+                if (!(asapFeasible->getScheduleTime(liveOutNode) > t)) {
                   constrained = true;
                   break;
                 }
@@ -846,12 +1148,8 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
               else
                 DEBUG("[ALAP Feasible]loop ctrl node: " << node->getId());
             }
-            if (alapFeasible.timeSchedule[t].peUsed < cgraSize) {
-              //allocate resource
-              alapFeasible.timeSchedule[t].peUsed ++;
-              //schedule node
-              alapFeasible.nodeSchedule[node->getId()] = t;
-              alapFeasible.timeSchedule[t].nodes.push_back(nodeId);
+            if (alapFeasible->resAvailable(t)) {
+              alapFeasible->scheduleOp(node, t);
               DEBUG("[ALAP Feasible]node: " << nodeId << " scheduled at " << t);
               //successfully scheduled an operation
               scheduledNodes.insert(nodeId);
@@ -868,4 +1166,56 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
     } else
       FATAL("[ALAP Feasible]ERROR! " << rest.size() << " nodes can't be scheduled");
   } // end of rest.size() > 0
+}
+
+
+std::vector<Node*>
+Mapper::getSortedNodes(DFG* myDFG)
+{
+  std::vector<std::set<Node*>> sortedSets;
+  std::set<Node*> visitedNodes;
+  // first we sort all the cycles and the nodes connecting them
+  for (auto cycle : myDFG->getCycles()) {
+    // skip cycles with only 1 node
+    if (cycle.size() == 1)
+      continue;
+    // first push in the nodes connecting this cycle to visited cycles
+    std::set<Node*> nodesBetween = getNodesBetween(cycle, visitedNodes);
+    sortedSets.push_back(nodesBetween);
+    visitedNodes.insert(nodesBetween.begin(), nodesBetween.end());
+    // next push in the cycle
+    sortedSets.push_back(cycle);
+    visitedNodes.insert(cycle.begin(), cycle.end());
+  }
+  // nodes left not in cycle or path between
+  std::set<Node*> nodesLeft;
+  for (int nodeId : myDFG->getNodeIdSet()) {
+    Node* node = myDFG->getNode(nodeId);
+    if (visitedNodes.find(node) == visitedNodes.end())
+      nodesLeft.insert(node);
+  }
+  sortedSets.push_back(nodesLeft);
+
+  std::vector<Node*> sortedNodes;
+  // each set in the sortedSets are now sorted using asap schedule
+  for (auto nodeSet : sortedSets) {
+    // nodes in nodeSet sorted asap high to low
+    std::vector<Node*> asapSorted;
+    for (Node* node : nodeSet) {
+      auto it = asapSorted.begin();
+      for (; it != asapSorted.end(); ++it) {
+        Node* nodeIt = *it;
+        if (asapFeasible->getScheduleTime(node) > asapFeasible->getScheduleTime(nodeIt))
+          break;
+      }
+      asapSorted.insert(it, node);
+    }
+    for (Node* node : asapSorted)
+      sortedNodes.push_back(node);
+  }
+  DEBUG("[Sorted Nodes]Done sorting with nodes ordered as:");
+  for (auto node : sortedNodes)
+    DEBUG("[Sorted Nodes]" << node->getId());
+
+  return sortedNodes;
 }

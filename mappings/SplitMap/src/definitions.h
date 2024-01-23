@@ -30,7 +30,6 @@ struct Mapping_Policy
   int MAX_II;
   int MAX_SCHED_TRY;
   float LAMBDA;
-  int IMS;  
 };
 
 enum Instruction_Operation

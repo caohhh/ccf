@@ -283,6 +283,17 @@ DFG::getPathMaxII(Node* currentNode, Node* destNode, std::set<Node*>& path, int 
         // reached dest
         pathLatency = prevNode->getLatency() + prevLat;
         pathDistance = getArc(prevNode, currentNode)->getDistance() + prevDist;
+        // if we reached dest, this forms a cycle in the DFG, record the cycle
+        pathII = float(pathLatency) / float(pathDistance);
+        std::set<Node*> foundPath = path;
+        foundPath.insert(destNode);
+        // in cycles, find where pathII > cycleII
+        auto cycleIt = cycles.begin();
+        for (; cycleIt != cycles.end(); ++cycleIt) {
+          if (pathII > std::get<1>(*cycleIt))
+            break;
+        }
+        cycles.insert(cycleIt, std::make_tuple(foundPath, pathII));
         pathFound = true;
       } else {
         // not at dest yet
@@ -430,4 +441,30 @@ DFG::getLiveOutNodes()
       liveOutNodes.push_back(node);
   }
   return liveOutNodes;
+}
+
+
+std::vector<std::set<Node*>> 
+DFG::getCycles()
+{
+  std::vector<std::set<Node*>> retCycles;
+  for (auto cycle : cycles)  {
+    // we also omit cycles completely contained in larger cycles
+    bool contained = false;
+    for (auto prevCycle : retCycles) {
+      contained = true;
+      for (Node* node : std::get<0>(cycle)) {
+        if (prevCycle.find(node) == prevCycle.end()) {
+          contained = false;
+          break;
+        }
+      }
+      if (contained)
+        break;
+    }
+    if (!contained) {
+      retCycles.push_back(std::get<0>(cycle));
+    }
+  }
+  return retCycles;
 }
