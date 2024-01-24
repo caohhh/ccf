@@ -27,6 +27,21 @@ Node::Node(Instruction_Operation ins, Datatype dt, int laten, int id, std::strin
 }
 
 
+Node::Node(const Node& originalNode)
+{
+  uid = originalNode.uid;
+  ins = originalNode.ins;
+  dataType = originalNode.dataType;
+  latency = originalNode.latency;
+  name = originalNode.name;
+  condBrId = originalNode.condBrId;
+  brPath = originalNode.brPath;
+  selfLoop = originalNode.selfLoop;
+  liveOut = originalNode.liveOut;
+  loopCtrl = originalNode.loopCtrl;
+}
+
+
 Node::~Node()
 {
 }

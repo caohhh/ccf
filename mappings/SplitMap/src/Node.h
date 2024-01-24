@@ -19,7 +19,8 @@ class Node
 {
   public:
     Node(Instruction_Operation ins, Datatype dt, int laten, int id, std::string nodeName, nodePath brPath, int condBrId);
-    virtual ~Node();
+    ~Node();
+    Node(const Node& originalNode);
 
     // returns the unique ID of the node
     int getId();

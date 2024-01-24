@@ -25,6 +25,46 @@ DFG::~DFG()
 }
 
 
+DFG::DFG(const DFG& originalDFG)
+{
+  // rng here at construction
+  std::random_device rd;
+  rng = std::mt19937(rd());
+  pathCount = originalDFG.pathCount;
+  nodeMaxId = originalDFG.nodeMaxId;
+  arcMaxId = originalDFG.arcMaxId;
+
+  // get all the nodes and make new node
+  for (Node* node : originalDFG.nodeSet)
+    nodeSet.push_back(new Node(*node));
+  for (Node* constNode : originalDFG.constants)
+    constants.push_back(new Node(*constNode));
+  // get all the arcs and make new arc
+  constArcSet = originalDFG.constArcSet;
+  for (Arc* arc : originalDFG.arcSet) {
+    Arc* newArc = new Arc(*arc, this);
+    Node* nodeFrom = newArc->getFromNode();
+    Node* nodeTo = newArc->getToNode();
+    if (newArc->getDependency() == LoadDep) {
+      nodeFrom->setLoadAddressGenerator(nodeTo);
+      nodeTo->setLoadDataBusRead(nodeFrom);
+    }
+    if (newArc->getDependency() == StoreDep) {
+      nodeFrom->setStoreAddressGenerator(nodeTo);
+      nodeTo->setStoreDataBusWrite(nodeFrom);
+    }
+    if (nodeFrom->getId() == nodeTo->getId())
+      nodeFrom->setSelfLoop(newArc);
+    else {
+      //connect those nodes through this new arc
+      nodeTo->addPredArc(newArc);
+      nodeFrom->addSuccArc(newArc);
+    }
+    arcSet.push_back(newArc);
+  }
+}
+
+
 bool
 DFG::hasNode(int nodeId)
 {

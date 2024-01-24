@@ -8,14 +8,18 @@
 #define __SPLITMAP_ARC_H__
 
 #include "Node.h"
+#include "DFG.h"
 
 class Node;
+class DFG;
 
 class Arc
 {
   public:
     Arc(Node* fromNode, Node* toNode, int ID, int distance, DataDepType dep, int opOrder);
-    virtual ~Arc();
+    ~Arc();
+    // constructor to copy existing arc to the new DFG
+    Arc(const Arc& originalArc, DFG* newDFG);
 
     //Get the node that this edge is its incoming edge
     Node* getToNode();

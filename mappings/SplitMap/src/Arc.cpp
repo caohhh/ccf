@@ -20,6 +20,18 @@ Arc::~Arc()
 }
 
 
+Arc::Arc(const Arc& originalArc, DFG* newDFG)
+{
+  id = originalArc.id;
+  distance = originalArc.distance;
+  dependency = originalArc.dependency;
+  operandOrder = originalArc.operandOrder;
+  from = newDFG->getNode(originalArc.from->getId());
+  to = newDFG->getNode(originalArc.to->getId());
+}
+
+
+
 Node* 
 Arc::getToNode()
 {

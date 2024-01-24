@@ -13,11 +13,17 @@
 #include "Node.h"
 #include "Arc.h"
 
+struct Const_Arc;
+class Arc;
+class Node;
+
 class DFG
 {
   public:
     DFG();
-    virtual ~DFG();
+    ~DFG();
+    // copy constructor
+    DFG(const DFG& originalDFG);
 
     // returns if node of the given ID exists in the DFG
     bool hasNode(int nodeId);
