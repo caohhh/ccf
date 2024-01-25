@@ -16,6 +16,7 @@
 struct Const_Arc;
 class Arc;
 class Node;
+class routeNode;
 
 class DFG
 {
@@ -33,6 +34,9 @@ class DFG
 
     // insert a node into the DFG
     void insertNode(Node* node);
+
+    // insert a routing node into the DFG
+    void insertNode(routeNode* routeNode);
 
     // make an edge between two nodes
     void makeArc(Node* nodeFrom, Node* nodeTo, int distance, DataDepType dep, int opOrder);

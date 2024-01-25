@@ -104,6 +104,9 @@ class moduloSchedule : public schedule
     // outputs a dot file of the modulo schedule
     void print();
 
+    // returns the II for this modulo schedule
+    int getII();
+
   private:
     int II;
     // map of node : mod time

@@ -303,6 +303,16 @@ Node::getLatency()
 }
 
 
+bool
+Node::isMemNode()
+{
+  if (inputDataBus || loadOutputAddressBus || storeOutputAddressBus || outputDataBus)
+    return true;
+  else
+    return false;
+}
+
+
 bool 
 Node::isLoadDataBusRead()
 {
@@ -482,12 +492,19 @@ Node::isLoopCtrl()
 
 
 /***********************routeNode********************************/
-routeNode::routeNode(int uid, Node* prevNode, nodePath path) :
-Node(route, prevNode->getDataType(), 1, uid, "route", path, -1)
+routeNode::routeNode(Node* prevNode, nodePath path) :
+Node(route, prevNode->getDataType(), 1, -1, "route", path, -1)
 {
 }
 
 
 routeNode::~routeNode()
 {
+}
+
+
+void
+routeNode::setId(int uid)
+{
+  this->uid = uid;
 }

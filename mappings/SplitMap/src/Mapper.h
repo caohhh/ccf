@@ -36,7 +36,6 @@ class Mapper
     std::map<int, int> alapSchedule;
     // rng
     std::mt19937 rng;
-    
     // the ASAP schedule considering resources available
     schedule* asapFeasible;
     // the ALAP schedule considering resources available
@@ -101,11 +100,14 @@ class Mapper
     int getModConstrainedTime(Node* node);
 
     // returns if source node is constrained by its given predcessor in modulo scheduling
+    // note that for now this is unused, maybe we could delete it
     bool isModConstrainedBy(Node* source, Node* pred);
 
     // modulo scheduling of the DFG
     bool scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II);
 
+    // based on the finished modulo schedule, insert routing nodes
+    bool insertRoute(DFG* myDFG);
 };
 
 #endif

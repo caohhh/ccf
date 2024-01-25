@@ -219,10 +219,21 @@ Mapper::generateMap(Parser* myParser)
         DEBUG("[Mapper]modulo schedule attempt " << modAttempt << " of " << mappingPolicy.MODULO_SCHEDULING_ATTEMPTS);
         if (scheduleModulo(originalDFG, sortedNodes, currentII)) {
           DEBUG("[Mapper]Modulo schedule complete and successful");
-          modScheduleSuccess = true;
-          break;
-        }
-      }
+          modSchedule->print();
+          // next, for nodes that can't be immediately accessed, insert routing nodes
+          // a new DFG to insert all the routing nodes inserted
+          DFG* routeDFG = new DFG(*originalDFG);
+          if (!insertRoute(routeDFG)) {
+            DEBUG("[Mapper]insert routing failed, retry modulo schedule");
+            continue;
+          } else {
+            modScheduleSuccess = true;
+            DEBUG("[Mapper]insert route success");
+            break;
+          }
+        } else
+          DEBUG("[Mapper]Modulo schedule attempt failed");
+      } // end of modulo schedule attempts
       if (!modScheduleSuccess) {
         DEBUG("[Mapper]Failed to generate modulo schedule for current II, increasing II");
         currentII++;
@@ -313,7 +324,7 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
       if (earliestStart > startTime)
         startTime = earliestStart;
     }
-    int endTime = alapFeasible->getScheduleTime(scheduleNode);
+    int endTime = std::get<1>(checkModulo(scheduleNode));
     DEBUG("[Modulo]start time: " << startTime <<", end time: " << endTime);
     if (startTime > endTime) {
       DEBUG("[Modulo]Failed: startTime > endTime");
@@ -424,17 +435,17 @@ int
 Mapper::getModConstrainedTime(Node* node)
 {
   bool constrained = false;
-  int constrainedTime = INT32_MAX;
+  int constrainedTime = INT32_MIN;
   for (Node* pred : node->getPrevSameIter()) {
     if (modSchedule->isScheduled(pred)) {
       // if node is constrained by pred
-      if (isModConstrainedBy(node, pred)) {
+      //if (isModConstrainedBy(node, pred)) {
         int earliestTime = modSchedule->getScheduleTime(pred) + pred->getLatency();
-        if (earliestTime < constrainedTime) {
+        if (earliestTime > constrainedTime) {
           constrained = true;
           constrainedTime = earliestTime;
         }
-      }
+      //}
     }
   } // end of iterating preds
   if (!constrained)
@@ -1218,4 +1229,84 @@ Mapper::getSortedNodes(DFG* myDFG)
     DEBUG("[Sorted Nodes]" << node->getId());
 
   return sortedNodes;
+}
+
+
+bool
+Mapper::insertRoute(DFG* myDFG)
+{
+  DEBUG("[Route]Started");
+  // first get routes needed
+  for (int nodeId : myDFG->getNodeIdSet()) {
+    Node* node = myDFG->getNode(nodeId);
+    // time data of this node is ready
+    int readyTime = modSchedule->getScheduleTime(node) + node->getLatency();
+    // make sure nodes are scheduled here
+    if (!modSchedule->isScheduled(node))
+      FATAL("ERROR!!!All nodes should be modulo scheduled by now");
+    // vector for all the succs that need routing and their need time
+    std::vector<std::tuple<Node*, int>> needRoute;
+    // check all successors of the node
+    for (Node* succ : node->getNextNodes()) {
+      // skip mem nodes
+      if (node->getMemRelatedNode() == succ)
+        continue;
+      // the time this data is needed for the succ node
+      int needTime = modSchedule->getScheduleTime(succ) + myDFG->getArc(node, succ)->getDistance() * modSchedule->getII();
+      if (needTime < readyTime) {
+        FATAL("[Route]ERROR!!!!! Data ready later than needed" <<
+              "Node: " << nodeId << " ready time: " << readyTime <<
+              "Succ node: " << succ->getId() << " Need time: " << needTime);
+      }
+      if (needTime > readyTime) {
+        // need routing node, need route is sorted from needtime low to high
+        auto needRouteIt = needRoute.begin();
+        for (;needRouteIt != needRoute.end(); ++needRouteIt) {
+          if (needTime < std::get<1>(*needRouteIt))
+            break;
+        }
+        needRoute.insert(needRouteIt, std::make_tuple(succ, needTime));
+      }
+    } // end of checking all succs
+    if (!needRoute.empty()) {
+      // if there need routing to succs for this node
+      DEBUG("[Route]Node: " << nodeId << " with ready time: " << readyTime << " needs routing to");
+      // lastest copy of the data ready at time
+      int curReadyTime = readyTime;
+      // lastest copy of the data ready at node
+      Node* curReadyNode = node;
+      for (auto needRouteIt : needRoute) {
+        // data is needed at node
+        Node* needNode = std::get<0>(needRouteIt);
+        // data is needed at time
+        int needTime = std::get<1>(needRouteIt);
+        DEBUG("[Route]Succ: " << needNode->getId() << " need time: " << needTime);
+        while (curReadyTime < needTime) {
+          if (!modSchedule->resAvailable(curReadyTime)) {
+            DEBUG("[Route]Not enough resources for a routing node at time " << curReadyTime);
+            DEBUG("[Route]Getting a new modulo schedule");
+            return false;
+          }
+          // enough resources for a routing node
+          // add a routing node for the time
+          routeNode* newRouteNode = new routeNode(curReadyNode, curReadyNode->getBrPath());
+          myDFG->insertNode(newRouteNode);
+          // connect it to the prev node
+          myDFG->makeArc(curReadyNode, newRouteNode, 0, TrueDep, 0);
+          // modulo shcedule the new route node
+          modSchedule->scheduleOp(newRouteNode, curReadyTime);
+          DEBUG("[Route]Route Node: " << newRouteNode->getId() << " at time " << curReadyTime << " added");
+          // update current ready time and node
+          curReadyNode = newRouteNode;
+          curReadyTime += newRouteNode->getLatency();
+        } // end of reaching need time
+        // disconnect need node from original node
+        Arc* arcOld = myDFG->getArc(node, needNode);
+        myDFG->removeArc(arcOld->getId());
+        // connect it to ready node
+        myDFG->makeArc(curReadyNode, needNode, arcOld->getDependency(), arcOld->getDependency(), arcOld->getOperandOrder());
+      } // end of checking all routes needed to be added
+    }
+  } // end of checking all nodes
+  return true;
 }

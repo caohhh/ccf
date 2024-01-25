@@ -98,6 +98,9 @@ class Node
     //return the latency for this node
     int getLatency();
 
+    // returns if the nodes a load or store related node
+    bool isMemNode();
+
     // return if the node is a load read node
     bool isLoadDataBusRead();
 
@@ -140,9 +143,11 @@ class Node
     // return if the node is a loop control node
     bool isLoopCtrl();
 
-  private:
+  protected:
     // unique id of Node in DFG
     int uid;
+
+  private:
     // instruction of the node
     Instruction_Operation ins;
     // data type of the operation
@@ -183,8 +188,12 @@ class Node
 class routeNode : public Node
 {
   public:
-    routeNode(int uid, Node* prevNode, nodePath path);
+    // route node by default have a uid of -1, their uid should be created when inserting into a DFG
+    routeNode(Node* prevNode, nodePath path);
     ~routeNode();
+
+    // sets the id for this routing node
+    void setId(int uid);
 };
 
 #endif

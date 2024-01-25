@@ -19,7 +19,7 @@ class Arc
     Arc(Node* fromNode, Node* toNode, int ID, int distance, DataDepType dep, int opOrder);
     ~Arc();
     // constructor to copy existing arc to the new DFG
-    Arc(const Arc& originalArc, DFG* newDFG);
+    Arc(const Arc& originalArc, Node* newFromNode, Node* newToNode);
 
     //Get the node that this edge is its incoming edge
     Node* getToNode();

@@ -42,9 +42,19 @@ DFG::DFG(const DFG& originalDFG)
   // get all the arcs and make new arc
   constArcSet = originalDFG.constArcSet;
   for (Arc* arc : originalDFG.arcSet) {
-    Arc* newArc = new Arc(*arc, this);
-    Node* nodeFrom = newArc->getFromNode();
-    Node* nodeTo = newArc->getToNode();
+    int oldFromId = arc->getFromNode()->getId();
+    int oldToId = arc->getToNode()->getId();
+    Node* nodeFrom = nullptr;
+    Node* nodeTo = nullptr;
+    for (Node* node : nodeSet) {
+      if (node->getId() == oldFromId)
+        nodeFrom = node;
+      if (node->getId() == oldToId)
+        nodeTo = node;
+    }
+    if (nodeFrom == nullptr || nodeTo == nullptr)
+      FATAL("[DFG Copy]Error: Arc with node not in set");
+    Arc* newArc = new Arc(*arc, nodeFrom, nodeTo);
     if (newArc->getDependency() == LoadDep) {
       nodeFrom->setLoadAddressGenerator(nodeTo);
       nodeTo->setLoadDataBusRead(nodeFrom);
@@ -87,6 +97,14 @@ DFG::insertNode(Node* node)
     constants.push_back(node);
   else
     nodeSet.push_back(node);
+}
+
+
+void
+DFG::insertNode(routeNode* newRouteNode)
+{
+  newRouteNode->setId(++nodeMaxId);
+  nodeSet.push_back(newRouteNode);  
 }
 
 
@@ -168,10 +186,10 @@ DFG::removeArc(int arcId)
 {
   for (auto arcIt = arcSet.begin(); arcIt != arcSet.end(); arcIt++) {
     if ((*arcIt)->getId() == arcId) {
-      // delete arc from set
-      arcSet.erase(arcIt, arcIt + 1);
       (*arcIt)->getFromNode()->removeSuccArc(arcId);
       (*arcIt)->getToNode()->removePredArc(arcId);
+      // delete arc from set
+      arcSet.erase(arcIt, arcIt + 1);
       return;
     }
   }
@@ -206,7 +224,7 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
           minDist = dist;
       }
       // create new routing node
-      Node* newRouteNode = new routeNode(++nodeMaxId, nodeIt, nodeIt->getBrPath());
+      routeNode* newRouteNode = new routeNode(nodeIt, nodeIt->getBrPath());
       insertNode(newRouteNode);
       // we put the new route node the same iter as minNode
       makeArc(nodeIt, newRouteNode, minDist, TrueDep, 0);
@@ -262,7 +280,7 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
 
         if (removeNumNone != 0) {
           // add a routing node in none set
-          Node* newRouteNode = new routeNode(++nodeMaxId, nodeIt, none);
+          routeNode* newRouteNode = new routeNode(nodeIt, none);
           insertNode(newRouteNode);
           // connect it to the prev node
           makeArc(nodeIt, newRouteNode, 0, TrueDep, 0);
@@ -280,7 +298,7 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
 
         if (removeNumPath != 0) {
           // add a routing node in none set
-          Node* newRouteNode = new routeNode(++nodeMaxId, nodeIt, (nodePath)path);
+          routeNode* newRouteNode = new routeNode(nodeIt, (nodePath)path);
           insertNode(newRouteNode);
           // connect it to the prev node
           makeArc(nodeIt, newRouteNode, 0, TrueDep, 0);

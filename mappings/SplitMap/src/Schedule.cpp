@@ -338,3 +338,10 @@ moduloSchedule::print()
   dotFile << "\n} \n";
   dotFile.close();
 }
+
+
+int
+moduloSchedule::getII()
+{
+  return II;
+}
