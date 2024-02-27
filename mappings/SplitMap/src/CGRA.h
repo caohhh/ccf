@@ -9,6 +9,7 @@
 #include <vector>
 #include <tuple>
 #include "definitions.h"
+#include "Node.h"
 
 class PE;
 class Row;
@@ -46,6 +47,12 @@ class CGRA
     // returns if toPE can access data produced by fromPE
     bool isAccessable(PE* fromPE, PE* toPE);
 
+    // map a node at the given PE
+    void mapNode(Node* node, PE* pe);
+
+    // remove a mapped node
+    void removeNode(Node* node);
+
   private:
     // size x of this CGRA, as in number of rows
     int xDim;
@@ -73,6 +80,9 @@ class PE
 
     // map a node with the ID at the PE
     void mapNode(int nodeId);
+    
+    // remove a node with the ID at the PE
+    void removeNode(int nodeId);
 
   private:
     // x coordinate of the PE
@@ -96,7 +106,13 @@ class Row
 
     // returns the <x, t> coordinate of the row
     std::tuple<int, int> getCoord();
+
+    // map a mem node at the given row
+    void mapNode(Node* node);
     
+    // remove a mem node at the given row
+    void removeNode(Node* node);
+
   private:
     // x coordinate of the row
     int x;

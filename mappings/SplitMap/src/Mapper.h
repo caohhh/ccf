@@ -117,6 +117,10 @@ class Mapper
 
     // returns the potential PEs this node can be mapped to
     std::vector<PE*> getPotentialPos(Node* node);
+
+    // attempt to remap and find a mapping for a node without mapping position
+    // returns if a valid position is found
+    bool remap(Node* failedNode);
 };
 
 #endif

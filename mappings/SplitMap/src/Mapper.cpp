@@ -1320,9 +1320,9 @@ bool
 Mapper::falconPlace(DFG* myDFG, int II)
 {
   DEBUG("[Falcon]Start placing");
-  // set of the ids of all the nodes in the DFG
-  auto nodeIdSet = myDFG->getNodeIdSet();
-  int searchSpace = cgraSize * II * nodeIdSet.size() * mappingPolicy.MAX_MAPPING_ATTEMPTS;
+  // set of the ids of the nodes left to map, start with all the nodes in the DFG
+  auto nodeSetToMap = myDFG->getNodeIdSet();
+  int searchSpace = cgraSize * II * nodeSetToMap.size() * mappingPolicy.MAX_MAPPING_ATTEMPTS;
   DEBUG("[Falcon]Max search space: " << searchSpace);
 
   /************************************************************************************************/
@@ -1341,103 +1341,90 @@ Mapper::falconPlace(DFG* myDFG, int II)
 
   // now maybe most of these won't even be used
   /************************************************************************************************/
-
-  // for placing, we have several ways to find a node to map
-  // 0: Completely random
-  // 1: Priority of nodes having outgoing recurrent edges
-  // 2: Priority of having incoming recurrent
-  // 3: Priority of high fan-in fan-out
-  // 4: Priority of having no incoming nodes
-  // 5: Priority of having no outgoing edges
+  
+  /**
+   * for placing, we have several ways to find a node to map
+   * 0: Completely random
+   * 1: Priority of nodes having outgoing recurrent edges
+   * 2: Priority of having incoming recurrent
+   * 3: Priority of high fan-in fan-out
+   * 4: Priority of having no incoming nodes
+   * 5: Priority of having no outgoing edges
+  */
   int mappingMode = mappingPolicy.MAPPING_MODE;
-  // the uid of the node to map
-  int startNode = -1;
-  // map of node id to its visited status
-  std::map<int, bool> visitedNodes;
-  for (int nodeId : nodeIdSet)
-    visitedNodes.insert(std::make_pair(nodeId, false));
-  if (mappingMode == 0) {
-    // completely random
-    // ID of the nodes to map
-    std::vector<int> toMap(nodeIdSet.begin(), nodeIdSet.end());
-    std::uniform_int_distribution<std::size_t> uni(0, nodeIdSet.size() - 1);
-    // the node to map
-    int randomIndex = uni(rng);
-    startNode = toMap[randomIndex];
-    DEBUG("[Falcon]Start node: " << startNode);
-  } else if (mappingMode == 1) {
-    // nodes with outgoing recurrent edges
-  }
-  if (startNode == -1)
-    FATAL("[Falcon]Can't find start node to map");
-
-  // map the node
-  std::queue<int> mappingQueue;
-  mappingQueue.push(startNode);
-  // mark the node as visited
-  visitedNodes[startNode] = true;
-  while (!mappingQueue.empty()) {
-    // the node to map
-    Node* node = myDFG->getNode(mappingQueue.front());
-    mappingQueue.pop();
-    DEBUG("[Falcon]Mapping node: " << node->getId());
-    // get the already mapped pred and succ of the node
-    std::vector<Node*> mappedPreds;
-    std::vector<Node*> mappedSuccs;
-    for (Node* pred : node->getPrevNodes()) {
-      if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
-        // pred is mapped
-        mappedPreds.push_back(pred);
-      }
-    } // end of iterating through preds
-    for (Node* succ : node->getNextNodes()) {
-      if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
-        // the succ is mapped
-        mappedSuccs.push_back(succ);
-      }
-    } // end of iterating through succs
-
-    // now based on the mapping status, get free coordinates this node can be mapped to
-    std::vector<PE*> potentialPos = getPotentialPos(node);
-    // the PE selected to map the node on
-    PE* selPE;
-    if (potentialPos.empty()) {
-      // no position for this node
-      // some action
-      FATAL("not done yet");
-    } else {
-      // there is position for this node, choose a random one for now
-      std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
-      selPE = potentialPos.at(uni(rng));
-      // map the node at the PE
-      selPE->mapNode(node->getId());
-      DEBUG("[Falcon]Mapped at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
-              std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
-      timeExCgra->print();
+  while (!nodeSetToMap.empty()) {
+    // the uid of the node to map
+    int startNode = -1;  
+    if (mappingMode == 0) {
+      // completely random
+      // ID of the nodes to map
+      std::vector<int> toMap(nodeSetToMap.begin(), nodeSetToMap.end());
+      std::uniform_int_distribution<std::size_t> uni(0, nodeSetToMap.size() - 1);
+      // the node to map
+      int randomIndex = uni(rng);
+      startNode = toMap[randomIndex];
+      DEBUG("[Falcon]Start node: " << startNode);
+    } else if (mappingMode == 1) {
+      // nodes with outgoing recurrent edges
     }
-    // with the node mapped, there is updating potential pos of its mapped preds and succs
-    
-    // now we add next nodes to map
-    if (mappingMode == 5) {
-      // mode 5 maps pred
-      for (auto pred : node->getPrevNodes()) {
-        if (visitedNodes[pred->getId()] == false) {
-          mappingQueue.push(pred->getId());
-          visitedNodes[pred->getId()] = true;
+    if (startNode == -1)
+      FATAL("[Falcon]Can't find start node to map");
+
+    // map the node
+    std::queue<int> mappingQueue;
+    mappingQueue.push(startNode);
+    // mark the node as visited, remove it from set to map
+    nodeSetToMap.erase(startNode);
+    while (!mappingQueue.empty()) {
+      // the node to map
+      Node* node = myDFG->getNode(mappingQueue.front());
+      mappingQueue.pop();
+      DEBUG("[Falcon]Mapping node: " << node->getId());
+      // now based on the mapping status, get free coordinates this node can be mapped to
+      std::vector<PE*> potentialPos = getPotentialPos(node);
+      // the PE selected to map the node on
+      PE* selPE;
+      if (potentialPos.empty()) {
+        DEBUG("[Falcon]No position, remapping");
+        // no position for this node, try to remap and find a potential position
+        bool remapSuccess = remap(node);
+        // we do diagnoses, maybe should add getting potential pos of the pred and succ of the node
+        // in falcon, it goes as: shallow->shallow_n->1deep
+        if (!remapSuccess)
+          FATAL("not done yet");
+      } else {
+        // there is position for this node, choose a random one for now
+        std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
+        selPE = potentialPos.at(uni(rng));
+        // map the node
+        timeExCgra->mapNode(node, selPE);
+        DEBUG("[Falcon]Mapped at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
+                std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
+        timeExCgra->print();
+      }
+      // with the node mapped, there is updating potential pos of its mapped preds and succs
+      
+      // now we add next nodes to map
+      if (mappingMode == 5) {
+        // mode 5 maps pred
+        for (auto pred : node->getPrevNodes()) {
+          if (nodeSetToMap.find(pred->getId()) != nodeSetToMap.end()) {
+            mappingQueue.push(pred->getId());
+            nodeSetToMap.erase(pred->getId());
+          }
+        }
+      } else {
+        // other mode maps succ
+        for (auto succ : node->getNextNodes()) {
+          // next we add succs of the node to the queue
+          if (nodeSetToMap.find(succ->getId()) != nodeSetToMap.end()) {
+            mappingQueue.push(succ->getId());
+            nodeSetToMap.erase(succ->getId());
+          }
         }
       }
-    } else {
-      // other mode maps succ
-      for (auto succ : node->getNextNodes()) {
-        // next we add succs of the node to the queue
-        if (visitedNodes[succ->getId()] == false) {
-          mappingQueue.push(succ->getId());
-          visitedNodes[succ->getId()] = true;
-        }
-      }
-    }
-
-  } // end of mappingQueue not empty
+    } // end of mappingQueue not empty
+  } // end of nodeSetToMap not empty
 
   timeExCgra->print();
   return true;
@@ -1447,6 +1434,18 @@ Mapper::falconPlace(DFG* myDFG, int II)
 std::vector<PE*>
 Mapper::getPotentialPos(Node* node)
 {
+  DEBUG("[PotentialPos]Finding potential position for node: " << node->getId());
+  bool mapped = false;
+  PE* mappedPe = nullptr;
+  // if the node is already mapped, we first remove the node and map it at the same PE in the end
+  if (timeExCgra->getPeMapped(node->getId()) != nullptr) {
+    // node already mapped
+    // first note down the PE
+    mapped = true;
+    mappedPe = timeExCgra->getPeMapped(node->getId());
+    // remove the node
+    timeExCgra->removeNode(node);
+  }
   // get the already mapped pred and succ of the node
   std::vector<Node*> mappedPreds;
   std::vector<Node*> mappedSuccs;
@@ -1703,5 +1702,53 @@ Mapper::getPotentialPos(Node* node)
   } // end of not a mem node
 
   DEBUG("[PotentialPos]Potential Pos Size " << potentialPos.size());
+  // restore the mapped node
+  if (mapped) 
+    timeExCgra->mapNode(node, mappedPe);
   return potentialPos;
+}
+
+
+bool
+Mapper::remap(Node* failedNode)
+{
+  DEBUG("[Remap]Remapping failed node " << failedNode->getId());
+  if (!failedNode->isMemNode()) {
+    // regular node
+    // first get all the mapped preds and succs constraining the node
+    // get the already mapped pred and succ of the node
+    std::vector<Node*> mappedPreds;
+    std::vector<Node*> mappedSuccs;
+    for (Node* pred : failedNode->getPrevNodes()) {
+      if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+        // pred is mapped
+        mappedPreds.push_back(pred);
+      }
+    } // end of iterating through preds
+    for (Node* succ : failedNode->getNextNodes()) {
+      if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+        // the succ is mapped
+        mappedSuccs.push_back(succ);
+      }
+    } // end of iterating through succs
+    DEBUG("preds:");
+    for (auto pred : mappedPreds) {
+      auto pot = getPotentialPos(pred);
+      DEBUG(pot.size());
+    }
+    DEBUG("succs:");
+    for (auto succ : mappedSuccs) {
+      auto pot = getPotentialPos(succ);
+      DEBUG(pot.size());
+    }
+
+
+    // we need to check the mapped preds and succs
+    // first, the preds, there are at most 3 preds
+    
+
+  } else {
+    // mem node
+  }
+  return false;
 }

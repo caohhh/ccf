@@ -167,6 +167,31 @@ CGRA::isAccessable(PE* fromPE, PE* toPE)
   return false;
 }
 
+
+void
+CGRA::mapNode(Node* node, PE* pe)
+{
+  pe->mapNode(node->getId());
+  if (node->isMemNode()) {
+    int xCoor = std::get<0>(pe->getCoord());
+    int t = std::get<2>(pe->getCoord());
+    Row* row = getRow(xCoor, t);
+    row->mapNode(node);
+  }
+}
+
+
+void
+CGRA::removeNode(Node* node)
+{
+  PE* mappedPe = getPeMapped(node->getId());
+  mappedPe->removeNode(node->getId());
+  if (node->isMemNode()) {
+    Row* row = getRow(std::get<0>(mappedPe->getCoord()), std::get<2>(mappedPe->getCoord()));
+    row->removeNode(node);
+  }
+}
+
 /************************PE******************************/
 PE::PE(int x, int y, int t)
 {
@@ -192,9 +217,18 @@ PE::getCoord()
 
 
 void
-PE:: mapNode(int nodeId)
+PE::mapNode(int nodeId)
 {
   this->nodeId = nodeId;
+}
+
+
+void
+PE::removeNode(int nodeId)
+{
+  if (this->nodeId != nodeId)
+    FATAL("[PE]ERROR! removing a node not mapped to this PE");
+  this->nodeId = -1;
 }
 
 /************************Row******************************/
@@ -225,4 +259,57 @@ std::tuple<int, int>
 Row::getCoord()
 {
   return std::make_tuple(x, t);
+}
+
+
+void
+Row::mapNode(Node* node)
+{
+  if (!node->isMemNode())
+    FATAL("[Row]ERROR! Mapping a non-mem node to a row");
+  if (node->isLoadAddressGenerator()) {
+    read = true;
+    addNodeId = node->getId();
+  } else if (node->isLoadDataBusRead()) {
+    read = true;
+    dataNodeId = node->getId();
+  } else if (node->isStoreAddressGenerator()) {
+    write = true;
+    addNodeId = node->getId();
+  } else if (node->isStoreDataBusWrite()) {
+    write = true;
+    dataNodeId = node->getId();
+  }
+}
+
+
+void
+Row::removeNode(Node* node)
+{
+  if (read) {
+    read = false;
+    if (node->isLoadAddressGenerator()) {
+      if (addNodeId == node->getId())
+        addNodeId = -1;
+      else 
+        FATAL("[Row]ERROR! read add node not matching");
+    } else if (node->isLoadDataBusRead()) {
+      if (dataNodeId == node->getId())
+        dataNodeId = -1;
+      else 
+        FATAL("[Row]ERROR! read data node not matching");
+    } else 
+      FATAL("[Row]ERROR! read writing not matching");
+  } else if (write) {
+    if (node->isStoreAddressGenerator()) {
+      addNodeId = -1;
+      if (dataNodeId == -1)
+        write = false;
+    } else if (node->isStoreDataBusWrite()) {
+      dataNodeId = -1;
+      if (addNodeId == -1)
+        write = false;
+    }
+  } else
+    FATAL("[Row]ERROR!removing node from a row not mapped");
 }
