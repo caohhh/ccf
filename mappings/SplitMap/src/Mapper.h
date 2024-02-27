@@ -13,6 +13,7 @@
 
 #include "Parser.h"
 #include "Schedule.h"
+#include "CGRA.h"
 
 class Mapper
 {
@@ -42,6 +43,8 @@ class Mapper
     schedule* alapFeasible;
     // the modulo schedule
     moduloSchedule* modSchedule;
+    // the time extanded CGRA
+    CGRA* timeExCgra;
 
     /**
      * Schedule operations as soon as all predecessors are completed
@@ -108,6 +111,12 @@ class Mapper
 
     // based on the finished modulo schedule, insert routing nodes
     bool insertRoute(DFG* myDFG);
+
+    // the falcon mapping algorithm
+    bool falconPlace(DFG* myDFG, int II);
+
+    // returns the potential PEs this node can be mapped to
+    std::vector<PE*> getPotentialPos(Node* node);
 };
 
 #endif

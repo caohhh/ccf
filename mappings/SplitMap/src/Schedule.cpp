@@ -305,17 +305,48 @@ moduloSchedule::clear()
 
 
 void
-moduloSchedule::print()
+moduloSchedule::print(DFG* myDFG)
 {
   std::ofstream dotFile;
   std::string fileName = "Modulo_Schedule.dot";
   dotFile.open(fileName);
 
-  dotFile << "digraph " << "Modulo_Schedule" << " { \n{";
+  dotFile << "digraph " << "Modulo_Schedule" << " { \n{\n";
   // print node
   for (auto nodeIt : nodeSchedule) {
     int nodeId = nodeIt.first;
-    dotFile << "\n" << nodeId << " [color=red];\n";
+    if (myDFG->getNode(nodeId)->isMemNode())
+      dotFile << nodeId << " [color=blue];\n";
+    else if (myDFG->getNode(nodeId)->getIns() == route)
+      dotFile << nodeId << " [color=green];\n";
+    else
+      dotFile << nodeId << " [color=red];\n";
+  }
+  dotFile << "\n";
+
+  // print arc
+  for (int arcId : myDFG->getArcIdSet()) {
+    Arc* arc = myDFG->getArc(arcId);
+    dotFile << arc->getFromNode()->getId() << " -> " << arc->getToNode()->getId();
+    if (arc->getDependency() == PredDep) {
+      if (arc->getDistance() == 0) {
+        dotFile << " [color=blue]\n";
+      }
+      else {
+        dotFile << " [style=bold, color=blue, label=" << arc->getDistance() << "] \n";
+      }
+    } else if (arc->getDependency() == TrueDep) {
+      if (arc->getDistance() == 0) {
+        dotFile << " [color=red]\n";
+      }
+      else {
+        dotFile << " [style=bold, color=red, label=" << arc->getDistance() << "] \n";
+      }
+    } else if (arc->getDependency() == LoadDep || arc->getDependency() == PredDep) {
+      dotFile << " [style=dotted, color=blue, label= mem] \n";
+    } else {
+      FATAL("[Print Modulo]Encountered arc dependency not implemented " << arc->getDependency());
+    }
   }
   dotFile << "}\n";
 
@@ -344,4 +375,14 @@ int
 moduloSchedule::getII()
 {
   return II;
+}
+
+
+int
+moduloSchedule::getModScheduleTime(Node* node)
+{
+  if (isScheduled(node))
+    return nodeScheduleMod[node->getId()];
+  else
+    return -1;
 }

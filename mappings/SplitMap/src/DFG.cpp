@@ -181,6 +181,17 @@ DFG::getArc(Node* nodeFrom, Node* nodeTo)
 }
 
 
+Arc* 
+DFG::getArc(int arcId)
+{
+  for (auto arc : arcSet) {
+    if (arc->getId() == arcId)
+      return arc;
+  }
+  return nullptr;
+}
+
+
 void
 DFG::removeArc(int arcId)
 {
@@ -461,6 +472,19 @@ DFG::getNodeIdSet()
     if (idSet.find(node->getId()) != idSet.end())
       FATAL("ERROR: Nodes with the same id exist in this DFG");
     idSet.insert(node->getId());
+  }
+  return idSet;
+}
+
+
+std::set<int> 
+DFG::getArcIdSet()
+{
+  std::set<int> idSet;
+  for (auto arc : arcSet) {
+    if (idSet.find(arc->getId()) != idSet.end())
+      FATAL("ERROR: Arcs with the same id exist in this DFG");
+    idSet.insert(arc->getId());
   }
   return idSet;
 }

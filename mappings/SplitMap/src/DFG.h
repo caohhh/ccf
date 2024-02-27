@@ -50,6 +50,9 @@ class DFG
     // returns the arc between the given nodes
     Arc* getArc(Node* nodeFrom, Node* nodeTo);
 
+    // returns the arc of the give ID
+    Arc* getArc(int arcId);
+
     // remove the arc of the given Id
     void removeArc(int arcId);
     
@@ -73,6 +76,9 @@ class DFG
 
     // returns set of node indexes of this DFG
     std::set<int> getNodeIdSet();
+
+    // returns set of arc indexes of this DFG
+    std::set<int> getArcIdSet();
 
     // return a set of nodes without any child in current iteration
     std::vector<Node*> getEndNodes();

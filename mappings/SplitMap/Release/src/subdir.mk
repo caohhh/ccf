@@ -6,7 +6,8 @@ CPP_SRCS += \
 ../src/main.cpp \
 ../src/Node.cpp \
 ../src/Mapper.cpp \
-../src/Schedule.cpp
+../src/Schedule.cpp \
+../src/CGRA.cpp
 
 OBJS += \
 ./src/Parser.o \
@@ -15,8 +16,8 @@ OBJS += \
 ./src/main.o \
 ./src/Node.o \
 ./src/Mapper.o \
-./src/Schedule.o
-
+./src/Schedule.o \
+./src/CGRA.o
 
 CPP_DEPS += \
 ./src/Parser.d \
@@ -25,8 +26,8 @@ CPP_DEPS += \
 ./src/main.d \
 ./src/Node.d \
 ./src/Mapper.d \
-./src/Schedule.d
-
+./src/Schedule.d \
+./src/CGRA.d
 
 # Each subdirectory must supply rules for building sources it contributes
 src/%.o: ../src/%.cpp

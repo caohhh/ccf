@@ -101,11 +101,15 @@ class moduloSchedule : public schedule
     // reset the modulo schedule
     void clear();
 
-    // outputs a dot file of the modulo schedule
-    void print();
+    // outputs a dot file of the modulo schedule based on the given DFG
+    void print(DFG* myDFG);
 
     // returns the II for this modulo schedule
     int getII();
+
+    // returns the modulo schedule time node is scheduled at
+    int getModScheduleTime(Node* node);
+
 
   private:
     int II;

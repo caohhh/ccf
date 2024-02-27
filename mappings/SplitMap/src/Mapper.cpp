@@ -214,15 +214,16 @@ Mapper::generateMap(Parser* myParser)
     for (int attemp = 0; attempt < lambda; attemp++) {
       DEBUG("[Mapper]attempt: " << attempt << "/" << lambda << "");
       bool modScheduleSuccess = false;
+      DFG* routeDFG = nullptr;
       // here we do modulo schedule
       for (int modAttempt = 0; modAttempt < mappingPolicy.MODULO_SCHEDULING_ATTEMPTS; modAttempt++) {
         DEBUG("[Mapper]modulo schedule attempt " << modAttempt << " of " << mappingPolicy.MODULO_SCHEDULING_ATTEMPTS);
         if (scheduleModulo(originalDFG, sortedNodes, currentII)) {
           DEBUG("[Mapper]Modulo schedule complete and successful");
-          modSchedule->print();
+          modSchedule->print(originalDFG);
           // next, for nodes that can't be immediately accessed, insert routing nodes
           // a new DFG to insert all the routing nodes inserted
-          DFG* routeDFG = new DFG(*originalDFG);
+          routeDFG = new DFG(*originalDFG);
           if (!insertRoute(routeDFG)) {
             DEBUG("[Mapper]insert routing failed, retry modulo schedule");
             continue;
@@ -239,7 +240,10 @@ Mapper::generateMap(Parser* myParser)
         currentII++;
         break;
       }
-      modSchedule->print();
+      modSchedule->print(routeDFG);
+      timeExCgra = new CGRA(cgraInfo.X_Dim, cgraInfo.Y_Dim, currentII);
+      // now falcon mapping
+      falconPlace(routeDFG, currentII);
       exit(0);
     } // end of iterating through attempts
     break;
@@ -1304,9 +1308,400 @@ Mapper::insertRoute(DFG* myDFG)
         Arc* arcOld = myDFG->getArc(node, needNode);
         myDFG->removeArc(arcOld->getId());
         // connect it to ready node
-        myDFG->makeArc(curReadyNode, needNode, arcOld->getDependency(), arcOld->getDependency(), arcOld->getOperandOrder());
+        myDFG->makeArc(curReadyNode, needNode, arcOld->getDistance(), arcOld->getDependency(), arcOld->getOperandOrder());
       } // end of checking all routes needed to be added
     }
   } // end of checking all nodes
   return true;
+}
+
+
+bool
+Mapper::falconPlace(DFG* myDFG, int II)
+{
+  DEBUG("[Falcon]Start placing");
+  // set of the ids of all the nodes in the DFG
+  auto nodeIdSet = myDFG->getNodeIdSet();
+  int searchSpace = cgraSize * II * nodeIdSet.size() * mappingPolicy.MAX_MAPPING_ATTEMPTS;
+  DEBUG("[Falcon]Max search space: " << searchSpace);
+
+  /************************************************************************************************/
+  // first construct M
+  // check out refine_M in CGRA.cpp for FalconCrimson
+  // what is M
+  // M is a matrix size of nodesize x tablesize
+  // table is of the mapping pairs
+  // if this node is the node of the mapping pair, it is a 1 in M
+
+  // for adjacency list:
+  // mode 5 is each node's pred, other mode is each node's succ
+
+  // essentially, M will be our mapping result in the end,
+  // each row is a node, and each column is a time-extanded pe
+
+  // now maybe most of these won't even be used
+  /************************************************************************************************/
+
+  // for placing, we have several ways to find a node to map
+  // 0: Completely random
+  // 1: Priority of nodes having outgoing recurrent edges
+  // 2: Priority of having incoming recurrent
+  // 3: Priority of high fan-in fan-out
+  // 4: Priority of having no incoming nodes
+  // 5: Priority of having no outgoing edges
+  int mappingMode = mappingPolicy.MAPPING_MODE;
+  // the uid of the node to map
+  int startNode = -1;
+  // map of node id to its visited status
+  std::map<int, bool> visitedNodes;
+  for (int nodeId : nodeIdSet)
+    visitedNodes.insert(std::make_pair(nodeId, false));
+  if (mappingMode == 0) {
+    // completely random
+    // ID of the nodes to map
+    std::vector<int> toMap(nodeIdSet.begin(), nodeIdSet.end());
+    std::uniform_int_distribution<std::size_t> uni(0, nodeIdSet.size() - 1);
+    // the node to map
+    int randomIndex = uni(rng);
+    startNode = toMap[randomIndex];
+    DEBUG("[Falcon]Start node: " << startNode);
+  } else if (mappingMode == 1) {
+    // nodes with outgoing recurrent edges
+  }
+  if (startNode == -1)
+    FATAL("[Falcon]Can't find start node to map");
+
+  // map the node
+  std::queue<int> mappingQueue;
+  mappingQueue.push(startNode);
+  // mark the node as visited
+  visitedNodes[startNode] = true;
+  while (!mappingQueue.empty()) {
+    // the node to map
+    Node* node = myDFG->getNode(mappingQueue.front());
+    mappingQueue.pop();
+    DEBUG("[Falcon]Mapping node: " << node->getId());
+    // get the already mapped pred and succ of the node
+    std::vector<Node*> mappedPreds;
+    std::vector<Node*> mappedSuccs;
+    for (Node* pred : node->getPrevNodes()) {
+      if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+        // pred is mapped
+        mappedPreds.push_back(pred);
+      }
+    } // end of iterating through preds
+    for (Node* succ : node->getNextNodes()) {
+      if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+        // the succ is mapped
+        mappedSuccs.push_back(succ);
+      }
+    } // end of iterating through succs
+
+    // now based on the mapping status, get free coordinates this node can be mapped to
+    std::vector<PE*> potentialPos = getPotentialPos(node);
+    // the PE selected to map the node on
+    PE* selPE;
+    if (potentialPos.empty()) {
+      // no position for this node
+      // some action
+      FATAL("not done yet");
+    } else {
+      // there is position for this node, choose a random one for now
+      std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
+      selPE = potentialPos.at(uni(rng));
+      // map the node at the PE
+      selPE->mapNode(node->getId());
+      DEBUG("[Falcon]Mapped at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
+              std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
+      timeExCgra->print();
+    }
+    // with the node mapped, there is updating potential pos of its mapped preds and succs
+    
+    // now we add next nodes to map
+    if (mappingMode == 5) {
+      // mode 5 maps pred
+      for (auto pred : node->getPrevNodes()) {
+        if (visitedNodes[pred->getId()] == false) {
+          mappingQueue.push(pred->getId());
+          visitedNodes[pred->getId()] = true;
+        }
+      }
+    } else {
+      // other mode maps succ
+      for (auto succ : node->getNextNodes()) {
+        // next we add succs of the node to the queue
+        if (visitedNodes[succ->getId()] == false) {
+          mappingQueue.push(succ->getId());
+          visitedNodes[succ->getId()] = true;
+        }
+      }
+    }
+
+  } // end of mappingQueue not empty
+
+  timeExCgra->print();
+  return true;
+}
+
+
+std::vector<PE*>
+Mapper::getPotentialPos(Node* node)
+{
+  // get the already mapped pred and succ of the node
+  std::vector<Node*> mappedPreds;
+  std::vector<Node*> mappedSuccs;
+  for (Node* pred : node->getPrevNodes()) {
+    if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+      // pred is mapped
+      mappedPreds.push_back(pred);
+    }
+  } // end of iterating through preds
+  for (Node* succ : node->getNextNodes()) {
+    if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+      // the succ is mapped
+      mappedSuccs.push_back(succ);
+    }
+  } // end of iterating through succs
+  DEBUG("[PotentialPos]Number of mapped preds: " << mappedPreds.size() << " succs: " << mappedSuccs.size());
+  // the potential positions to return
+  std::vector<PE*> potentialPos;
+
+  // for mem nodes, there are more restrictions
+  if (node->isMemNode()) {
+    if (node->isLoadAddressGenerator()) {
+      // load address generator
+      // first check for mapped succs, should only be the read node
+      if (mappedSuccs.size() > 0) {
+        // succ mapped for this load add gen, should only be 1 load read
+        if (mappedSuccs.size() > 1)
+          FATAL("[PotentialPos]ERROR! Load add gen with more than 1 succ");
+        Node* dataNode = mappedSuccs[0];
+        if (!dataNode->isLoadDataBusRead())
+          FATAL("[PotentialPos]ERROR! Load add gen succ not a read");
+        // made sure there is only one succ: data read
+        int xCoor = std::get<0>(timeExCgra->getPeMapped(dataNode->getId())->getCoord());
+        Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
+        if (row->memResAvailable()) {
+          for (auto pe: timeExCgra->getPeAtRow(row)) {
+            if (pe->getNode() == -1)
+              potentialPos.push_back(pe);
+          } // end of iterating through PEs at row
+        }
+      } else { // end of mapped succ size > 0
+        // with no mapped succ, get all free rows
+        for (auto row : timeExCgra->getRowAtTime(modSchedule->getModScheduleTime(node))) {
+          if (row->memResAvailable()) {
+            for (auto pe: timeExCgra->getPeAtRow(row)) {
+              if (pe->getNode() == -1)
+                potentialPos.push_back(pe);
+            } // end of iterating through PEs at row
+          }
+        } // end of iterating through rows at mod schedule time
+      }
+      // next check for mapped preds, there should at most be 1
+      if (mappedPreds.size() > 1)
+        FATAL("[PotentialPos]ERROR! load add gen should only have 1 pred");
+      // next check if it is connected to mapped preds
+      auto posIt = potentialPos.begin();
+      for (; posIt != potentialPos.end(); ) {
+        // if this pos is removed
+        bool removed = false;
+        for (auto pred : mappedPreds) {
+          PE* predPE = timeExCgra->getPeMapped(pred->getId());
+          if (!timeExCgra->isAccessable(predPE, *posIt)) {
+            // not accessable, remove this pos
+            posIt = potentialPos.erase(posIt);
+            removed = true;
+            break;
+          }
+        } // end of iterating through mapped preds
+        if (!removed)
+          ++posIt;
+      } // end of iterating through potential positions
+
+    } else if (node->isLoadDataBusRead()) {
+      // load data bus read
+      // check pred first, should only be the add node
+      if (mappedPreds.size() > 0) {
+        if (mappedPreds.size() > 1)
+          FATAL("[PotentialPos]ERROR! read node with more than 1 pred");
+        Node* addNode = mappedPreds[0];
+        if (!addNode->isLoadAddressGenerator())
+          FATAL("[PotentialPos]ERROR! read node pred node add gen");
+        int xCoor = std::get<0>(timeExCgra->getPeMapped(addNode->getId())->getCoord());
+        Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
+        if (row->memResAvailable()) {
+          for (auto pe: timeExCgra->getPeAtRow(row)) {
+            if (pe->getNode() == -1)
+              potentialPos.push_back(pe);
+          } // end of iterating through PEs at row
+        }
+      } else { // end of mapped pred size > 0
+        // with no mapped pred, get all free rows
+        for (auto row : timeExCgra->getRowAtTime(modSchedule->getModScheduleTime(node))) {
+          if (row->memResAvailable()) {
+            for (auto pe: timeExCgra->getPeAtRow(row)) {
+              if (pe->getNode() == -1)
+                potentialPos.push_back(pe);
+            } // end of iterating through PEs at row
+          }
+        } // end of iterating through rows at mod schedule time
+      }
+      // next check succs
+      auto posIt = potentialPos.begin();
+      for (; posIt != potentialPos.end(); ) {
+        // if this pos is removed
+        bool removed = false;
+        for (auto succ : mappedSuccs) {
+          PE* succPE = timeExCgra->getPeMapped(succ->getId());
+          if (!timeExCgra->isAccessable(*posIt, succPE)) {
+            // not accessable, remove this pos
+            posIt = potentialPos.erase(posIt);
+            removed = true;
+            break;
+          }
+        } // end of iterating through mapped preds
+        if (!removed)
+          ++posIt;
+      } // end of iterating through potential positions
+    
+    } else if (node->isStoreAddressGenerator()) {
+      // check succ for the data node
+      if (mappedSuccs.size() > 0) {
+        // there should only be 1 succ
+        Node* dataNode = mappedSuccs[0];
+        int xCoor = std::get<0>(timeExCgra->getPeMapped(dataNode->getId())->getCoord());
+        Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
+        for (auto pe: timeExCgra->getPeAtRow(row)) {
+          if (pe->getNode() == -1)
+            potentialPos.push_back(pe);
+        } // end of iterating through PEs at row
+      } else {
+        // with no mapped succ, get all free rows
+        for (auto row : timeExCgra->getRowAtTime(modSchedule->getModScheduleTime(node))) {
+          if (row->memResAvailable()) {
+            for (auto pe: timeExCgra->getPeAtRow(row)) {
+              if (pe->getNode() == -1)
+                potentialPos.push_back(pe);
+            } // end of iterating through PEs at row
+          }
+        } // end of iterating through rows at mod schedule time
+      }
+      // next check if it is connected to mapped preds, should only be 1
+      auto posIt = potentialPos.begin();
+      for (; posIt != potentialPos.end(); ) {
+        // if this pos is removed
+        bool removed = false;
+        for (auto pred : mappedPreds) {
+          PE* predPE = timeExCgra->getPeMapped(pred->getId());
+          if (!timeExCgra->isAccessable(predPE, *posIt)) {
+            // not accessable, remove this pos
+            posIt = potentialPos.erase(posIt);
+            removed = true;
+            break;
+          }
+        } // end of iterating through mapped preds
+        if (!removed)
+          ++posIt;
+      } // end of iterating through potential positions
+
+    } else if (node->isStoreDataBusWrite()) {
+      // for write, there are two preds, one add one data
+      // the address gen pred node
+      Node* addPred = nullptr;
+      // the data provider pred node
+      Node* dataPred = nullptr; 
+      for (auto pred : mappedPreds) {
+        if (pred->isStoreAddressGenerator()) {
+          addPred = pred;
+        } else {
+          dataPred = pred;
+        }
+      }
+      if (addPred != nullptr) {
+        // address gen pred mapped, row fixed
+        int xCoor = std::get<0>(timeExCgra->getPeMapped(addPred->getId())->getCoord());
+        Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
+        for (auto pe: timeExCgra->getPeAtRow(row)) {
+          if (pe->getNode() == -1)
+            potentialPos.push_back(pe);
+        } // end of iterating through PEs at row
+      } else {
+        // add gen pred not mapped, can choose all rows with mem res available
+        for (auto row : timeExCgra->getRowAtTime(modSchedule->getModScheduleTime(node))) {
+          if (row->memResAvailable()) {
+            for (auto pe: timeExCgra->getPeAtRow(row)) {
+              if (pe->getNode() == -1)
+                potentialPos.push_back(pe);
+            } // end of iterating through PEs at row
+          }
+        } // end of iterating through rows at mod schedule time
+      }
+      if (dataPred != nullptr) {
+        auto posIt = potentialPos.begin();
+        for (; posIt != potentialPos.end(); ) {
+          // if this pos is removed
+          bool removed = false;
+          PE* predPE = timeExCgra->getPeMapped(dataPred->getId());
+          if (!timeExCgra->isAccessable(predPE, *posIt)) {
+            // not accessable, remove this pos
+            posIt = potentialPos.erase(posIt);
+            removed = true;
+            break;
+          }
+          if (!removed)
+            ++posIt;
+        } // end of iterating through potential positions
+      }
+      // sanity check for succs
+      if (mappedSuccs.size() > 0)
+        FATAL("[PotentialPos]ERROR! Store write node with succ mapped");
+    } // end of is store write
+  } else { // end of node is mem node
+    // normal nodes
+    // first get all the free PEs at time based on modulo schedule
+    for (auto pe : timeExCgra->getPeAtTime(modSchedule->getModScheduleTime(node))) {
+      if (pe->getNode() == -1)
+        potentialPos.push_back(pe);
+    } // end of iterating through PEs at modulo schedule time
+
+    // next check if it is connected to mapped preds
+    auto posIt = potentialPos.begin();
+    for (; posIt != potentialPos.end(); ) {
+      // if this pos is removed
+      bool removed = false;
+      for (auto pred : mappedPreds) {
+        PE* predPE = timeExCgra->getPeMapped(pred->getId());
+        if (!timeExCgra->isAccessable(predPE, *posIt)) {
+          // not accessable, remove this pos
+          posIt = potentialPos.erase(posIt);
+          removed = true;
+          break;
+        }
+      } // end of iterating through mapped preds
+      if (!removed)
+        ++posIt;
+    } // end of iterating through potential positions
+
+    // also check mapped succ
+    posIt = potentialPos.begin();
+    for (; posIt != potentialPos.end(); ) {
+      // if this pos is removed
+      bool removed = false;
+      for (auto succ : mappedSuccs) {
+        PE* succPE = timeExCgra->getPeMapped(succ->getId());
+        if (!timeExCgra->isAccessable(*posIt, succPE)) {
+          // not accessable, remove this pos
+          posIt = potentialPos.erase(posIt);
+          removed = true;
+          break;
+        }
+      } // end of iterating through mapped preds
+      if (!removed)
+        ++posIt;
+    } // end of iterating through potential positions
+  } // end of not a mem node
+
+  DEBUG("[PotentialPos]Potential Pos Size " << potentialPos.size());
+  return potentialPos;
 }
