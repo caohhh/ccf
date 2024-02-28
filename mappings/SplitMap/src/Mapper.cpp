@@ -1382,20 +1382,18 @@ Mapper::falconPlace(DFG* myDFG, int II)
       DEBUG("[Falcon]Mapping node: " << node->getId());
       // now based on the mapping status, get free coordinates this node can be mapped to
       std::vector<PE*> potentialPos = getPotentialPos(node);
-      // the PE selected to map the node on
-      PE* selPE;
       if (potentialPos.empty()) {
         DEBUG("[Falcon]No position, remapping");
         // no position for this node, try to remap and find a potential position
-        bool remapSuccess = remap(node);
-        // we do diagnoses, maybe should add getting potential pos of the pred and succ of the node
+        bool remapSuccess = remapBasic(node);
         // in falcon, it goes as: shallow->shallow_n->1deep
         if (!remapSuccess)
           FATAL("not done yet");
       } else {
         // there is position for this node, choose a random one for now
         std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
-        selPE = potentialPos.at(uni(rng));
+        // the PE selected to map the node on
+        PE* selPE = potentialPos.at(uni(rng));
         // map the node
         timeExCgra->mapNode(node, selPE);
         DEBUG("[Falcon]Mapped at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
@@ -1710,45 +1708,85 @@ Mapper::getPotentialPos(Node* node)
 
 
 bool
-Mapper::remap(Node* failedNode)
+Mapper::remapBasic(Node* failedNode)
 {
-  DEBUG("[Remap]Remapping failed node " << failedNode->getId());
-  if (!failedNode->isMemNode()) {
-    // regular node
-    // first get all the mapped preds and succs constraining the node
-    // get the already mapped pred and succ of the node
-    std::vector<Node*> mappedPreds;
-    std::vector<Node*> mappedSuccs;
-    for (Node* pred : failedNode->getPrevNodes()) {
-      if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
-        // pred is mapped
-        mappedPreds.push_back(pred);
-      }
-    } // end of iterating through preds
-    for (Node* succ : failedNode->getNextNodes()) {
-      if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
-        // the succ is mapped
-        mappedSuccs.push_back(succ);
-      }
-    } // end of iterating through succs
-    DEBUG("preds:");
-    for (auto pred : mappedPreds) {
-      auto pot = getPotentialPos(pred);
-      DEBUG(pot.size());
+  DEBUG("[Remap Basic]Remapping failed node " << failedNode->getId());
+  // first get all the mapped preds and succs constraining the node, we try and remap the constraints
+  // get the already mapped pred and succ of the node, also remove them for remap
+  std::vector<Node*> mappedNodes;
+  // the original PE mapped for potential restore
+  std::map<int, PE*> originalPos; 
+  for (Node* pred : failedNode->getPrevNodes()) {
+    if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+      // pred is mapped
+      mappedNodes.push_back(pred);
+      originalPos[pred->getId()] = timeExCgra->getPeMapped(pred->getId());
+      timeExCgra->removeNode(pred);
     }
-    DEBUG("succs:");
-    for (auto succ : mappedSuccs) {
-      auto pot = getPotentialPos(succ);
-      DEBUG(pot.size());
+  } // end of iterating through preds
+  for (Node* succ : failedNode->getNextNodes()) {
+    if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+      // the succ is mapped
+      mappedNodes.push_back(succ);
+      originalPos[succ->getId()] = timeExCgra->getPeMapped(succ->getId());
+      timeExCgra->removeNode(succ);
     }
-
-
-    // we need to check the mapped preds and succs
-    // first, the preds, there are at most 3 preds
+  } // end of iterating through succs
+  if (mappedNodes.empty())
+    FATAL("[Remap Basic]ERROR! Probably should not happen, remapping a node without constraints");
+  // we can check all the potential mappings of mapped preds and succs to find a mapping
+  std::vector<std::vector<PE*>> positionsLeft;
+  // if we should use positions in positionsLeft
+  bool useLeft = false;
+  int constraintIt = 0;
+  while (constraintIt != -1) {
+    Node* constraint = mappedNodes[constraintIt];
+    std::vector<PE*> potentialPos;
+    // see where potentialPos should come from first
+    if (useLeft) {
+      potentialPos = positionsLeft.back();
+      positionsLeft.pop_back();
+      timeExCgra->removeNode(constraint);
+    } else {
+      potentialPos = getPotentialPos(constraint);
+      // shuffle to potentialPos here since potentialPos is ordered
+      std::shuffle(potentialPos.begin(), potentialPos.end(), rng);
+    }
     
-
-  } else {
-    // mem node
+    if (potentialPos.empty()) {
+      // no position to map, return to last constraint and choose another position
+      constraintIt--;
+      useLeft = true;
+    } else {
+      timeExCgra->mapNode(constraint, potentialPos.back());
+      potentialPos.pop_back();
+      positionsLeft.push_back(potentialPos);
+      constraintIt++;
+      useLeft = false;
+    }
+    if (constraintIt == (int)mappedNodes.size()) {
+      // found a position composition for all constraints
+      auto remapPos = getPotentialPos(failedNode);
+      if (!remapPos.empty()) {
+        // there is position for this node, choose a random one for now
+        std::uniform_int_distribution<std::size_t> uni(0, remapPos.size() - 1);
+        PE* selPE = remapPos.at(uni(rng));
+        // map the node
+        timeExCgra->mapNode(failedNode, selPE);
+        DEBUG("[Remap Basic]Remap success at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
+                std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
+        timeExCgra->print();
+        return true;
+      } else {
+        constraintIt--;
+        useLeft = true;
+      }
+    }
+  } // end of while constraintIt != -1 
+  // remap failed, need to restore the constraint's location
+  DEBUG("[Remap Basic]Remap failed, restoring constraints' location");
+  for (auto constraint : mappedNodes) {
+    timeExCgra->mapNode(constraint, originalPos[constraint->getId()]);
   }
   return false;
 }
