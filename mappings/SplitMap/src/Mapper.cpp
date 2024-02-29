@@ -220,10 +220,11 @@ Mapper::generateMap(Parser* myParser)
         DEBUG("[Mapper]modulo schedule attempt " << modAttempt << " of " << mappingPolicy.MODULO_SCHEDULING_ATTEMPTS);
         if (scheduleModulo(originalDFG, sortedNodes, currentII)) {
           DEBUG("[Mapper]Modulo schedule complete and successful");
-          modSchedule->print(originalDFG);
+          modSchedule->print(originalDFG, "original");
           // next, for nodes that can't be immediately accessed, insert routing nodes
           // a new DFG to insert all the routing nodes inserted
           routeDFG = new DFG(*originalDFG);
+          modSchedule->print(routeDFG, "copy");
           if (!insertRoute(routeDFG)) {
             DEBUG("[Mapper]insert routing failed, retry modulo schedule");
             continue;
@@ -240,7 +241,7 @@ Mapper::generateMap(Parser* myParser)
         currentII++;
         break;
       }
-      modSchedule->print(routeDFG);
+      modSchedule->print(routeDFG, "route");
       timeExCgra = new CGRA(cgraInfo.X_Dim, cgraInfo.Y_Dim, currentII);
       // now falcon mapping
       falconPlace(routeDFG, currentII);
@@ -1388,6 +1389,9 @@ Mapper::falconPlace(DFG* myDFG, int II)
         bool remapSuccess = remapBasic(node);
         // in falcon, it goes as: shallow->shallow_n->1deep
         if (!remapSuccess)
+          remapSuccess = remapCurrT(node, myDFG);
+        timeExCgra->print();
+        if (!remapSuccess)
           FATAL("not done yet");
       } else {
         // there is position for this node, choose a random one for now
@@ -1734,6 +1738,8 @@ Mapper::remapBasic(Node* failedNode)
   } // end of iterating through succs
   if (mappedNodes.empty())
     FATAL("[Remap Basic]ERROR! Probably should not happen, remapping a node without constraints");
+  // we add a shuffle here
+  std::shuffle(mappedNodes.begin(), mappedNodes.end(), rng);
   // we can check all the potential mappings of mapped preds and succs to find a mapping
   std::vector<std::vector<PE*>> positionsLeft;
   // if we should use positions in positionsLeft
@@ -1787,6 +1793,86 @@ Mapper::remapBasic(Node* failedNode)
   DEBUG("[Remap Basic]Remap failed, restoring constraints' location");
   for (auto constraint : mappedNodes) {
     timeExCgra->mapNode(constraint, originalPos[constraint->getId()]);
+  }
+  return false;
+}
+
+
+bool 
+Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
+{
+  DEBUG("[Remap T]Remapping failed node: " << failedNode->getId());
+  // here we exclude store related node since it's the only with pred or succ at same time slot
+  if (failedNode->isStoreAddressGenerator() || failedNode->isStoreDataBusWrite())
+    FATAL("[Remap T]Store node remap not implemented yet");
+  // for this, we remove all nodes in the same time slot, and do basic remap, than try and remap all the removed nodes
+  // all the mapped nodes in current time slot for later remap/restore
+  std::vector<int> mappedNodes;
+  std::map<int, PE*> originalPos;
+  for (auto pe : timeExCgra->getPeAtTime(modSchedule->getModScheduleTime(failedNode))) {
+    if (pe->getNode() != -1) {
+      // note down the mapped nodes
+      mappedNodes.push_back(pe->getNode());
+      // store the previously PE mapped
+      originalPos[pe->getNode()] = pe;
+      // remove the node from map
+      timeExCgra->removeNode(myDFG->getNode(pe->getNode()));
+    } 
+  }
+  // now do a basic remap
+  bool basicSuccess = remapBasic(failedNode);
+  if (basicSuccess) {
+    // now we remap all the stored node in current time slot
+    DEBUG("[Remap T]Remapping all " << mappedNodes.size() << \
+          " nodes in currrent time slot: " << modSchedule->getModScheduleTime(failedNode));
+    for (int attempt = 0; attempt < mappingPolicy.MAX_MAPPING_ATTEMPTS; attempt++) {
+      DEBUG("[Remap T]Remap attempt: " << attempt);
+      bool remapSuccess = true;
+      // first shuffle the nodes to remap
+      std::shuffle(mappedNodes.begin(), mappedNodes.end(), rng);
+      for (int nodeToMap : mappedNodes) {
+        Node* remapNode = myDFG->getNode(nodeToMap);
+        auto potentialPos = getPotentialPos(remapNode);
+        if (potentialPos.empty()) {
+          // remap attempt failed
+          DEBUG("[Remap T]Attempt failed, starting over");
+          // remove all mapped nodes in this attempt
+          for (int nodeId : mappedNodes) {
+            if (timeExCgra->getPeMapped(nodeId) != nullptr)
+              timeExCgra->removeNode(myDFG->getNode(nodeId));
+          }
+          remapSuccess = false;
+          if (attempt % mappedNodes.size() == 0) {
+            // redo basic remap to try and create greater success rate
+            DEBUG("[Remap T]Redoing basic remap");
+            timeExCgra->removeNode(failedNode);
+            remapBasic(failedNode);
+          }
+          break;
+        } else {
+          // there is position for this node, choose a random one for now
+          std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
+          // the PE selected to map the node on
+          PE* selPE = potentialPos.at(uni(rng));
+          // map the node
+          timeExCgra->mapNode(remapNode, selPE);
+        }
+      } // end of iterating through all nodes to map
+      if (remapSuccess) {
+        DEBUG("[Remap T]Attempt success");
+        timeExCgra->print();
+        return true;
+      }
+    } // end of reaching max mapping attempts
+    DEBUG("[Remap T]Remap failed after reaching max attempts");
+    // restore the map to previous form, just remove the mapped failedNode
+    // do not need to care about prev or succ
+    timeExCgra->removeNode(failedNode);
+  } // end of if basic remap success
+  // restore all the mapped nodes
+  DEBUG("[Remap T]Failed, restoring locations of nodes in current time slot");
+  for (auto nodeId : mappedNodes) {
+    timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId]);
   }
   return false;
 }

@@ -126,7 +126,7 @@ class Mapper
     // try to remap all nodes in the same time slot as failed node 
     // and find a place for failed node
     // returns if remap is successful
-    bool remapCurrT(Node* failedNode);
+    bool remapCurrT(Node* failedNode, DFG* myDFG);
 };
 
 #endif
