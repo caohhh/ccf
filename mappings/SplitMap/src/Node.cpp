@@ -39,6 +39,10 @@ Node::Node(const Node& originalNode)
   selfLoop = originalNode.selfLoop;
   liveOut = originalNode.liveOut;
   loopCtrl = originalNode.loopCtrl;
+  loadOutputAddressBus = originalNode.loadOutputAddressBus;
+  inputDataBus = originalNode.inputDataBus;
+  storeOutputAddressBus = originalNode.storeOutputAddressBus;
+  outputDataBus = originalNode.outputDataBus;
 }
 
 

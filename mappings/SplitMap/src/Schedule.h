@@ -102,7 +102,7 @@ class moduloSchedule : public schedule
     void clear();
 
     // outputs a dot file of the modulo schedule based on the given DFG
-    void print(DFG* myDFG);
+    void print(DFG* myDFG, std::string name);
 
     // returns the II for this modulo schedule
     int getII();

@@ -305,10 +305,10 @@ moduloSchedule::clear()
 
 
 void
-moduloSchedule::print(DFG* myDFG)
+moduloSchedule::print(DFG* myDFG, std::string name)
 {
   std::ofstream dotFile;
-  std::string fileName = "Modulo_Schedule.dot";
+  std::string fileName = "Modulo_Schedule_" + name + ".dot";
   dotFile.open(fileName);
 
   dotFile << "digraph " << "Modulo_Schedule" << " { \n{\n";
