@@ -209,9 +209,7 @@ Mapper::generateMap(Parser* myParser)
     DEBUG("[Mapper]Mapping for II: " << currentII);
     // Fraction of scheduling space based on user input.
     int lambda =  mappingPolicy.LAMBDA * cgraSize * currentII * originalDFG->getNodeSize();
-    // attempt count for current II
-    int attempt = 0;
-    for (int attemp = 0; attempt < lambda; attemp++) {
+    for (int attempt = 0; attempt < lambda; attempt++) {
       DEBUG("[Mapper]attempt: " << attempt << "/" << lambda << "");
       bool modScheduleSuccess = false;
       DFG* routeDFG = nullptr;
@@ -224,7 +222,6 @@ Mapper::generateMap(Parser* myParser)
           // next, for nodes that can't be immediately accessed, insert routing nodes
           // a new DFG to insert all the routing nodes inserted
           routeDFG = new DFG(*originalDFG);
-          modSchedule->print(routeDFG, "copy");
           if (!insertRoute(routeDFG)) {
             DEBUG("[Mapper]insert routing failed, retry modulo schedule");
             continue;
@@ -244,13 +241,16 @@ Mapper::generateMap(Parser* myParser)
       modSchedule->print(routeDFG, "route");
       timeExCgra = new CGRA(cgraInfo.X_Dim, cgraInfo.Y_Dim, currentII);
       // now falcon mapping
-      falconPlace(routeDFG, currentII);
-      exit(0);
+      bool placeSuccess = falconPlace(routeDFG, currentII);
+      if (placeSuccess) {
+        timeExCgra->print();
+        return true;
+      } 
     } // end of iterating through attempts
-    break;
+    DEBUG("[Mapper]Reached maximum attempt for current II, increasing II");
+    currentII++;
   } // end of while current II <= maxII
-
-  return true;
+  return false;
 }
 
 
@@ -344,8 +344,10 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
 
     // now to schedule the node at a tryTime
     for (int scheduleTime : tryTime) {
-      int modScheduleTime = scheduleTime % II;
-      DEBUG("[Modulo]schedule time: " << scheduleTime << ", modulo schedule time: " << modScheduleTime);
+      #ifndef NDEBUG
+        int modScheduleTime = scheduleTime % II;
+        DEBUG("[Modulo]schedule time: " << scheduleTime << ", modulo schedule time: " << modScheduleTime);
+      #endif
       if (scheduleNode->isLoadDataBusRead()) {
         // first deal with loads, since we've skipped address generators already
         Node* addNode;
@@ -1231,8 +1233,10 @@ Mapper::getSortedNodes(DFG* myDFG)
       sortedNodes.push_back(node);
   }
   DEBUG("[Sorted Nodes]Done sorting with nodes ordered as:");
-  for (auto node : sortedNodes)
-    DEBUG("[Sorted Nodes]" << node->getId());
+  #ifndef NDEBUG
+    for (auto node : sortedNodes)
+      DEBUG("[Sorted Nodes]" << node->getId());
+  #endif
 
   return sortedNodes;
 }
@@ -1321,29 +1325,7 @@ Mapper::insertRoute(DFG* myDFG)
 bool
 Mapper::falconPlace(DFG* myDFG, int II)
 {
-  DEBUG("[Falcon]Start placing");
-  // set of the ids of the nodes left to map, start with all the nodes in the DFG
-  auto nodeSetToMap = myDFG->getNodeIdSet();
-  int searchSpace = cgraSize * II * nodeSetToMap.size() * mappingPolicy.MAX_MAPPING_ATTEMPTS;
-  DEBUG("[Falcon]Max search space: " << searchSpace);
-
-  /************************************************************************************************/
-  // first construct M
-  // check out refine_M in CGRA.cpp for FalconCrimson
-  // what is M
-  // M is a matrix size of nodesize x tablesize
-  // table is of the mapping pairs
-  // if this node is the node of the mapping pair, it is a 1 in M
-
-  // for adjacency list:
-  // mode 5 is each node's pred, other mode is each node's succ
-
-  // essentially, M will be our mapping result in the end,
-  // each row is a node, and each column is a time-extanded pe
-
-  // now maybe most of these won't even be used
-  /************************************************************************************************/
-  
+  DEBUG("[Falcon]Start placing");  
   /**
    * for placing, we have several ways to find a node to map
    * 0: Completely random
@@ -1354,86 +1336,121 @@ Mapper::falconPlace(DFG* myDFG, int II)
    * 5: Priority of having no outgoing edges
   */
   int mappingMode = mappingPolicy.MAPPING_MODE;
-  while (!nodeSetToMap.empty()) {
-    // the uid of the node to map
-    int startNode = -1;  
-    if (mappingMode == 0) {
-      // completely random
-      // ID of the nodes to map
-      std::vector<int> toMap(nodeSetToMap.begin(), nodeSetToMap.end());
-      std::uniform_int_distribution<std::size_t> uni(0, nodeSetToMap.size() - 1);
-      // the node to map
-      int randomIndex = uni(rng);
-      startNode = toMap[randomIndex];
-      DEBUG("[Falcon]Start node: " << startNode);
-    } else if (mappingMode == 1) {
-      // nodes with outgoing recurrent edges
-    }
-    if (startNode == -1)
-      FATAL("[Falcon]Can't find start node to map");
+  for (int attempt = 0; attempt < mappingPolicy.MAX_MAPPING_ATTEMPTS; attempt++) {
+    DEBUG("[Falcon]Placement attempt: " << attempt);
+    // set of the ids of the nodes left to map, start with all the nodes in the DFG
+    auto nodeSetToMap = myDFG->getNodeIdSet();
+    // if a valid placement is found
+    bool placementFound = true;
+    while (!nodeSetToMap.empty()) {
+      // the uid of the node to map
+      int startNode = -1;  
+      if (mappingMode == 0) {
+        // completely random
+        // ID of the nodes to map
+        std::vector<int> toMap(nodeSetToMap.begin(), nodeSetToMap.end());
+        std::uniform_int_distribution<std::size_t> uni(0, nodeSetToMap.size() - 1);
+        // the node to map
+        int randomIndex = uni(rng);
+        startNode = toMap[randomIndex];
+        DEBUG("[Falcon]Start node: " << startNode);
+      } else if (mappingMode == 1) {
+        // nodes with outgoing recurrent edges
+      }
+      if (startNode == -1)
+        FATAL("[Falcon]Can't find start node to map");
 
-    // map the node
-    std::queue<int> mappingQueue;
-    mappingQueue.push(startNode);
-    // mark the node as visited, remove it from set to map
-    nodeSetToMap.erase(startNode);
-    while (!mappingQueue.empty()) {
-      // the node to map
-      Node* node = myDFG->getNode(mappingQueue.front());
-      mappingQueue.pop();
-      DEBUG("[Falcon]Mapping node: " << node->getId());
-      // now based on the mapping status, get free coordinates this node can be mapped to
-      std::vector<PE*> potentialPos = getPotentialPos(node);
-      if (potentialPos.empty()) {
-        DEBUG("[Falcon]No position, remapping");
-        // no position for this node, try to remap and find a potential position
-        bool remapSuccess = remapBasic(node);
-        // in falcon, it goes as: shallow->shallow_n->1deep
-        if (!remapSuccess)
-          remapSuccess = remapCurrT(node, myDFG);
-        timeExCgra->print();
-        if (!remapSuccess)
-          remapSuccess = remapAdjT(node, myDFG);
-        timeExCgra->print();
-        if (!remapSuccess)
-          FATAL("not done yet, " << nodeSetToMap.size() << " nodes left");
-      } else {
-        // there is position for this node, choose a random one for now
-        std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
-        // the PE selected to map the node on
-        PE* selPE = potentialPos.at(uni(rng));
-        // map the node
-        timeExCgra->mapNode(node, selPE);
-        DEBUG("[Falcon]Mapped at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
-                std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
-        timeExCgra->print();
-      }
-      // with the node mapped, there is updating potential pos of its mapped preds and succs
-      
-      // now we add next nodes to map
-      if (mappingMode == 5) {
-        // mode 5 maps pred
-        for (auto pred : node->getPrevNodes()) {
-          if (nodeSetToMap.find(pred->getId()) != nodeSetToMap.end()) {
-            mappingQueue.push(pred->getId());
-            nodeSetToMap.erase(pred->getId());
+      // map the node
+      std::queue<int> mappingQueue;
+      mappingQueue.push(startNode);
+      // mark the node as visited, remove it from set to map
+      nodeSetToMap.erase(startNode);
+      while (!mappingQueue.empty()) {
+        // the node to map
+        Node* node = myDFG->getNode(mappingQueue.front());
+        mappingQueue.pop();
+        DEBUG("[Falcon]Mapping node: " << node->getId());
+        if (timeExCgra->getPeMapped(node->getId()) != nullptr) {
+          DEBUG("[Falcon]Node already placed, remove to find a new location for it");
+          timeExCgra->removeNode(node);
+        }
+        // now based on the mapping status, get free coordinates this node can be mapped to
+        std::vector<PE*> potentialPos = getPotentialPos(node);
+        if (potentialPos.empty()) {
+          DEBUG("[Falcon]No position, remapping");
+          // no position for this node, try to remap and find a potential position
+          bool remapSuccess = remapBasic(node);
+          // in falcon, it goes as: shallow->shallow_n->1deep
+          if (!remapSuccess)
+            remapSuccess = remapCurrT(node, myDFG);
+          if (!remapSuccess)
+            remapSuccess = remapAdjT(node, myDFG);
+          if (!remapSuccess) {
+            // all remap done and node is still not mapped
+            nodeSetToMap.insert(node->getId());
+            // clear out the mapping queue
+            while (!mappingQueue.empty()) {
+              nodeSetToMap.insert(mappingQueue.front());
+              mappingQueue.pop();
+            }
+            placementFound = false;
+            DEBUG("[Falcon]Mapping failed with " << nodeSetToMap.size() << " nodes left");
+            break;
+          }
+        } else {
+          // there is position for this node, choose a random one for now
+          std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
+          // the PE selected to map the node on
+          PE* selPE = potentialPos.at(uni(rng));
+          // map the node
+          timeExCgra->mapNode(node, selPE);
+          DEBUG("[Falcon]Mapped at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
+                  std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
+          #ifndef NDEBUG
+            timeExCgra->print();
+          #endif
+        }        
+        // now we add next nodes to map
+        if (mappingMode == 5) {
+          // mode 5 maps pred
+          for (auto pred : node->getPrevNodes()) {
+            if (nodeSetToMap.find(pred->getId()) != nodeSetToMap.end()) {
+              mappingQueue.push(pred->getId());
+              nodeSetToMap.erase(pred->getId());
+            }
+          }
+        } else {
+          // other mode maps succ
+          for (auto succ : node->getNextNodes()) {
+            // next we add succs of the node to the queue
+            if (nodeSetToMap.find(succ->getId()) != nodeSetToMap.end()) {
+              mappingQueue.push(succ->getId());
+              nodeSetToMap.erase(succ->getId());
+            }
           }
         }
-      } else {
-        // other mode maps succ
-        for (auto succ : node->getNextNodes()) {
-          // next we add succs of the node to the queue
-          if (nodeSetToMap.find(succ->getId()) != nodeSetToMap.end()) {
-            mappingQueue.push(succ->getId());
-            nodeSetToMap.erase(succ->getId());
-          }
-        }
-      }
-    } // end of mappingQueue not empty
-  } // end of nodeSetToMap not empty
-  DEBUG("[Falcon]Placement success");
-  timeExCgra->print();
-  return true;
+        if (!placementFound)
+          break;
+      } // end of mappingQueue not empty
+      if (!placementFound)
+        break;
+    } // end of nodeSetToMap not empty
+    if (placementFound) {
+      // valid placement found
+      DEBUG("[Falcon]Placement success at attempt: " << attempt);
+      #ifndef NDEBUG
+        timeExCgra->print();
+      #endif
+      return true;
+    } else {
+      // no valid placement found during this attempt
+      DEBUG("[Falcon]Attemp failed");
+      // reset the time extanded cgra
+      timeExCgra->clear();
+    }
+  } // end of reaching max mapping attempts
+  DEBUG("[Falcon]Placement failed after reaching maximum attempt");
+  return false;
 }
 
 
@@ -1785,7 +1802,9 @@ Mapper::remapBasic(Node* failedNode)
         timeExCgra->mapNode(failedNode, selPE);
         DEBUG("[Remap Basic]Remap success at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
                 std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
-        timeExCgra->print();
+        #ifndef NDEBUG
+          timeExCgra->print();
+        #endif
         return true;
       } else {
         constraintIt--;
@@ -1889,8 +1908,10 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
         }
       } // end of iterating through all nodes to map
       if (remapSuccess) {
-        DEBUG("[Remap T]Attempt success");
-        timeExCgra->print();
+        DEBUG("[Remap T]Attempt success: " << attempt);
+        #ifndef NDEBUG
+          timeExCgra->print();
+        #endif
         return true;
       }
     } // end of reaching max mapping attempts
@@ -2011,8 +2032,10 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG)
         }
       } // end of iterating through all nodes to map
       if (remapSuccess) {
-        DEBUG("[Remap Adj]Attempt success");
-        timeExCgra->print();
+        DEBUG("[Remap Adj]Attempt success: " << attempt);
+        #ifndef NDEBUG
+          timeExCgra->print();
+        #endif
         return true;
       }
     } // end of reaching max mapping attempts

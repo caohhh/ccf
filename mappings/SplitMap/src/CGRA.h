@@ -53,6 +53,9 @@ class CGRA
     // remove a mapped node
     void removeNode(Node* node);
 
+    // clear all mapped nodes
+    void clear();
+
   private:
     // size x of this CGRA, as in number of rows
     int xDim;
@@ -84,6 +87,9 @@ class PE
     // remove a node with the ID at the PE
     void removeNode(int nodeId);
 
+    // remove mapped node
+    void clear();
+
   private:
     // x coordinate of the PE
     int x;
@@ -112,6 +118,9 @@ class Row
     
     // remove a mem node at the given row
     void removeNode(Node* node);
+
+    // reset the row
+    void clear();
 
   private:
     // x coordinate of the row

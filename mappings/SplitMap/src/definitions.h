@@ -5,6 +5,7 @@
 #define __SPLITMAP_DEFINITIONS_H__
 #include <iostream>
 
+//#define NDEBUG
 struct CGRA_Architecture
 {
   unsigned X_Dim;
@@ -20,7 +21,7 @@ struct CGRA_Architecture
 
 struct Mapping_Policy
 {
-  float MAX_MAPPING_ATTEMPTS;
+  int MAX_MAPPING_ATTEMPTS;
   int CLIQUE_ATTEMPTS;
   int MAX_LATENCY;
   bool ENABLE_REGISTERS;

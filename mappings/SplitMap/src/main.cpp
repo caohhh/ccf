@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
   mappingPolicy.MAX_II = 50;
   mappingPolicy.LAMBDA = 0.02;
   mappingPolicy.MODULO_SCHEDULING_ATTEMPTS = 1000;
-  mappingPolicy.MAX_MAPPING_ATTEMPTS = 1000;
+  mappingPolicy.MAX_MAPPING_ATTEMPTS = 500;
 
   // Default inputs and settings
   cgraInfo.X_Dim = 4;

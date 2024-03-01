@@ -192,6 +192,16 @@ CGRA::removeNode(Node* node)
   }
 }
 
+
+void
+CGRA::clear()
+{
+  for (PE* pe : peSet)
+    pe->clear();
+  for (Row* row : rowSet)
+    row->clear();
+}
+
 /************************PE******************************/
 PE::PE(int x, int y, int t)
 {
@@ -229,6 +239,13 @@ PE::removeNode(int nodeId)
   if (this->nodeId != nodeId)
     FATAL("[PE]ERROR! removing a node not mapped to this PE");
   this->nodeId = -1;
+}
+
+
+void
+PE::clear()
+{
+  nodeId = -1;
 }
 
 /************************Row******************************/
@@ -312,4 +329,14 @@ Row::removeNode(Node* node)
     }
   } else
     FATAL("[Row]ERROR!removing node from a row not mapped");
+}
+
+
+void
+Row::clear()
+{
+  dataNodeId = -1;
+  addNodeId = -1;
+  read = false;
+  write = false;
 }

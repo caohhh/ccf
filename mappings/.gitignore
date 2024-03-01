@@ -21,3 +21,6 @@
 /SimulatedAnnealing/Release/debugfile
 /GraphMinor/Release/debugfile
 /REGIMap/Release/debugfile
+
+*.dot
+*.log
