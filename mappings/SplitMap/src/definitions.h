@@ -105,8 +105,13 @@ do { \
   exit(1); \
 } while (0)
 
-#define DEBUG(x) \
-do { \
-  std::cout << x << std::endl; \
-} while(0)
+#ifndef NDEBUG
+  #define DEBUG(x) \
+  do { \
+    std::cout << x << std::endl; \
+  } while(0) 
+#else
+  #define DEBUG(x)
+#endif 
+
 #endif //__SPLILTMAP_DEFINITIONS_H__

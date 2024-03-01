@@ -123,10 +123,15 @@ class Mapper
     // returns if a valid position is found
     bool remapBasic(Node* failedNode);
 
+    /******the following 2 remap probably need adjustment to max remap attempt******/
+
     // try to remap all nodes in the same time slot as failed node 
     // and find a place for failed node
     // returns if remap is successful
     bool remapCurrT(Node* failedNode, DFG* myDFG);
+
+    // remapping adjacent time slots and try to find a position for the failed node
+    bool remapAdjT(Node* failedNode, DFG* myDFG);
 };
 
 #endif

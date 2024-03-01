@@ -309,7 +309,7 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
       }
     }
     if (scheduleNode == nullptr) {
-      #ifdef DEBUG
+      #ifndef NDEBUG
         DEBUG("[Modulo]No node to schedule with " << toSchedule.size() << " nodes left: ");
         for (Node* node : toSchedule)
           DEBUG("[Modulo]node: " << node->getId() << " not scheduled");
@@ -460,7 +460,8 @@ Mapper::getModConstrainedTime(Node* node)
 
 
 bool
-Mapper::isModConstrainedBy(Node* source, Node* pred) {
+Mapper::isModConstrainedBy(Node* source, Node* pred)
+{
   std::set<Node*> visited;
   std::queue<Node*> toVisit;
   toVisit.push(source);
@@ -1392,7 +1393,10 @@ Mapper::falconPlace(DFG* myDFG, int II)
           remapSuccess = remapCurrT(node, myDFG);
         timeExCgra->print();
         if (!remapSuccess)
-          FATAL("not done yet");
+          remapSuccess = remapAdjT(node, myDFG);
+        timeExCgra->print();
+        if (!remapSuccess)
+          FATAL("not done yet, " << nodeSetToMap.size() << " nodes left");
       } else {
         // there is position for this node, choose a random one for now
         std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
@@ -1427,7 +1431,7 @@ Mapper::falconPlace(DFG* myDFG, int II)
       }
     } // end of mappingQueue not empty
   } // end of nodeSetToMap not empty
-
+  DEBUG("[Falcon]Placement success");
   timeExCgra->print();
   return true;
 }
@@ -1802,9 +1806,30 @@ bool
 Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
 {
   DEBUG("[Remap T]Remapping failed node: " << failedNode->getId());
-  // here we exclude store related node since it's the only with pred or succ at same time slot
-  if (failedNode->isStoreAddressGenerator() || failedNode->isStoreDataBusWrite())
-    FATAL("[Remap T]Store node remap not implemented yet");
+  
+  // in case preds or succs are in the same time slot as failed node, we store and restore them
+  std::vector<Node*> mappedCons;
+  // also store the original positions of the constraints
+  std::map<Node*, PE*> originalConsPos; 
+  for (Node* pred : failedNode->getPrevNodes()) {
+    if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+      // pred is mapped
+      mappedCons.push_back(pred);
+      originalConsPos[pred] = timeExCgra->getPeMapped(pred->getId());
+      timeExCgra->removeNode(pred);
+    }
+  } // end of iterating through preds
+  for (Node* succ : failedNode->getNextNodes()) {
+    if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+      // the succ is mapped
+      mappedCons.push_back(succ);
+      originalConsPos[succ] = timeExCgra->getPeMapped(succ->getId());
+      timeExCgra->removeNode(succ);
+    }
+  } // end of iterating through succs
+  if (mappedCons.empty())
+    FATAL("[Remap T]ERROR!! Remapping a node without constraints");
+
   // for this, we remove all nodes in the same time slot, and do basic remap, than try and remap all the removed nodes
   // all the mapped nodes in current time slot for later remap/restore
   std::vector<int> mappedNodes;
@@ -1819,6 +1844,11 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
       timeExCgra->removeNode(myDFG->getNode(pe->getNode()));
     } 
   }
+
+  // restore mapped constraints
+  for (Node* constraint : mappedCons) 
+    timeExCgra->mapNode(constraint, originalConsPos[constraint]);
+  
   // now do a basic remap
   bool basicSuccess = remapBasic(failedNode);
   if (basicSuccess) {
@@ -1871,6 +1901,128 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
   } // end of if basic remap success
   // restore all the mapped nodes
   DEBUG("[Remap T]Failed, restoring locations of nodes in current time slot");
+  for (auto nodeId : mappedNodes) {
+    timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId]);
+  }
+  return false;
+}
+
+
+bool
+Mapper::remapAdjT(Node* failedNode, DFG* myDFG)
+{
+  DEBUG("[Remap Adj]Remapping failed node: " << failedNode->getId());
+
+  // for this, we remove all unrelated nodes in prev slot and succ slot (if constraining)
+  // and then do basic remap
+  // first get the constraing mapped preds and succs
+  std::vector<Node*> mappedCons;
+  // also store the original positions of the constraints
+  std::map<Node*, PE*> originalConsPos; 
+  for (Node* pred : failedNode->getPrevNodes()) {
+    if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+      // pred is mapped
+      mappedCons.push_back(pred);
+      originalConsPos[pred] = timeExCgra->getPeMapped(pred->getId());
+      timeExCgra->removeNode(pred);
+    }
+  } // end of iterating through preds
+  for (Node* succ : failedNode->getNextNodes()) {
+    if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+      // the succ is mapped
+      mappedCons.push_back(succ);
+      originalConsPos[succ] = timeExCgra->getPeMapped(succ->getId());
+      timeExCgra->removeNode(succ);
+    }
+  } // end of iterating through succs
+  if (mappedCons.empty())
+    FATAL("[Remap Adj]ERROR!! Remapping a node without constraints");
+
+  // now we get the time slots to remap, of the constraints and the failed node
+  std::set<int> remapTimeSlots;
+  for (Node* cons : mappedCons)
+    remapTimeSlots.insert(modSchedule->getModScheduleTime(cons));
+  remapTimeSlots.insert(modSchedule->getModScheduleTime(failedNode));
+  #ifndef NDEBUG
+    std::cout << "[Remap Adj]Remapping time slots: ";
+    for (int timeSlot : remapTimeSlots)
+      std::cout << timeSlot <<" ";
+    std::cout << std::endl;
+  #endif
+
+  // store original positions of mapped nodes in time slots
+  std::vector<int> mappedNodes;
+  std::map<int, PE*> originalPos;
+
+  // free the timeslots 
+  for (int timeSlot : remapTimeSlots) {
+    for (auto pe : timeExCgra->getPeAtTime(timeSlot)) {
+      if (pe->getNode() != -1) {
+        // note down the mapped nodes
+        mappedNodes.push_back(pe->getNode());
+        // store the previously PE mapped
+        originalPos[pe->getNode()] = pe;
+        // remove the node from map
+        timeExCgra->removeNode(myDFG->getNode(pe->getNode()));
+      } 
+    }
+  }
+  // restore the constraints
+  for (Node* cons : mappedCons)
+    timeExCgra->mapNode(cons, originalConsPos[cons]);
+  
+  // now do the basic remap
+  bool basicSuccess = remapBasic(failedNode);
+  if (basicSuccess) {
+    // basic remap success, now we need to remap all the mapped nodes in time slots
+    // here we also have a choice to remap a time slot at a time, don't know if that will be better
+    DEBUG("[Remap Adj]Remapping all " << mappedNodes.size() << " nodes");
+    for (int attempt = 0; attempt < mappingPolicy.MAX_MAPPING_ATTEMPTS; attempt++) {
+      DEBUG("[Remap Adj]Remap attempt: " << attempt);
+      bool remapSuccess = true;
+      // first shuffle the nodes to remap
+      std::shuffle(mappedNodes.begin(), mappedNodes.end(), rng);
+      for (int nodeToMap : mappedNodes) {
+        Node* remapNode = myDFG->getNode(nodeToMap);
+        auto potentialPos = getPotentialPos(remapNode);
+        if (potentialPos.empty()) {
+          // remap attempt failed
+          DEBUG("[Remap Adj]Attempt failed, starting over");
+          // remove all mapped nodes in this attempt
+          for (int nodeId : mappedNodes) {
+            if (timeExCgra->getPeMapped(nodeId) != nullptr)
+              timeExCgra->removeNode(myDFG->getNode(nodeId));
+          }
+          remapSuccess = false;
+          if (attempt % mappedNodes.size() == 0) {
+            // redo basic remap to try and create greater success rate
+            DEBUG("[Remap Adj]Redoing basic remap");
+            timeExCgra->removeNode(failedNode);
+            remapBasic(failedNode);
+          }
+          break;
+        } else {
+          // there is position for this node, choose a random one for now
+          std::uniform_int_distribution<std::size_t> uni(0, potentialPos.size() - 1);
+          // the PE selected to map the node on
+          PE* selPE = potentialPos.at(uni(rng));
+          // map the node
+          timeExCgra->mapNode(remapNode, selPE);
+        }
+      } // end of iterating through all nodes to map
+      if (remapSuccess) {
+        DEBUG("[Remap Adj]Attempt success");
+        timeExCgra->print();
+        return true;
+      }
+    } // end of reaching max mapping attempts
+    DEBUG("[Remap Adj]Remap failed after reaching max attempts");
+    // restore the map to previous form, just remove the mapped failedNode
+    // do not need to care about prev or succ
+    timeExCgra->removeNode(failedNode);
+  }
+  // restore all the mapped nodes
+  DEBUG("[Remap Adj]Failed, restoring locations of nodes in current time slot");
   for (auto nodeId : mappedNodes) {
     timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId]);
   }
