@@ -531,13 +531,15 @@ NODE* DFG::get_Node(std::string name){
 
 NODE* DFG::get_Node(Value* ins)
 {
+  if (ins->getValueID() == llvm::Value::ConstantIntVal)
+    errs() << "WARNNING!!!!!Getting a constant int node with LLVM value, will most likely cause problem" << "\n";
   std::vector<NODE*>::iterator iNode1;
   for (iNode1 = _node_Set.begin(); iNode1 != _node_Set.end(); iNode1++)
   {
-    if ((*iNode1)->get_LLVM_Instruction() == ins)
+    if ((*iNode1)->get_LLVM_Instruction() == ins) {
       return *iNode1;
+    }
   }
-
   return NULL;
 }
 
@@ -561,11 +563,15 @@ NODE* DFG::get_Node_1(Value* ins)
 
 NODE* DFG::get_Node_Mem_Add(Value* ins)
 {
+  if (ins->getValueID() == llvm::Value::ConstantIntVal)
+    errs() << "WARNNING!!!!!Getting a constant int node with LLVM value, will most likely cause problem" << "\n";
+
   std::vector<NODE*>::iterator iNode1;
   for (iNode1 = _node_Set.begin(); iNode1 != _node_Set.end(); iNode1++)
   {
-    if ((*iNode1)->get_LLVM_Instruction() == ins && ((*iNode1)->get_Instruction() == st_add || (*iNode1)->get_Instruction() == ld_add))
+    if ((*iNode1)->get_LLVM_Instruction() == ins && ((*iNode1)->get_Instruction() == st_add || (*iNode1)->get_Instruction() == ld_add)) {
       return *iNode1;
+    }
   }
 
   return NULL;
@@ -574,11 +580,14 @@ NODE* DFG::get_Node_Mem_Add(Value* ins)
 
 NODE* DFG::get_Node_Mem_Data(Value* ins)
 {
+  if (ins->getValueID() == llvm::Value::ConstantIntVal)
+    errs() << "WARNNING!!!!!Getting a constant int node with LLVM value, will most likely cause problem" << "\n";
   std::vector<NODE*>::iterator iNode1;
   for (iNode1 = _node_Set.begin(); iNode1 != _node_Set.end(); iNode1++)
   {
-    if ((*iNode1)->get_LLVM_Instruction() == ins && ((*iNode1)->get_Instruction() == st_data || (*iNode1)->get_Instruction() == ld_data))
+    if ((*iNode1)->get_LLVM_Instruction() == ins && ((*iNode1)->get_Instruction() == st_data || (*iNode1)->get_Instruction() == ld_data)) {
       return *iNode1;
+    }
   }
 
   return NULL;

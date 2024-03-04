@@ -360,6 +360,10 @@ class DFG
 } /* namespace llvm */
 
 
-#define DEBUG(x) do { errs() << x; } while (0)
+#ifndef NDEBUG_M
+  #define DEBUG(x) do { errs() << x; } while (0)
+#else
+  #define DEBUG(x)
+#endif
 
 #endif /* DFG_H_ */

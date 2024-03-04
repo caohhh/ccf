@@ -1216,7 +1216,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
     //constant values can be immediate
     //if it is greater than immediate field; instruction generation should treat it as nonrecurring value
     if (operandVal->getValueID() == llvm::Value::ConstantIntVal) {
-      DEBUG("  in constintval\n");
+      DEBUG("  is constintval\n");
       int constVal = 0;
       if (dyn_cast<llvm::ConstantInt>(operandVal)->getBitWidth() > 1)
         constVal = dyn_cast<llvm::ConstantInt>(operandVal)->getSExtValue();
@@ -1443,23 +1443,29 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
     DEBUG(" Fixing op order of select\n"); 
     DEBUG("  Select node: " << loopDFG->get_Node(BI)->get_ID() << "\n");
     NODE* nodeSel = loopDFG->get_Node(BI);
-    // cond op
-    NODE* nodeOp = loopDFG->get_Node((dyn_cast<SelectInst>(BI))->getCondition());
-    ARC* arcOp = loopDFG->get_Arc(nodeOp, nodeSel);
-    arcOp->SetOperandOrder(2);
-    arcOp->Set_Dependency_Type(PredDep);
-    // true op
-    nodeOp = loopDFG->get_Node((dyn_cast<SelectInst>(BI))->getTrueValue());
-    if (nodeOp->is_Load_Address_Generator())
-      nodeOp = nodeOp->get_Related_Node();  
-    arcOp = loopDFG->get_Arc(nodeOp, nodeSel);
-    arcOp->SetOperandOrder(0);
-    // false op
-    nodeOp = loopDFG->get_Node((dyn_cast<SelectInst>(BI))->getFalseValue());
-    if (nodeOp->is_Load_Address_Generator())
-      nodeOp = nodeOp->get_Related_Node();
-    arcOp = loopDFG->get_Arc(nodeOp, nodeSel);
-    arcOp->SetOperandOrder(1);
+    for (NODE* nodeOp : nodeSel->Get_Prev_Nodes()) {
+      if (nodeOp->get_LLVM_Instruction() == (dyn_cast<SelectInst>(BI))->getCondition()) {
+        // cond op
+        DEBUG("  cond op is " << nodeOp->get_ID() << "\n");
+        ARC* arcOp = loopDFG->get_Arc(nodeOp, nodeSel);
+        arcOp->SetOperandOrder(2);
+        arcOp->Set_Dependency_Type(PredDep);
+      } else if (nodeOp->get_LLVM_Instruction() == (dyn_cast<SelectInst>(BI))->getTrueValue()) {
+        // true op
+        DEBUG("  true op is " << nodeOp->get_ID() << "\n");
+        if (nodeOp->is_Load_Address_Generator())
+          nodeOp = nodeOp->get_Related_Node();  
+        ARC* arcOp = loopDFG->get_Arc(nodeOp, nodeSel);
+        arcOp->SetOperandOrder(0);
+      } else if (nodeOp->get_LLVM_Instruction() == (dyn_cast<SelectInst>(BI))->getFalseValue()) {
+        // false op
+        DEBUG("  false op is " << nodeOp->get_ID() << "\n");
+        if (nodeOp->is_Load_Address_Generator())
+          nodeOp = nodeOp->get_Related_Node();  
+        ARC* arcOp = loopDFG->get_Arc(nodeOp, nodeSel);
+        arcOp->SetOperandOrder(1);
+      }
+    }
   }
 
   // for get element pointer instructions
@@ -1655,7 +1661,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       loopDFG->insert_Node(nodeOffsetConst);
       offsetNodes.push_back(nodeOffsetConst);
     }
-    #ifdef DEBUG
+    #ifndef NDEBUG_M
       DEBUG("offsetNodes size: " << offsetNodes.size() << "\n");
       for (auto node : offsetNodes) {
         DEBUG(node->get_Name() << "\n");
@@ -1726,7 +1732,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
         bbList.push_back(dyn_cast<PHINode>(BI)->getIncomingBlock(ii));
         operandList.push_back(dyn_cast<Instruction>(BI->getOperand(ii)));
       } 
-      #ifdef DEBUG
+      #ifndef NDEBUG_M
         for (unsigned int ii=0; ii < (int) operandList.size(); ii++)
           DEBUG("  op nodes: " << loopDFG->get_Node(operandList[ii])->get_ID() << "\n");
         DEBUG("  BBLIST:\n\n"); 
@@ -2259,7 +2265,7 @@ MultiDDGGen::fuseNodes(DFG* loopDFG)
       ++nodeIT;
   }
   //  or we can first map...
-  #ifdef DEBUG
+  #ifndef NDEBUG_M
     DEBUG("true nodes to be fused include:\n");
     for (auto nodeIT : trueNodeSet) {
       DEBUG(nodeIT->get_Name() << ", " << nodeIT->get_ID() << "\n");
@@ -2352,7 +2358,7 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
 
   // here to first update the loop's branching information
   updateBranchInfo(L, DT);
-  #ifdef DEBUG
+  #ifndef NDEBUG_M
     for (auto const &branch : mapBrIdPaths) {
       DEBUG("Printing out all the branches\n");
       DEBUG("BrId: " << branch.first << "\n");
@@ -2376,7 +2382,7 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
     }
   }
 
-  #ifdef DEBUG
+  #ifndef NDEBUG_M
     DEBUG("Add nodes complete\n");
     for (int i = 0; i < (int) bbs.size(); i++) 
       for (BasicBlock::iterator BI = bbs[i]->begin(); BI != bbs[i]->end(); ++BI) {
