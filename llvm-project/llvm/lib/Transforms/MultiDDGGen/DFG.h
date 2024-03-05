@@ -257,6 +257,9 @@ class ARC
     int ID;
     int Inter_Iteration_Distance;
     int operandOrder;
+    // this is only used for arcs created with the removal of a sel node
+    // to register with path this arc originally belongs to.
+    nodePath brPath;
   public:
     //Set the node that this edge is its outgoing edge
     void Set_From_Node(NODE* inNode);
@@ -281,6 +284,10 @@ class ARC
     int GetOperandOrder();
     void SetOperandOrder(int i);
     void Set_Inter_Iteration_Distance(int inter); 
+    // set the branch path of this arc, used only for arcs originally connected to sel nodes
+    void setPath(nodePath brPath);
+    // returns the branch path this arc belongs to
+    nodePath getPath();
 };
 
 class DFG
@@ -329,8 +336,9 @@ class DFG
     NODE* get_Node_Mem_Add(Value* ins);
     NODE* get_Node_Mem_Data(Value* ins);
 
-    //make an edge between two nodes
-    void make_Arc(NODE* pNin, NODE* pNout, int ID, int Distance, 
+    // make an edge between two nodes
+    // returns the arc if made, NULL if no arc was created
+    ARC* make_Arc(NODE* pNin, NODE* pNout, int ID, int Distance, 
                   DataDepType dep,int operandOrder=0);
 
     //delete a node from node set

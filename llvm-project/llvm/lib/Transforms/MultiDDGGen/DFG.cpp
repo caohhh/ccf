@@ -19,6 +19,7 @@ ARC::ARC(int ID, int Inter_Iteration_Distance,int operandOrder)
   this->ID = ID;
   this->Inter_Iteration_Distance = Inter_Iteration_Distance;
   this->operandOrder = operandOrder;
+  brPath = none;
 }
 
 ARC::~ARC()
@@ -88,6 +89,19 @@ void ARC::SetOperandOrder(int i)
   operandOrder = i;
 }
 
+
+void
+ARC::setPath(nodePath brPath)
+{
+  this->brPath = brPath;
+}
+
+
+nodePath
+ARC::getPath()
+{
+  return brPath;
+}
 
 /************************************NODE************************************/
 NODE::NODE(Instruction_Operation ins, int laten, int id, std::string name, Value* Node_Ins, unsigned basicBlockIdx)
@@ -594,7 +608,7 @@ NODE* DFG::get_Node_Mem_Data(Value* ins)
 }
 
 //make an edge between two nodes
-void DFG::make_Arc(NODE* pNin, NODE* pNout, int ID, int Distance, DataDepType dep, int operandOrder)
+ARC* DFG::make_Arc(NODE* pNin, NODE* pNout, int ID, int Distance, DataDepType dep, int operandOrder)
 {
   if (pNin->is_Connected_To(pNout))
   {
@@ -604,12 +618,12 @@ void DFG::make_Arc(NODE* pNin, NODE* pNout, int ID, int Distance, DataDepType de
     ARC *arc1 = get_Arc(pNin,pNout);
     if(arc1 != NULL)
       if(arc1->GetOperandOrder() == operandOrder)
-        return;
+        return NULL;
   }
 
   if (pNin->get_ID() == pNout->get_ID() && pNin->has_self_loop())
   {
-    return;
+    return NULL;
   }
 
   ARC *pArc;
@@ -634,6 +648,7 @@ void DFG::make_Arc(NODE* pNin, NODE* pNout, int ID, int Distance, DataDepType de
   {
     ARC_Max_Index = ID;
   }
+  return pArc;
 }
 
 // Delete a node from node set
@@ -863,14 +878,14 @@ void DFG::Dump_Loop(std::string filename)
         errs() << "load: " << _node_Set[i]->get_ID() << "\t" << _node_Set[i]->get_Name() << "\n";
         errs() << "related: " << _node_Set[i]->get_Related_Node()->get_ID() << "\n";
       }
-      edgeFile << _node_Set[i]->get_ID() << "\t" << _node_Set[i]->get_Related_Node()->get_ID() << "\t" << "0" << "\t" << "LRE" << "\t0" << "\n";
+      edgeFile << _node_Set[i]->get_ID() << "\t" << _node_Set[i]->get_Related_Node()->get_ID() << "\t" << "0" << "\t" << "LRE" << "\t0" <<"\t0" << "\n";
       alignment = _node_Set[i]->getAlignment();
     }
     if (_node_Set[i]->is_Store_Address_Generator())
     {
       if(debug)
         errs() << "store\n";
-      edgeFile << _node_Set[i]->get_ID() << "\t" << _node_Set[i]->get_Related_Node()->get_ID() << "\t" << "0" << "\t" << "SRE" << "\t0" << "\n";
+      edgeFile << _node_Set[i]->get_ID() << "\t" << _node_Set[i]->get_Related_Node()->get_ID() << "\t" << "0" << "\t" << "SRE" << "\t0" <<"\t0"<< "\n";
       alignment = _node_Set[i]->getAlignment();
     }
     if(_node_Set[i]->get_Instruction() == constant)
@@ -923,18 +938,18 @@ void DFG::Dump_Loop(std::string filename)
 
     if (_ARC_Set[i]->Get_Dependency_Type() == PredDep)
     {
-      edgeFile << _ARC_Set[i]->get_From_Node()->get_ID() << "\t" << _ARC_Set[i]->get_To_Node()->get_ID() << "\t" << _ARC_Set[i]->Get_Inter_Iteration_Distance() << "\t" << "PRE"<<"\t" <<_ARC_Set[i]->GetOperandOrder() << "\n";
+      edgeFile << _ARC_Set[i]->get_From_Node()->get_ID() << "\t" << _ARC_Set[i]->get_To_Node()->get_ID() << "\t" << _ARC_Set[i]->Get_Inter_Iteration_Distance() << "\t" << "PRE"<<"\t" <<_ARC_Set[i]->GetOperandOrder() << "\t" <<_ARC_Set[i]->getPath() << "\n";
 
     }
     else if(_ARC_Set[i]->Get_Dependency_Type() == LiveInDataDep)
     {
-      edgeFile << _ARC_Set[i]->get_From_Node()->get_ID() << "\t" << _ARC_Set[i]->get_To_Node()->get_ID() << "\t" << _ARC_Set[i]->Get_Inter_Iteration_Distance() << "\t" << "LIE"<<"\t" <<_ARC_Set[i]->GetOperandOrder() << "\n";
+      edgeFile << _ARC_Set[i]->get_From_Node()->get_ID() << "\t" << _ARC_Set[i]->get_To_Node()->get_ID() << "\t" << _ARC_Set[i]->Get_Inter_Iteration_Distance() << "\t" << "LIE"<<"\t" <<_ARC_Set[i]->GetOperandOrder() << "\t" <<_ARC_Set[i]->getPath() << "\n";
     }
     else if(_ARC_Set[i]->Get_Dependency_Type() == LoopControlDep)
-      edgeFile << _ARC_Set[i]->get_From_Node()->get_ID() << "\t" << _ARC_Set[i]->get_To_Node()->get_ID() << "\t" << _ARC_Set[i]->Get_Inter_Iteration_Distance() << "\t" << "LCE"<<"\t" <<_ARC_Set[i]->GetOperandOrder() << "\n";
+      edgeFile << _ARC_Set[i]->get_From_Node()->get_ID() << "\t" << _ARC_Set[i]->get_To_Node()->get_ID() << "\t" << _ARC_Set[i]->Get_Inter_Iteration_Distance() << "\t" << "LCE"<<"\t" <<_ARC_Set[i]->GetOperandOrder() << "\t" <<_ARC_Set[i]->getPath() << "\n";
     else
     {
-      edgeFile << _ARC_Set[i]->get_From_Node()->get_ID() << "\t" << _ARC_Set[i]->get_To_Node()->get_ID() << "\t" << _ARC_Set[i]->Get_Inter_Iteration_Distance() << "\t" << "TRU"<<"\t"<< _ARC_Set[i]->GetOperandOrder() << "\n";
+      edgeFile << _ARC_Set[i]->get_From_Node()->get_ID() << "\t" << _ARC_Set[i]->get_To_Node()->get_ID() << "\t" << _ARC_Set[i]->Get_Inter_Iteration_Distance() << "\t" << "TRU"<<"\t"<< _ARC_Set[i]->GetOperandOrder() << "\t" <<_ARC_Set[i]->getPath() << "\n";
     }
   }
 
@@ -942,4 +957,3 @@ void DFG::Dump_Loop(std::string filename)
   nodeFile.close();
 }
 
-///make a new node from instruction BI and adds it to DFe* namespace llvm */

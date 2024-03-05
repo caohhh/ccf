@@ -533,10 +533,10 @@ MultiDDGGen::updateBranchInfo(Loop* L, DominatorTree* DT)
     for (int ii = 0; ii < (int) bbs.size(); ii++) {
       if (DT->dominates(*trueEdge, bbs[ii])) {
         paths.truePath.push_back(ii);
-        DEBUG("block " << ii << "in true path\n");
+        DEBUG("block " << ii << " in true path\n");
       } else if (DT->dominates(*falseEdge, bbs[ii])) {
         paths.falsePath.push_back(ii);
-        DEBUG("block " << ii << "in false path\n");
+        DEBUG("block " << ii << " in false path\n");
       }
     }
     mapBrIdPaths[i] = paths;
@@ -2177,14 +2177,16 @@ MultiDDGGen::splitDFG(DFG* loopDFG, int splitBrId)
           DEBUG("successor node of phi node: " << succNode->get_Name() << "\n");
           ARC* arcPhi = loopDFG->get_Arc(nodeIT, succNode);
           
-          loopDFG->make_Arc(trueNode, succNode, edgeID++, arcPhi->Get_Inter_Iteration_Distance(), 
+          // here we need to note if this new arc belongs to a path for later mapping
+          ARC* arcTrue = loopDFG->make_Arc(trueNode, succNode, edgeID++, arcPhi->Get_Inter_Iteration_Distance(), 
                   arcPhi->Get_Dependency_Type(), arcPhi->GetOperandOrder());
-          loopDFG->make_Arc(falseNode, succNode, edgeID++, arcPhi->Get_Inter_Iteration_Distance(), 
-                            arcPhi->Get_Dependency_Type(), arcPhi->GetOperandOrder());
+          arcTrue->setPath(true_path);
+          ARC* arcFalse = loopDFG->make_Arc(falseNode, succNode, edgeID++, arcPhi->Get_Inter_Iteration_Distance(), 
+                  arcPhi->Get_Dependency_Type(), arcPhi->GetOperandOrder());
+          arcFalse->setPath(false_path);
         }
         // safe to delete the phi node now
         loopDFG->delete_Node(nodeIT);
-        nodeIT->setOperation(cond_select);
       }
     }
   }
@@ -2462,7 +2464,7 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   DEBUG("Done splitting the DFG\n");
   
   // after splitting the DFG, we need to fuse the nodes of the two paths
-  fuseNodes(loopDFG);
+  //fuseNodes(loopDFG);
 
   std::ostringstream osNodeID;
   osNodeID << nodeID;
