@@ -792,9 +792,9 @@ void DFG::Dot_Print_DFG(std::string filename)
       dotFile << "style=filled, fillcolor = orange];\n";
     }
     else if (_node_Set[i]->getBrPath() == true_path) {
-      dotFile << "style=filled, fillcolor = lightcoral];\n";
-    } else if (_node_Set[i]->getBrPath() == false_path) {
       dotFile << "style=filled, fillcolor = lightblue];\n";
+    } else if (_node_Set[i]->getBrPath() == false_path) {
+      dotFile << "style=filled, fillcolor = lightcoral];\n";
     } else {
       dotFile << "];\n";
     }
