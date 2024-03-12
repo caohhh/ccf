@@ -681,8 +681,8 @@ DFG::padPath()
   }
   // DFG is a split source, check all the arcs belonging to a path
 
-  // arcs to pad
-  std::vector<Arc*> toPad;
+  // arcs to pad, accessed by their from node
+  std::map<Node*, std::vector<Arc*>>  toPad;
   for (Arc* arc :  arcSet) {
     if (arc->getPath() != none) {
       // sanity check to ensure arcs with path is to a node with none path
@@ -690,25 +690,33 @@ DFG::padPath()
         FATAL("[Pad Path]ERROR!!Edge with branch path should always be to a node with none path");
       if (arc->getFromNode()->getBrPath() == none) {
         // if from node is of none path, then padding is needed
-        toPad.push_back(arc);
+        toPad[arc->getFromNode()].push_back(arc);
       }
     }
   } // end of iterating through arcSet
 
   // now do the padding, doing this seperately because we need to remove the padded arc from arcset
   // and I'm too lazy to change the removeArc function to return an iterator position
-  for (Arc* arc : toPad) {
-    DEBUG("[Pad Path]Padding between node: " << arc->getFromNode()->getId() <<" to node: " << arc->getToNode()->getId() << 
-          " of path " << arc->getPath());
-    // first a new routing node of the arc's path
-    routeNode* newRouteNode = new routeNode(arc->getFromNode(), arc->getPath());
-    // we put this routing node in the same iteration as the from node
+  for (auto it : toPad) {
+    Node* fromNode = it.first;
+    std::vector<Arc*> arcsToPad = it.second;
+    // path of the arcs, should be the same across the vector
+    nodePath path = arcsToPad[0]->getPath();
+    // first the new routing node
+    routeNode* newRouteNode = new routeNode(fromNode, path);
     insertNode(newRouteNode);
-    // connect to from node
-    makeArc(arc->getFromNode(), newRouteNode, 0, TrueDep, 0, none);
-    // connect to to node
-    makeArc(newRouteNode, arc->getToNode(), arc->getDistance(), arc->getDependency(), arc->getOperandOrder(), arc->getPath());
-    // remove the arc
-    removeArc(arc->getId());
+    // connect it to from node, we make the routing node in the same iter as the from node
+    makeArc(fromNode, newRouteNode, 0, TrueDep, 0, none);
+    // now iterate through the arcs
+    for (auto arc : arcsToPad) {
+      DEBUG("[Pad Path]Padding between node: " << fromNode->getId() <<" to node: " << arc->getToNode()->getId() << 
+        " of path " << arc->getPath());
+      if (arc->getPath() != path)
+        FATAL("[Pad Path]ERROR!! All arc from the same node should be of the same path");
+      // connect
+      makeArc(newRouteNode, arc->getToNode(), arc->getDistance(), arc->getDependency(), arc->getOperandOrder(), arc->getPath());
+      // remove arc
+      removeArc(arc->getId());
+    } // end of iterating through arcs
   } // end of iterating through toPad
 }

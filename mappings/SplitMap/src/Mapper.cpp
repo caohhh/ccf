@@ -1330,17 +1330,23 @@ Mapper::insertRoute(DFG* myDFG, moduloSchedule* modSchedule)
         int needTime = std::get<1>(*needRouteIt);
         nodePath routePath = needNode->getBrPath();
         // check what path this routing node should belong to
-        for (auto restIt = needRouteIt; restIt != needRoute.end(); ++restIt) {
-          // the path of the node currentry iterated on
-          nodePath path = std::get<0>(*restIt)->getBrPath();
-          if (path == none) {
-            // if a later needNode is of none path, the route should be of none path
-            routePath = none;
-            break;
-          } else if (path != routePath) {
-            // if both paths exist in later need nodes, the route should be of none path
-            routePath = none;
-            break;
+        if (curReadyNode->getBrPath() != none) {
+          // if the data from node is already of path, the rest routing nodes should all be of the same path
+          routePath = curReadyNode->getBrPath();
+        } else {
+          // route from a node of none path, should check the need nodes
+          for (auto restIt = needRouteIt; restIt != needRoute.end(); ++restIt) {
+            // the path of the node currentry iterated on
+            nodePath path = std::get<0>(*restIt)->getBrPath();
+            if (path == none) {
+              // if a later needNode is of none path, the route should be of none path
+              routePath = none;
+              break;
+            } else if (path != routePath) {
+              // if both paths exist in later need nodes, the route should be of none path
+              routePath = none;
+              break;
+            }
           }
         }
         DEBUG("[Route]Succ: " << needNode->getId() << " need time: " << needTime);
@@ -1352,7 +1358,7 @@ Mapper::insertRoute(DFG* myDFG, moduloSchedule* modSchedule)
           }
           // enough resources for a routing node
           // add a routing node for the time
-          routeNode* newRouteNode = new routeNode(curReadyNode, curReadyNode->getBrPath());
+          routeNode* newRouteNode = new routeNode(curReadyNode, routePath);
           myDFG->insertNode(newRouteNode);
           // connect it to the prev node
           myDFG->makeArc(curReadyNode, newRouteNode, 0, TrueDep, 0, none);
@@ -1408,8 +1414,8 @@ Mapper::falconPlace(DFG* myDFG, int II, CGRA* timeExCgra, moduloSchedule* modSch
         int randomIndex = uni(rng);
         startNode = toMap[randomIndex];
         DEBUG("[Falcon]Start node: " << startNode);
-      } else if (mappingMode == 1) {
-        // nodes with outgoing recurrent edges
+      } else {
+        FATAL("[Falcon]Other mapping modes not implemented yet, just use Mode 0");
       }
       if (startNode == -1)
         FATAL("[Falcon]Can't find start node to map");

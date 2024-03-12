@@ -475,24 +475,22 @@ moduloSchedule::print(DFG* myDFG, std::string name)
   for (int arcId : myDFG->getArcIdSet()) {
     Arc* arc = myDFG->getArc(arcId);
     dotFile << arc->getFromNode()->getId() << " -> " << arc->getToNode()->getId();
-    if (arc->getDependency() == PredDep) {
-      if (arc->getDistance() == 0) {
-        dotFile << " [color=blue]\n";
+    if (arc->getDependency() == PredDep || arc->getDependency() == TrueDep) {
+      if (arc->getDistance() != 0) {
+        dotFile << " [style=bold, label=" << arc->getDistance() << "]";
       }
-      else {
-        dotFile << " [style=bold, color=blue, label=" << arc->getDistance() << "] \n";
-      }
-    } else if (arc->getDependency() == TrueDep) {
-      if (arc->getDistance() == 0) {
-        dotFile << " [color=red]\n";
-      }
-      else {
-        dotFile << " [style=bold, color=red, label=" << arc->getDistance() << "] \n";
-      }
-    } else if (arc->getDependency() == LoadDep || arc->getDependency() == PredDep) {
-      dotFile << " [style=dotted, color=blue, label= mem] \n";
+    } else if (arc->getDependency() == LoadDep) {
+      dotFile << " [style=dotted, label= mem]";
     } else {
       FATAL("[Print Modulo]Encountered arc dependency not implemented " << arc->getDependency());
+    }
+
+    if (arc->getPath() == true_path) {
+      dotFile << " [color=blue]\n";
+    } else if (arc->getPath() == false_path) {
+      dotFile << " [color=red]\n";
+    } else {
+      dotFile << "[color=black]\n";
     }
   }
   dotFile << "}\n";
