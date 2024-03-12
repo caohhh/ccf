@@ -4,7 +4,7 @@
 
 #include "Arc.h"
 
-Arc::Arc(Node* fromNode, Node* toNode, int ID, int distance, DataDepType dep, int opOrder)
+Arc::Arc(Node* fromNode, Node* toNode, int ID, int distance, DataDepType dep, int opOrder, nodePath brPath)
 {
   from = fromNode;
   to = toNode;
@@ -12,6 +12,7 @@ Arc::Arc(Node* fromNode, Node* toNode, int ID, int distance, DataDepType dep, in
   this->distance = distance;
   dependency = dep;
   this->operandOrder = opOrder;
+  this->brPath = brPath;
 }
 
 
@@ -28,6 +29,7 @@ Arc::Arc(const Arc& originalArc, Node* newFromNode, Node* newToNode)
   operandOrder = originalArc.operandOrder;
   from = newFromNode;
   to = newToNode;
+  brPath = originalArc.brPath;
 }
 
 
@@ -71,4 +73,11 @@ int
 Arc::getId()
 {
   return id;
+}
+
+
+nodePath
+Arc::getPath()
+{
+  return brPath;
 }

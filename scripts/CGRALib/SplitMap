@@ -1,0 +1,262 @@
+#!/bin/bash
+# SplitMap
+# Author: Cao heng
+# 2024.3.1
+
+# compiling .c or .cpp files for the branch prediction CGRA
+# modified on cgracc
+
+# Set Paths
+ccf_root="/home/caohhh/ccf/ccf"
+install_path="/home/caohhh/ccf/install"
+
+
+# CGRA initialization
+if [ ! -f ./combinedIR.ll ]; then 
+    clang -w -O3 --target=armv7a-none-linux-eabi -isystem /usr/arm-linux-gnueabi/include $ccf_root/scripts/CGRALib/cgra.c -S -o - -emit-llvm -o from_clang.ll
+    opt -loop-simplify -redundant-dbg-inst-elim from_clang.ll -o simplified.bc
+    llvm-dis -f simplified.bc -o combinedIR.ll
+fi
+
+objFound=0;
+objNum=0
+target_arm=0
+obj=""
+src="clang -w -g -O3 -mllvm -force-vector-width=1 -fno-unroll-loops -Wpadded --target=armv7a-none-linux-eabi -isystem /usr/arm-linux-gnueabi/include";
+srcIR="clang -w -g -O3 -mllvm -force-vector-width=1 -Wpadded -fno-unroll-loops --target=armv7a-none-linux-eabi -isystem /usr/arm-linux-gnueabi/include -S -o - -emit-llvm";
+LIB="";
+zero=0;
+MakeType=2;
+
+j=1
+for i in "$@"
+do
+    #If switch is beginning with -o, check for object file name
+    if [[ "$i" == *-o* ]]
+    then
+        objNum=$(( j + 1 ))
+    fi
+
+    if [[ $j -eq $objNum ]]
+    then
+        obj="${i##*/}"
+        if [[ "$obj" != *.* ]]
+        then
+            objFound=1;
+            MakeType=1;
+            obj="$i"; 
+            break;
+        else
+            MakeType=2;
+        fi
+    fi
+
+    if [[ "$i" == *arm* ]]
+    then
+        echo "Compiling for ARM!"
+        target_arm=1;
+    fi
+    ((j = j + 1))
+done
+
+
+if [[ $objFound -gt $zero ]]
+then
+    MakeType=1;
+    for i in "$@"
+    do
+        if [[ "$i" == *.o ]]
+        then
+            MakeType=3;
+            break;
+        fi
+    done
+else
+    #TypeTwo
+    for i in "$@"
+    do 
+        src+=" $i"
+        if [[ "$i" == *.o ]]
+          then
+            objFound=1;    
+            srcIR+=" temp.ll"
+            echo "$i" >> tempObjList.txt
+        else
+            srcIR+=" $i"
+        fi	
+        if [ -f "$i" ] && [[ "$i" != *.o ]]
+        then
+            tempString=`echo $i | sed -e 's/\.[^.]*$//'`
+            echo "./$tempString.o" >> tempObjList.txt
+        fi
+    done
+    $src
+    if [[ $objFound -eq $zero ]]
+    then
+        srcIR+=" -o temp.ll"
+    fi
+    #echo here
+    $srcIR
+
+    llvm-link temp.ll combinedIR.ll -S -o combinedIR.ll
+    exit
+fi
+
+objFound=0;
+
+if [ $MakeType -eq 1 ]
+then
+    #TypeOne
+    for i in "$@"
+    do 
+        src+=" $i"
+    done
+    $src
+    for i in "$@"
+    do 
+        if [ $objFound -eq 1 ] && [ ! -f "$i" ]
+        then
+            LIB+=" $i"
+        fi
+
+        if [[ "$i" == *-o* ]]
+        then
+            objFound=1;
+        fi
+
+        if [ $objFound -ne 1 ] && [ ! -f "$i" ]
+        then
+            srcIR+=" $i"
+        fi
+
+        if [ -f "$i" ] && [[ "$i" != "$obj" ]]
+        then
+            srcNew="$srcIR";
+            srcNew+=" $i"
+            srcNew+=" -o temp.ll"
+            $srcNew
+        
+            llvm-link temp.ll combinedIR.ll -S -o combinedIR.ll
+        fi
+    done
+else
+    for i in "$@"
+    do 
+        if [ "$i" == "$obj" ] 
+        then
+            objFound=1;
+        fi
+
+        if [ -f "$i" ] && [[ "$i" != "$obj" ]] 
+        then
+            if ! grep -q "$i" tempObjList.txt
+            then
+                LIB+=" $i"
+            fi
+        fi	
+
+        if [ $objFound -eq 1 ] && [ ! -f "$i" ] && [[ "$i" != "$obj" ]]
+        then
+            LIB+=" $i"
+        fi
+    done	
+fi
+
+# all above is to produce combinedIR.ll, basically the inpuc c with CGRA init functions linked
+# here for the LLVM CGRA related passes
+if [[ $target_arm == 0 ]]; then
+    opt -loop-simplify -strip-debug -O3 -force-vector-width=1 combinedIR.ll -o temp.bc
+    llvm-dis temp.bc -o combinedIR.ll
+    echo "MultiDDGGen Pass"
+    # here for MultiDDGGenk, the -split can be changed to indicate the split location
+    opt -enable-new-pm=0 -load ${install_path}/lib/LLVMMultiDDGGen.so -MultiDDGGen combinedIR.ll -split 0 -o MultiDDGGen.bc
+    echo "CGRAGen Pass Complete"
+    llvm-dis MultiDDGGen.bc -o MultiDDGGen.ll
+    cp MultiDDGGen.bc combinedIR.bc
+    if [ -d "CGRAExec" ]; then
+        echo "CGRAGen Pass" 
+        opt -enable-new-pm=0 -load ${install_path}/lib/LLVMCGRAGen.so -CGRAGen MultiDDGGen.bc -o CGRAGen.bc
+        echo "CGRAGen Pass Complete"
+    fi
+fi
+
+# not compiling for CGRA due to user choice or workload not compatable
+if [[ $target_arm == 1 ]] || ([[ ! -f "CGRAGen.bc" ]] && [[ ! -d "CGRAExec" ]]); then
+    echo "Accelerating loop not found! Compiling for CPU"
+    llvm-dis MultiDDGGen.bc -o MultiDDGGen.ll
+    llc -march="arm" MultiDDGGen.ll
+    clang -w -O3 -mllvm -force-vector-width=1 -Wpadded -static --target=armv7a-none-linux-eabi MultiDDGGen.s -o $obj -lm
+    rm  *.bc
+    exit
+fi
+
+llvm-dis CGRAGen.bc -o CGRAGen.ll
+
+if [ ! -f "CGRAGen.ll" ]; then
+    echo "ERROR: CGRAGen.ll not found!"
+    exit 1
+fi
+
+llvm-dis CGRAGen.bc -o CGRAGen.ll
+
+llc -march="arm" CGRAGen.ll
+
+#apply remaining optimizations here such as vectoirize
+clang -w -O3 -mllvm -force-vector-width=1 -Wpadded -static --target=armv7a-none-linux-eabi CGRAGen.s -o $obj -lm 
+
+#Delete temporary files
+rm *.bc *.s #*.ll
+
+# Check if CGRAExec exists.
+if [ -d "CGRAExec" ]; then
+    #Change directory
+    cd CGRAExec
+    noDir=$(ls -lR | grep ^d | wc -l)
+    #echo "Total Loops Compiled for CGRA: " $noDir
+    #For each of the loop folders, copy and execute run file to generate CGRA instructions
+    for ((i=1; i<=noDir; i++));
+    do
+        cd L"$i"
+        cp ../../CGRA_config.csv .
+        awk -F "[,\"]" '{print $2 }' CGRA_config.csv > CGRA_config.txt
+
+        # here we get all the mapping and cgra architecture info
+        if [ -f "CGRA_config.csv" ]; then
+            INPUTFILE="CGRA_config.csv"
+            X=$(grep -w X $INPUTFILE | cut -d, -f2)
+            Y=$(grep -w Y $INPUTFILE | cut -d, -f2)
+            R=$(grep -w R $INPUTFILE | cut -d, -f2)
+            MSA=$(grep -w MSA $INPUTFILE | cut -d, -f2)
+            MAPII=$(grep -w MAPII $INPUTFILE | cut -d, -f2)
+            MAX_MAP=$(grep -w MAX_MAP $INPUTFILE | cut -d, -f2)
+            MAX_II=$(grep -w MAX_II $INPUTFILE | cut -d, -f2)
+            LAMBDA=$(grep -w LAMBDA $INPUTFILE | cut -d, -f2)
+        else
+            echo "Please include CGRA architecture file"
+            exit 1
+        fi
+
+        #Detect node and edge file
+        llvmedge="$(find . -name "*.txt" | grep -i loop | grep -i edge)"
+        llvmnode="$(find . -name "*.txt" | grep -i loop | grep -i node)"
+
+        # now do the mapping
+        map="$ccf_root/mappings/SplitMap/Release"
+        # nodefile="$dir/DFGFiles"
+        echo "mapping with SplitMap"
+        $map/SplitMap -EDGE $llvmedge -NODE $llvmnode -X $X -Y $Y -R $R -MSA $MSA -MAPII $MAPII -MAX_MAP $MAX_MAP -MAX_II $MAX_II -LAMBDA $LAMBDA
+        
+        exit 1
+
+        $nodefile/nodefile $llvmnode DUMP_node.txt > final_node.txt
+
+        cp $ccf_root/scripts/CGRALib/run.sh ./
+        echo "start running run.sh"
+        ./run.sh ../../$obj ${ccf_root}
+        cd ..
+    done
+    cd ..
+fi
+
+exit
+

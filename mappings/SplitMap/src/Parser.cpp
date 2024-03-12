@@ -26,6 +26,8 @@ Parser::ParseDFG(DFG* myDFG)
   std::ifstream fInNode;
   std::ifstream fInEdge;
 
+  // here to set the path count
+  std::set<int> paths;
   // parse node file
   fInNode.open(nodeFile.c_str());
   if (fInNode.is_open()) {
@@ -39,11 +41,15 @@ Parser::ParseDFG(DFG* myDFG)
       int brPath;
       int condBrId;
       lineIn >> nodeId >> insOp >> nodeName >> alignment >> dataType >> brPath >> condBrId;
+      // here to register all the paths that exist in the DFG
+      paths.insert(brPath);
       if (!myDFG->hasNode(nodeId)) {
         Node* newNode = new Node((Instruction_Operation)insOp, (Datatype)dataType, 1, nodeId, nodeName, (nodePath)brPath, condBrId);
         myDFG->insertNode(newNode);
       }
     }
+    // all nodes parsed, now for path info
+    myDFG->setPathCount(paths.size());
   } else {
     FATAL("Can't open node file");
   }
@@ -59,11 +65,12 @@ Parser::ParseDFG(DFG* myDFG)
       int distance;
       std::string edgeType;
       int operandOrder;
-      lineIn >> fromNodeId >> toNodeId >> distance >> edgeType >> operandOrder;
+      int brPath;
+      lineIn >> fromNodeId >> toNodeId >> distance >> edgeType >> operandOrder >> brPath;
       if (myDFG->hasConstant(fromNodeId)|| myDFG->hasConstant(toNodeId)) {
         // at least one of the nodes is a constant
         if (edgeType.compare("TRU") == 0) {
-          myDFG->makeConstArc(fromNodeId, toNodeId, operandOrder);
+          myDFG->makeConstArc(fromNodeId, toNodeId, operandOrder, (nodePath)brPath);
         }
       } else {
         // no constants
@@ -80,25 +87,25 @@ Parser::ParseDFG(DFG* myDFG)
           // load related dependency
           nodeFrom->setLoadAddressGenerator(nodeTo);
           nodeTo->setLoadDataBusRead(nodeFrom);
-          myDFG->makeArc(nodeFrom, nodeTo, 0, LoadDep, 0);
+          myDFG->makeArc(nodeFrom, nodeTo, 0, LoadDep, 0, (nodePath)brPath);
         } else if (edgeType.compare("SRE") == 0) {
           // store related dependency
           nodeFrom->setStoreAddressGenerator(nodeTo);
           nodeTo->setStoreDataBusWrite(nodeFrom);
-          myDFG->makeArc(nodeFrom, nodeTo, 0, StoreDep, 0);
+          myDFG->makeArc(nodeFrom, nodeTo, 0, StoreDep, 0, (nodePath)brPath);
         } else if (edgeType.compare("PRE") == 0) {
           // predication dependency
-          myDFG->makeArc(nodeFrom, nodeTo, distance, PredDep, operandOrder);
+          myDFG->makeArc(nodeFrom, nodeTo, distance, PredDep, operandOrder, (nodePath)brPath);
         } else if (edgeType.compare("MEM") == 0) {
           // memory dependency
-          myDFG->makeArc(nodeFrom, nodeTo, distance, MemoryDep, operandOrder);
+          myDFG->makeArc(nodeFrom, nodeTo, distance, MemoryDep, operandOrder, (nodePath)brPath);
         } else if (edgeType.compare("LCE") == 0) {
           // loop control edge
           nodeFrom->setLoopCtrl();
           nodeTo->setLiveOut();
         } else {
           //allow live-in as true-data dependency to perform register allocation
-          myDFG->makeArc(nodeFrom, nodeTo, distance, TrueDep, operandOrder);
+          myDFG->makeArc(nodeFrom, nodeTo, distance, TrueDep, operandOrder, (nodePath)brPath);
         }
       }
     } // end of parsing lines
@@ -106,4 +113,21 @@ Parser::ParseDFG(DFG* myDFG)
     FATAL("Can't open edge file");
   }
   fInEdge.close();
+
+  // parse the splitting info
+  std::ifstream splitInfo;
+  splitInfo.open("Control_Node.txt");
+  if (splitInfo.is_open()) {
+    std::string line;
+    getline(fInEdge, line);
+    getline(fInEdge, line);
+    getline(fInEdge, line);
+    std::istringstream lineIn(line);
+    int splitPath;
+    lineIn >> splitPath;
+    if (splitPath != -1)
+      myDFG->setSplitSource(true);
+  } else {
+    FATAL("Can't open split info file");
+  }
 }

@@ -51,51 +51,104 @@ schedule::getScheduleTime(Node* node)
 
 
 bool
-schedule::hasInterIterConfilct(Node* node, int time)
-{
-  for (auto relatedNode : node->getInterIterRelatedNodes()) {
-    if (isScheduled(relatedNode)) {
-      if (getScheduleTime(relatedNode) == time)
-        return true;
-    }
+schedule::memLdResAvailable(nodePath path, int time)
+{ 
+  // for none path, it should be none path + max of other paths(which is true and false for now)
+  // for other path, it should be this path + none path
+
+  // add bus used
+  int addU;
+  // data bus used
+  int dataU;
+  // pe used at address time slot
+  int peAddU;
+  // pe used at data time slot
+  int peDataU;
+
+  if (path == none) {
+    int trueAdd = addBusUsed[std::make_tuple(true_path, time)];
+    int falseAdd = addBusUsed[std::make_tuple(false_path, time)];
+    int trueData = dataBusUsed[std::make_tuple(true_path, time + 1)];
+    int falseData = dataBusUsed[std::make_tuple(false_path, time + 1)];
+    int truePeAdd = peUsed[std::make_tuple(true_path, time)];
+    int falsePeAdd = peUsed[std::make_tuple(false_path, time)];
+    int truePeData = peUsed[std::make_tuple(true_path, time + 1)];
+    int falsePeData = peUsed[std::make_tuple(false_path, time + 1)];
+    addU = addBusUsed[std::make_tuple(none, time)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
+    dataU = dataBusUsed[std::make_tuple(none, time + 1)] + ((trueData > falseData) ? trueData : falseData);
+    peAddU = peUsed[std::make_tuple(none, time)] + ((truePeAdd > falsePeAdd) ? truePeAdd : falsePeAdd);
+    peDataU = peUsed[std::make_tuple(none, time + 1)] + ((truePeData > falsePeData) ? truePeData : falsePeData);
+  } else {
+    addU = addBusUsed[std::make_tuple(path, time)] + addBusUsed[std::make_tuple(none, time)];
+    dataU = dataBusUsed[std::make_tuple(path, time + 1)] + dataBusUsed[std::make_tuple(none, time + 1)];
+    peAddU = peUsed[std::make_tuple(path, time)] + peUsed[std::make_tuple(none, time)];
+    peDataU = peUsed[std::make_tuple(path, time + 1)] + peUsed[std::make_tuple(none, time + 1)];
   }
-  return false;
-}
 
-
-bool
-schedule::memLdResAvailable(int time)
-{
-  if (!(addBusUsed[time] < perRowMem * xDim))
+  if (!(addU < perRowMem * xDim))
     return false;
-  if (!(dataBusUsed[time + 1] < perRowMem * xDim))
+  if (!(dataU < perRowMem * xDim))
     return false;
-  if (!(peUsed[time] < cgraSize))
+  if (!(peAddU < cgraSize))
     return false;
-  if (!(peUsed[time + 1] < cgraSize))
+  if (!(peDataU < cgraSize))
     return false;
   return true;
 }
 
 
 bool 
-schedule::memStResAvailable(int time)
+schedule::memStResAvailable(nodePath path, int time)
 {
-  if (!(addBusUsed[time] < perRowMem * xDim))
+  // add bus used
+  int addU;
+  // data bus used
+  int dataU;
+  // pe used
+  int peU;
+
+  if (path == none) {
+    int trueAdd = addBusUsed[std::make_tuple(true_path, time)];
+    int falseAdd = addBusUsed[std::make_tuple(false_path, time)];
+    int trueData = dataBusUsed[std::make_tuple(true_path, time)];
+    int falseData = dataBusUsed[std::make_tuple(false_path, time)];
+    int truePe = peUsed[std::make_tuple(true_path, time)];
+    int falsePe = peUsed[std::make_tuple(false_path, time)];
+    addU = addBusUsed[std::make_tuple(none, time)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
+    dataU = dataBusUsed[std::make_tuple(none, time)] + ((trueData > falseData) ? trueData : falseData);
+    peU = peUsed[std::make_tuple(none, time)] + ((truePe > falsePe) ? truePe : falsePe);
+  } else {
+    addU = addBusUsed[std::make_tuple(path, time)] + addBusUsed[std::make_tuple(none, time)];
+    dataU = dataBusUsed[std::make_tuple(path, time)] + dataBusUsed[std::make_tuple(none, time)];
+    peU = peUsed[std::make_tuple(path, time)] + peUsed[std::make_tuple(none, time)];
+  }
+
+  if (!(addU < perRowMem * xDim))
     return false;
-  if (!(dataBusUsed[time] < perRowMem * xDim))
+  if (!(dataU < perRowMem * xDim))
     return false;
   // 2 pe at same time for a store
-  if (!(peUsed[time] < cgraSize - 1))
+  if (!(peU < cgraSize - 1))
     return false;
   return true;
 }
 
 
 bool 
-schedule::resAvailable(int time)
+schedule::resAvailable(nodePath path, int time)
 {
-  if (peUsed[time] < cgraSize)
+  // pe used
+  int peU;
+
+  if (path == none) {
+    int truePe = peUsed[std::make_tuple(true_path, time)];
+    int falsePe = peUsed[std::make_tuple(false_path, time)];
+    peU = peUsed[std::make_tuple(none, time)] + ((truePe > falsePe) ? truePe : falsePe);
+  } else {
+    peU = peUsed[std::make_tuple(path, time)] + peUsed[std::make_tuple(none, time)];
+  }
+
+  if (peU < cgraSize)
     return true;
   else
     return false;
@@ -105,13 +158,17 @@ schedule::resAvailable(int time)
 void
 schedule::scheduleLd(Node* addNode, Node* dataNode, int time)
 {
-  if (!memLdResAvailable(time))
+  // the 2 nodes should belong to the same path
+  if (addNode->getBrPath() != dataNode->getBrPath())
+    FATAL("ERROR!! address node and data node not in the same path");
+  nodePath path = addNode->getBrPath();
+  if (!memLdResAvailable(path, time))
     return;
   // allocate resources
-  addBusUsed[time]++;
-  dataBusUsed[time + 1]++;
-  peUsed[time]++;
-  peUsed[time + 1]++;
+  addBusUsed[std::make_tuple(path, time)]++;
+  dataBusUsed[std::make_tuple(path, time + 1)]++;
+  peUsed[std::make_tuple(path, time)]++;
+  peUsed[std::make_tuple(path, time + 1)]++;
   //schedule operations
   nodeSchedule[addNode->getId()] = time;
   nodeSchedule[dataNode->getId()] = time + 1;
@@ -123,10 +180,11 @@ schedule::scheduleLd(Node* addNode, Node* dataNode, int time)
 void
 schedule::scheduleOp(Node* node, int time)
 {
-  if (!resAvailable(time))
+  nodePath path = node->getBrPath();
+  if (!resAvailable(path, time))
     return;
   //allocate resource
-  peUsed[time]++;
+  peUsed[std::make_tuple(path, time)]++;
   // schedule the node
   nodeSchedule[node->getId()] = time;
   timeSchedule[time].push_back(node->getId());
@@ -136,12 +194,16 @@ schedule::scheduleOp(Node* node, int time)
 void 
 schedule::scheduleSt(Node* storeNode, Node* storeRelatedNode, int time)
 {
-  if (!memStResAvailable(time))
+  // the 2 nodes should belong to the same path
+  if (storeNode->getBrPath() != storeRelatedNode->getBrPath())
+    FATAL("ERROR!! 2 store nodes not in the same path");
+  nodePath path = storeNode->getBrPath();
+  if (!memStResAvailable(path, time))
     return;
   //allocate resources
-  addBusUsed[time]++;
-  dataBusUsed[time]++;
-  peUsed[time] += 2;
+  addBusUsed[std::make_tuple(path, time)]++;
+  dataBusUsed[std::make_tuple(path, time)]++;
+  peUsed[std::make_tuple(path, time)] += 2;
   //schedule both operations
   nodeSchedule[storeNode->getId()] = time;
   nodeSchedule[storeRelatedNode->getId()] = time;
@@ -184,10 +246,22 @@ moduloSchedule::setII(int II)
 
 
 bool 
-moduloSchedule::resAvailable(int scheduleTime)
+moduloSchedule::resAvailable(nodePath path, int scheduleTime)
 {
   int modTime = scheduleTime % II;
-  if (peUsed[modTime] < cgraSize)
+
+  // pe used
+  int peU;
+
+  if (path == none) {
+    int truePe = peUsed[std::make_tuple(true_path, modTime)];
+    int falsePe = peUsed[std::make_tuple(false_path, modTime)];
+    peU = peUsed[std::make_tuple(none, modTime)] + ((truePe > falsePe) ? truePe : falsePe);
+  } else {
+    peU = peUsed[std::make_tuple(path, modTime)] + peUsed[std::make_tuple(none, modTime)];
+  }
+
+  if (peU < cgraSize)
     return true;
   else
     return false;
@@ -197,11 +271,12 @@ moduloSchedule::resAvailable(int scheduleTime)
 void
 moduloSchedule::scheduleOp(Node* node, int time)
 {
+  nodePath path = node->getBrPath();
   int modTime = time % II;
-  if (!resAvailable(time))
+  if (!resAvailable(path, time))
     return;
   //allocate resource
-  peUsed[modTime]++;
+  peUsed[std::make_tuple(path, modTime)]++;
   // schedule the node
   nodeSchedule[node->getId()] = time;
   timeSchedule[time].push_back(node->getId());
@@ -212,17 +287,47 @@ moduloSchedule::scheduleOp(Node* node, int time)
 
 
 bool 
-moduloSchedule::memLdResAvailable(int time)
+moduloSchedule::memLdResAvailable(nodePath path, int scheduleTime)
 {
-  int modTimeAdd = time % II;
-  int modTimeData = (time + 1) % II;
-  if (!(addBusUsed[modTimeAdd] < perRowMem * xDim))
+  int modTimeAdd = scheduleTime % II;
+  int modTimeData = (scheduleTime + 1) % II;
+
+  // add bus used
+  int addU;
+  // data bus used
+  int dataU;
+  // pe used at address time slot
+  int peAddU;
+  // pe used at data time slot
+  int peDataU;
+
+  if (path == none) {
+    int trueAdd = addBusUsed[std::make_tuple(true_path, modTimeAdd)];
+    int falseAdd = addBusUsed[std::make_tuple(false_path, modTimeAdd)];
+    int trueData = dataBusUsed[std::make_tuple(true_path, modTimeData)];
+    int falseData = dataBusUsed[std::make_tuple(false_path, modTimeData)];
+    int truePeAdd = peUsed[std::make_tuple(true_path, modTimeAdd)];
+    int falsePeAdd = peUsed[std::make_tuple(false_path, modTimeAdd)];
+    int truePeData = peUsed[std::make_tuple(true_path, modTimeData)];
+    int falsePeData = peUsed[std::make_tuple(false_path, modTimeData)];
+    addU = addBusUsed[std::make_tuple(none, modTimeAdd)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
+    dataU = dataBusUsed[std::make_tuple(none, modTimeData)] + ((trueData > falseData) ? trueData : falseData);
+    peAddU = peUsed[std::make_tuple(none, modTimeAdd)] + ((truePeAdd > falsePeAdd) ? truePeAdd : falsePeAdd);
+    peDataU = peUsed[std::make_tuple(none, modTimeData)] + ((truePeData > falsePeData) ? truePeData : falsePeData);
+  } else {
+    addU = addBusUsed[std::make_tuple(path, modTimeAdd)] + addBusUsed[std::make_tuple(none, modTimeAdd)];
+    dataU = dataBusUsed[std::make_tuple(path, modTimeData)] + dataBusUsed[std::make_tuple(none, modTimeData)];
+    peAddU = peUsed[std::make_tuple(path, modTimeAdd)] + peUsed[std::make_tuple(none, modTimeAdd)];
+    peDataU = peUsed[std::make_tuple(path, modTimeData)] + peUsed[std::make_tuple(none, modTimeData)];
+  }
+
+  if (!(addU < perRowMem * xDim))
     return false;
-  if (!(dataBusUsed[modTimeData] < perRowMem * xDim))
+  if (!(dataU < perRowMem * xDim))
     return false;
-  if (!(peUsed[modTimeAdd] < cgraSize))
+  if (!(peAddU < cgraSize))
     return false;
-  if (!(peUsed[modTimeData] < cgraSize))
+  if (!(peDataU < cgraSize))
     return false;
   return true;
 }
@@ -231,15 +336,19 @@ moduloSchedule::memLdResAvailable(int time)
 void
 moduloSchedule::scheduleLd(Node* addNode, Node* dataNode, int time)
 {
+  // the 2 nodes should belong to the same path
+  if (addNode->getBrPath() != dataNode->getBrPath())
+    FATAL("ERROR!! address node and data node not in the same path");
+  nodePath path = addNode->getBrPath();
   int modTimeAdd = time % II;
   int modTimeData = (time + 1) % II;
-  if (!memLdResAvailable(time))
+  if (!memLdResAvailable(path, time))
     return;
   // allocate resources
-  addBusUsed[modTimeAdd]++;
-  dataBusUsed[modTimeData]++;
-  peUsed[modTimeAdd]++;
-  peUsed[modTimeData]++;
+  addBusUsed[std::make_tuple(path, modTimeAdd)]++;
+  dataBusUsed[std::make_tuple(path, modTimeData)]++;
+  peUsed[std::make_tuple(path, modTimeAdd)]++;
+  peUsed[std::make_tuple(path, modTimeData)]++;
   //schedule operations
   nodeSchedule[addNode->getId()] = time;
   nodeSchedule[dataNode->getId()] = time + 1;
@@ -254,15 +363,39 @@ moduloSchedule::scheduleLd(Node* addNode, Node* dataNode, int time)
 
 
 bool 
-moduloSchedule::memStResAvailable(int time)
+moduloSchedule::memStResAvailable(nodePath path, int scheduleTime)
 {
-  int modTime = time % II;
-  if (!(addBusUsed[modTime] < perRowMem * xDim))
+  int modTime = scheduleTime % II;
+
+  // add bus used
+  int addU;
+  // data bus used
+  int dataU;
+  // pe used
+  int peU;
+
+  if (path == none) {
+    int trueAdd = addBusUsed[std::make_tuple(true_path, modTime)];
+    int falseAdd = addBusUsed[std::make_tuple(false_path, modTime)];
+    int trueData = dataBusUsed[std::make_tuple(true_path, modTime)];
+    int falseData = dataBusUsed[std::make_tuple(false_path, modTime)];
+    int truePe = peUsed[std::make_tuple(true_path, modTime)];
+    int falsePe = peUsed[std::make_tuple(false_path, modTime)];
+    addU = addBusUsed[std::make_tuple(none, modTime)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
+    dataU = dataBusUsed[std::make_tuple(none, modTime)] + ((trueData > falseData) ? trueData : falseData);
+    peU = peUsed[std::make_tuple(none, modTime)] + ((truePe > falsePe) ? truePe : falsePe);
+  } else {
+    addU = addBusUsed[std::make_tuple(path, modTime)] + addBusUsed[std::make_tuple(none, modTime)];
+    dataU = dataBusUsed[std::make_tuple(path, modTime)] + dataBusUsed[std::make_tuple(none, modTime)];
+    peU = peUsed[std::make_tuple(path, modTime)] + peUsed[std::make_tuple(none, modTime)];
+  }
+
+  if (!(addU < perRowMem * xDim))
     return false;
-  if (!(dataBusUsed[modTime] < perRowMem * xDim))
+  if (!(dataU < perRowMem * xDim))
     return false;
   // 2 pe at same time for a store
-  if (!(peUsed[modTime] < cgraSize - 1))
+  if (!(peU < cgraSize - 1))
     return false;
   return true;
 }
@@ -271,13 +404,17 @@ moduloSchedule::memStResAvailable(int time)
 void 
 moduloSchedule::scheduleSt(Node* storeNode, Node* storeRelatedNode, int time)
 {
+  // the 2 nodes should belong to the same path
+  if (storeNode->getBrPath() != storeRelatedNode->getBrPath())
+    FATAL("ERROR!! 2 store nodes not in the same path");
+  nodePath path = storeNode->getBrPath();
   int modTime = time % II;
-  if (!memStResAvailable(time))
+  if (!memStResAvailable(path, time))
     return;
   //allocate resources
-  addBusUsed[modTime]++;
-  dataBusUsed[modTime]++;
-  peUsed[modTime] += 2;
+  addBusUsed[std::make_tuple(path, modTime)]++;
+  dataBusUsed[std::make_tuple(path, modTime)]++;
+  peUsed[std::make_tuple(path, modTime)] += 2;
   //schedule both operations
   nodeSchedule[storeNode->getId()] = time;
   nodeSchedule[storeRelatedNode->getId()] = time;
@@ -315,12 +452,22 @@ moduloSchedule::print(DFG* myDFG, std::string name)
   // print node
   for (auto nodeIt : nodeSchedule) {
     int nodeId = nodeIt.first;
+    dotFile << nodeId;
+    dotFile << " [label=\"" << nodeId << "(" << (int)floor(nodeSchedule[nodeId]/II) << ")\"]";
+
     if (myDFG->getNode(nodeId)->isMemNode())
-      dotFile << nodeId << " [color=blue];\n";
+      dotFile << " [color=blue]";
     else if (myDFG->getNode(nodeId)->getIns() == route)
-      dotFile << nodeId << " [color=green];\n";
+      dotFile << " [color=green]";
     else
-      dotFile << nodeId << " [color=red];\n";
+      dotFile << " [color=red]";
+    
+    if (myDFG->getNode(nodeId)->getBrPath() == true_path)
+      dotFile << " [style=filled, fillcolor=lightblue];\n";
+    else if (myDFG->getNode(nodeId)->getBrPath() == false_path)
+      dotFile << " [style=filled, fillcolor=lightcoral];\n";
+    else
+      dotFile << ";\n";
   }
   dotFile << "\n";
 

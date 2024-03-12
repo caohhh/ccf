@@ -13,10 +13,11 @@ DFG::DFG()
   arcMaxId = 0;
   // currently set to 2: true path and false path
   // this can be extanted and set during parsing
-  pathCount = 2;
+  pathCount = 0;
   // rng here at construction
   std::random_device rd;
   rng = std::mt19937(rd());
+  splitSource = false;
 }
 
 
@@ -33,6 +34,7 @@ DFG::DFG(const DFG& originalDFG)
   pathCount = originalDFG.pathCount;
   nodeMaxId = originalDFG.nodeMaxId;
   arcMaxId = originalDFG.arcMaxId;
+  splitSource = originalDFG.splitSource;
 
   // get all the nodes and make new node
   for (Node* node : originalDFG.nodeSet)
@@ -109,11 +111,16 @@ DFG::insertNode(routeNode* newRouteNode)
 
 
 void
-DFG::makeArc(Node* nodeFrom, Node* nodeTo, int distance, DataDepType dep, int opOrder)
+DFG::makeArc(Node* nodeFrom, Node* nodeTo, int distance, DataDepType dep, int opOrder, nodePath path)
 {
   //if they are already connected, ignore it
-  if (nodeFrom->isConnectedTo(nodeTo))
+  if (nodeFrom->isConnectedTo(nodeTo)) {
+    // here we should also check for op order
+    // but that would mean changing too much, mainly the getArc with from and to node
+    // so I'll defer this to when there is a problem :P
+    DEBUG("[Make Arc]WARNNING!!! Making an arc between 2 already connected nodes.");
     return;
+  }
 
   //source and destination are the same and the node has already a self loop, ignore it
   if (nodeFrom->getId() == nodeTo->getId() && nodeFrom->hasSelfLoop())
@@ -121,7 +128,7 @@ DFG::makeArc(Node* nodeFrom, Node* nodeTo, int distance, DataDepType dep, int op
 
   Arc *newArc;
   //create an arc with given properties
-  newArc = new Arc(nodeFrom, nodeTo, ++arcMaxId, distance, dep, opOrder);
+  newArc = new Arc(nodeFrom, nodeTo, ++arcMaxId, distance, dep, opOrder, path);
 
   //if source and destination are the same, create a self loop
   if (nodeFrom->getId() == nodeTo->getId())
@@ -138,12 +145,13 @@ DFG::makeArc(Node* nodeFrom, Node* nodeTo, int distance, DataDepType dep, int op
 
 
 void
-DFG::makeConstArc(int nodeFromId, int nodeToId, int opOrder)
+DFG::makeConstArc(int nodeFromId, int nodeToId, int opOrder, nodePath path)
 {
   Const_Arc newArc;
   newArc.fromNodeId = nodeFromId;
   newArc.toNodeId = nodeToId;
   newArc.opOrder = opOrder;
+  newArc.brPath = path;
   constArcSet.push_back(newArc);
 }
 
@@ -197,8 +205,11 @@ DFG::removeArc(int arcId)
 {
   for (auto arcIt = arcSet.begin(); arcIt != arcSet.end(); arcIt++) {
     if ((*arcIt)->getId() == arcId) {
-      (*arcIt)->getFromNode()->removeSuccArc(arcId);
-      (*arcIt)->getToNode()->removePredArc(arcId);
+      // ignore self loop for now
+      if ((*arcIt)->getFromNode() != (*arcIt)->getToNode()) {
+        (*arcIt)->getFromNode()->removeSuccArc(arcId);
+        (*arcIt)->getToNode()->removePredArc(arcId);
+      }
       // delete arc from set
       arcSet.erase(arcIt, arcIt + 1);
       return;
@@ -228,6 +239,7 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
     if (nextNodes.size() > 1) {
       // selected node has more than 1 child in next iterations
       // find the node with min distance
+      DEBUG("[Preprocess]Inter iteration dependency reduction");
       int minDist = INT32_MAX;
       for (auto nextNodeIt : nextNodes) {
         int dist = getArc(nodeIt, nextNodeIt)->getDistance();
@@ -238,13 +250,14 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
       routeNode* newRouteNode = new routeNode(nodeIt, nodeIt->getBrPath());
       insertNode(newRouteNode);
       // we put the new route node the same iter as minNode
-      makeArc(nodeIt, newRouteNode, minDist, TrueDep, 0);
+      makeArc(nodeIt, newRouteNode, minDist, TrueDep, 0, none);
       for (auto nextNodeIt: nextNodes) {
         //disconnect
         Arc* arcOld = getArc(nodeIt, nextNodeIt);
         removeArc(arcOld->getId());
         //connect
-        makeArc(newRouteNode, nextNodeIt, arcOld->getDistance() - minDist, arcOld->getDependency(), arcOld->getOperandOrder());
+        makeArc(newRouteNode, nextNodeIt, arcOld->getDistance() - minDist, 
+                arcOld->getDependency(), arcOld->getOperandOrder(), arcOld->getPath());
       }
     }
   }
@@ -260,6 +273,7 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
       else
         nodeCount = mapPathNodeCount[none] + mapPathNodeCount[(nodePath)path];
       if (nodeCount > maxOutDegree) {
+        DEBUG("[Preprocess]Limiting outdegree");
         // if outdegree > max, need to add routing node
         // with nodes of path:none and given path 
         // we should choose the larger set and favor path set
@@ -294,7 +308,7 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
           routeNode* newRouteNode = new routeNode(nodeIt, none);
           insertNode(newRouteNode);
           // connect it to the prev node
-          makeArc(nodeIt, newRouteNode, 0, TrueDep, 0);
+          makeArc(nodeIt, newRouteNode, 0, TrueDep, 0, none);
           // since the next nodes won't be large, just shuffle the whole vec will be ok
           std::shuffle(nextNoneNodes.begin(), nextNoneNodes.end(), rng);
           // pick out the nodes and move it to the route node
@@ -303,16 +317,17 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
             Arc* arcOld = getArc(nodeIt, nextNoneNodes[i]);
             removeArc(arcOld->getId());
             // connect
-            makeArc(newRouteNode, nextNoneNodes[i], arcOld->getDistance(), arcOld->getDependency(), arcOld->getOperandOrder());
+            makeArc(newRouteNode, nextNoneNodes[i], arcOld->getDistance(), 
+                    arcOld->getDependency(), arcOld->getOperandOrder(), arcOld->getPath());
           }
         }
 
         if (removeNumPath != 0) {
-          // add a routing node in none set
+          // add a routing node in path set
           routeNode* newRouteNode = new routeNode(nodeIt, (nodePath)path);
           insertNode(newRouteNode);
           // connect it to the prev node
-          makeArc(nodeIt, newRouteNode, 0, TrueDep, 0);
+          makeArc(nodeIt, newRouteNode, 0, TrueDep, 0, none);
           // since the next nodes won't be large, just shuffle the whole vec will be ok
           std::shuffle(nextPathNodes.begin(), nextPathNodes.end(), rng);
           // pick out the nodes and move it to the route node
@@ -321,7 +336,8 @@ DFG::preProcess(unsigned maxInDegree, unsigned maxOutDegree)
             Arc* arcOld = getArc(nodeIt, nextPathNodes[i]);
             removeArc(arcOld->getId());
             // connect
-            makeArc(newRouteNode, nextPathNodes[i], arcOld->getDistance(), arcOld->getDependency(), arcOld->getOperandOrder());
+            makeArc(newRouteNode, nextPathNodes[i], arcOld->getDistance(), 
+                    arcOld->getDependency(), arcOld->getOperandOrder(), arcOld->getPath());
           }
         }
       } // end of nodeCount > maxOutDegree
@@ -549,4 +565,150 @@ DFG::getCycles()
     }
   }
   return retCycles;
+}
+
+
+bool 
+DFG::canBeSplit()
+{
+  return splitSource;
+}
+
+
+void
+DFG::setSplitSource(bool ifSource)
+{
+  splitSource = ifSource;
+}
+
+
+void
+DFG::setPathCount(int pathCount)
+{
+  this->pathCount = pathCount;
+}
+
+
+std::tuple<DFG*, DFG*> 
+DFG::split()
+{
+  if (!splitSource)
+    FATAL("[Split]ERROR! Splitting a DFG that can't be split");
+  
+  // basically the copy creator, just don't copy nodes belonging to other path
+  // we can just copy create 2 DFGs and remove the unwanted nodes
+  DFG* trueDFG = new DFG(*this);
+  DFG* falseDFG = new DFG(*this);
+  trueDFG->removePath(false_path);
+  falseDFG->removePath(true_path);
+  trueDFG->setSplitSource(false);
+  falseDFG->setSplitSource(false);
+  return std::make_tuple(trueDFG, falseDFG);
+}
+
+
+void
+DFG::removePath(nodePath path)
+{
+  if (path != true_path && path != false_path)
+    FATAL("[Remove Path]ERROR! Removing a path other than true or false");
+  // iterate through all nodes, remove nodes belonging to the path and the arcs
+  for (auto nodeIt = nodeSet.begin(); nodeIt != nodeSet.end();) {
+    Node* node = *nodeIt;
+    if (node->getBrPath() == path) {
+      // remove the node and arc
+      // first all arcs
+      std::vector<int> arcsToRemove;
+      for (Arc* arc : arcSet) {
+        if (arc->getFromNode() == node || arc->getToNode() == node)
+          arcsToRemove.push_back(arc->getId());
+      } // end of iterating through arcSet
+      // remove arcs
+      for (int arcId : arcsToRemove) {
+        removeArc(arcId);
+      }
+      // now all arcs are gone, remove the node
+      nodeIt = nodeSet.erase(nodeIt);
+    } else 
+      ++nodeIt;
+  } // end of iterating through nodeSet
+
+  // also iterate through the constants
+  for (auto constIt = constants.begin(); constIt != constants.end();) {
+    Node* constNode = *constIt;
+    if (constNode->getBrPath() == path) {
+      // remove the constant and the arc
+      // first all arcs
+      for (auto arcIt = constArcSet.begin(); arcIt != constArcSet.end();) {
+        Const_Arc constArc = *arcIt;
+        if (constArc.fromNodeId == constNode->getId() || constArc.toNodeId == constNode->getId())
+          arcIt = constArcSet.erase(arcIt);
+        else
+          ++arcIt;
+      } // end of iterating through constArcSet
+      // now all arcs are gone, remove the node
+      constIt = constants.erase(constIt);
+    } else 
+      ++constIt;
+  } // end of iterating through constants
+
+  // now for the arcs originally the data source of sel
+  std::vector<Arc*> arcsToRemove;
+  for (Arc* arc : arcSet) {
+    if (arc->getPath() == path)
+      arcsToRemove.push_back(arc);
+  }
+  for (Arc* arc : arcsToRemove) {
+    removeArc(arc->getId());
+  }
+  // also the constArc set
+  for (auto arcIt = constArcSet.begin(); arcIt != constArcSet.end();) {
+    if ((*arcIt).brPath == path) 
+      arcIt = constArcSet.erase(arcIt);
+    else
+      ++arcIt;
+  } // end of iterating through constArc set
+}
+
+
+void
+DFG::padPath()
+{
+  DEBUG("[Pad Path]Padding paths of this DFG");
+  if (!splitSource) {
+    DEBUG("[Pad Path]Not a split source, no need for padding");
+    return;
+  }
+  // DFG is a split source, check all the arcs belonging to a path
+
+  // arcs to pad
+  std::vector<Arc*> toPad;
+  for (Arc* arc :  arcSet) {
+    if (arc->getPath() != none) {
+      // sanity check to ensure arcs with path is to a node with none path
+      if (arc->getToNode()->getBrPath() != none)
+        FATAL("[Pad Path]ERROR!!Edge with branch path should always be to a node with none path");
+      if (arc->getFromNode()->getBrPath() == none) {
+        // if from node is of none path, then padding is needed
+        toPad.push_back(arc);
+      }
+    }
+  } // end of iterating through arcSet
+
+  // now do the padding, doing this seperately because we need to remove the padded arc from arcset
+  // and I'm too lazy to change the removeArc function to return an iterator position
+  for (Arc* arc : toPad) {
+    DEBUG("[Pad Path]Padding between node: " << arc->getFromNode()->getId() <<" to node: " << arc->getToNode()->getId() << 
+          " of path " << arc->getPath());
+    // first a new routing node of the arc's path
+    routeNode* newRouteNode = new routeNode(arc->getFromNode(), arc->getPath());
+    // we put this routing node in the same iteration as the from node
+    insertNode(newRouteNode);
+    // connect to from node
+    makeArc(arc->getFromNode(), newRouteNode, 0, TrueDep, 0, none);
+    // connect to to node
+    makeArc(newRouteNode, arc->getToNode(), arc->getDistance(), arc->getDependency(), arc->getOperandOrder(), arc->getPath());
+    // remove the arc
+    removeArc(arc->getId());
+  } // end of iterating through toPad
 }

@@ -31,44 +31,36 @@ class Mapper
     Mapping_Policy mappingPolicy;
     // number of PEs in the CGRA
     unsigned cgraSize;
-    // the ASAP schedule of nodeId:time
-    std::map<int, int> asapSchedule;
-    // the ALAP schedule of nodeId:time
-    std::map<int, int> alapSchedule;
     // rng
     std::mt19937 rng;
-    // the ASAP schedule considering resources available
-    schedule* asapFeasible;
-    // the ALAP schedule considering resources available
-    schedule* alapFeasible;
-    // the modulo schedule
-    moduloSchedule* modSchedule;
-    // the time extanded CGRA
-    CGRA* timeExCgra;
+
 
     /**
      * Schedule operations as soon as all predecessors are completed
      * @param myDFG the DFG to be scheduled
-     * @return the length of the schedule
+     * @return <schedule length, asapSchedule>
     */
-    int scheduleASAP(DFG* myDFG);
+    std::tuple<int, std::map<int, int>> scheduleASAP(DFG* myDFG);
 
     /**
      * Schedule operations as late as all successors are luanched
      * @param myDFG the DFG to be scheduled
      * @param length 
+     * @return alapSchedule
     */
-    void scheduleALAP(DFG* myDFG, int length);
+    std::map<int, int> scheduleALAP(DFG* myDFG, int length);
 
     /**
      * schedule operations in ASAP manner considering number of available resources
      * @param myDFG the DFG to be scheduled
+     * @param asapFeasible the schedule
      * @return the length of the schedule
     */
-    int scheduleASAPFeasible(DFG* myDFG);
+    int scheduleASAPFeasible(DFG* myDFG, schedule* asapFeasible);
 
     // schedule operations in ALAP manner considering number of available resources
-    void scheduleALAPFeasible(DFG* myDFG, int II);
+    // this step is carried out after an asap feasible schedule is done
+    void scheduleALAPFeasible(DFG* myDFG, int length, schedule* alapFeasible, schedule* asapFeasible);
 
     /**
      * check if a node is ready for asap scheduling, as in all
@@ -76,7 +68,7 @@ class Mapper
      * @return tuple of if the given node is ready to be scheduled
      * and the scheduled time
     */
-    std::tuple<bool, int> checkASAP(Node* node);
+    std::tuple<bool, int> checkASAP(Node* node, schedule* asapFeasible);
 
     /**
      * check if a node is ready for alap scheduling, as in all
@@ -84,11 +76,11 @@ class Mapper
      * @return tuple of if the given node is ready to be scheduled
      * and the scheduled time
     */
-    std::tuple<bool, int> checkALAP(Node* node, int II);
+    std::tuple<bool, int> checkALAP(Node* node, int length, schedule* alapFeasible);
 
     // returns all the nodes in the DFG sorted in priority of mapping
     // as in longer cycles -> shorter cycles -> nodes not in cycle
-    std::vector<Node*> getSortedNodes(DFG* myDFG);
+    std::vector<Node*> getSortedNodes(DFG* myDFG, schedule* asapFeasible);
 
     /**
      * check if a node is ready for modulo scheduling, as in all
@@ -96,42 +88,38 @@ class Mapper
      * @return tuple of if the given node is ready to be scheduled
      * and the scheduled time
     */
-    std::tuple<bool, int> checkModulo(Node* node);
-
+    std::tuple<bool, int> checkModulo(Node* node, moduloSchedule* modSchedule, schedule* alapFeasible);
 
     // returnes the earliest time slot this node can be placed in modulo scheduling
-    int getModConstrainedTime(Node* node);
-
-    // returns if source node is constrained by its given predcessor in modulo scheduling
-    // note that for now this is unused, maybe we could delete it
-    bool isModConstrainedBy(Node* source, Node* pred);
+    int getModConstrainedTime(Node* node, moduloSchedule* modSchedule, schedule* asapFeasible);
 
     // modulo scheduling of the DFG
-    bool scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II);
+    bool scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II, 
+                        moduloSchedule* modSchedule, schedule* asapFeasible, schedule* alapFeasible);
 
     // based on the finished modulo schedule, insert routing nodes
-    bool insertRoute(DFG* myDFG);
+    bool insertRoute(DFG* myDFG, moduloSchedule* modSchedule);
 
     // the falcon mapping algorithm
-    bool falconPlace(DFG* myDFG, int II);
+    bool falconPlace(DFG* myDFG, int II, CGRA* timeExCgra, moduloSchedule* modSchedule);
 
     // returns the potential PEs this node can be mapped to
-    std::vector<PE*> getPotentialPos(Node* node);
+    std::vector<PE*> getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedule);
 
     // attempt to remap mapped predecesors and successors to find a
     // mapping for a node without mapping position
     // returns if a valid position is found
-    bool remapBasic(Node* failedNode);
+    bool remapBasic(Node* failedNode, CGRA* timeExCgra, moduloSchedule* modSchedule);
 
     /******the following 2 remap probably need adjustment to max remap attempt******/
 
     // try to remap all nodes in the same time slot as failed node 
     // and find a place for failed node
     // returns if remap is successful
-    bool remapCurrT(Node* failedNode, DFG* myDFG);
+    bool remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule* modSchedule);
 
     // remapping adjacent time slots and try to find a position for the failed node
-    bool remapAdjT(Node* failedNode, DFG* myDFG);
+    bool remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule* modSchedule);
 };
 
 #endif

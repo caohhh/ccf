@@ -100,7 +100,11 @@ CGRA::print()
     for (int x = 0; x < xDim; x++) {
       for (int y = 0; y < yDim; y++) {
         PE* pe = getPe(x, y, time);
-        std::cout << std::setw(10) << pe->getNode();
+        std::cout << std::setw(10);
+        if (pe->getNode() == -1)
+          std::cout << "F";
+        else
+          std::cout << pe->getNode();
       }
       std::cout << std::endl;
     }

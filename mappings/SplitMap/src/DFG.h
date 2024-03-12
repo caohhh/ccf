@@ -39,10 +39,10 @@ class DFG
     void insertNode(routeNode* routeNode);
 
     // make an edge between two nodes
-    void makeArc(Node* nodeFrom, Node* nodeTo, int distance, DataDepType dep, int opOrder);
+    void makeArc(Node* nodeFrom, Node* nodeTo, int distance, DataDepType dep, int opOrder, nodePath path);
 
     // make an arc that includes a constant
-    void makeConstArc(int nodeFromId, int nodeToId, int opOrder);
+    void makeConstArc(int nodeFromId, int nodeToId, int opOrder, nodePath path);
 
     //return a node with given ID 
     Node* getNode(int nodeId);
@@ -92,6 +92,22 @@ class DFG
     // return all the cycles in this DFG
     std::vector<std::set<Node*>> getCycles();
 
+    // returns if this DFG can be split into 2 DFGs based on the paths
+    bool canBeSplit();
+
+    // set if this DFG is a split source
+    void setSplitSource(bool ifSource);
+
+    // set the path count for this DFG
+    void setPathCount(int pathCount);
+
+    // split a split source DFG into 2 seperate ones
+    // returns <trueDFG, falseDFG>
+    std::tuple<DFG*, DFG*> split();
+
+    // pad a paths of a DFG with routing nodes so that edges with branch path always connects to a node of the path
+    void padPath();
+
   private:
     // set of nodes in the graph
     std::vector<Node*> nodeSet;
@@ -111,6 +127,8 @@ class DFG
     std::mt19937 rng;
     // a list of all the cycles with their II, sorted from highest II to lowest
     std::vector<std::tuple<std::set<Node*>, float>> cycles;
+    // if this DFG is a scource to be split
+    bool splitSource;
 
     /**
      * recurssively get a path the produces the maximum II
@@ -122,6 +140,9 @@ class DFG
      * @return tuple of found, latency, and distance of the path
     */
     std::tuple<bool, int, int> getPathMaxII(Node* currentNode, Node* destNode, std::set<Node*>& path, int prevLat, int prevDist);
+
+    // remove all the nodes belonging to given path, used for splitting a DFG
+    void removePath(nodePath path);
 };
 
 #endif

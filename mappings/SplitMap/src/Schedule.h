@@ -21,17 +21,14 @@ class schedule
     // returns the time node is scheduled at
     int getScheduleTime(Node* node);
 
-    // return if the given node has inter iteration related nodes mapped at the same time
-    bool hasInterIterConfilct(Node* node, int time);
-
     // returns if the given schedule has enough resources for a load at given time 
-    virtual bool memLdResAvailable(int time);
+    virtual bool memLdResAvailable(nodePath path, int time);
 
     // returns if the given schedule has enough resources for a store at given time 
-    virtual bool memStResAvailable(int time);
+    virtual bool memStResAvailable(nodePath path, int time);
 
     // returns if the given schedule has enough resources for a regular op at given time 
-    virtual bool resAvailable(int time);
+    virtual bool resAvailable(nodePath path, int time);
 
     // schedule a load address at time, and data at time + 1
     virtual void scheduleLd(Node* addNode, Node* dataNode, int time);
@@ -58,12 +55,12 @@ class schedule
     std::map<int, int> nodeSchedule;
     // map of time : nodeID scheduled at time
     std::map<int, std::vector<int>> timeSchedule;
-    // map of time : peused
-    std::map<int, int> peUsed;
-    // map of time : peused
-    std::map<int, int> addBusUsed;
-    // map of time : peused
-    std::map<int, int> dataBusUsed;
+    // map of path, time : peused 
+    std::map<std::tuple<nodePath, int>, int> peUsed;
+    // map of path, time : peused
+    std::map<std::tuple<nodePath, int>, int> addBusUsed;
+    // map of path, time : peused
+    std::map<std::tuple<nodePath, int>, int> dataBusUsed;
 };
 
 
@@ -78,15 +75,15 @@ class moduloSchedule : public schedule
 
     // returns if the given schedule has enough resources for 
     // a regular op at given time considering modulo overlap
-    bool resAvailable(int scheduleTime) override;
+    bool resAvailable(nodePath path, int scheduleTime) override;
 
     // returns if the given schedule has enough resources for a load at given time 
     // considering modulo scheduling
-    bool memLdResAvailable(int time) override;
+    bool memLdResAvailable(nodePath path, int scheduleTime) override;
 
     // returns if the given schedule has enough resources for a store at given time 
     // considering modulo scheduling
-    bool memStResAvailable(int time) override;
+    bool memStResAvailable(nodePath path, int scheduleTime) override;
 
 
     // schedule a regular op at time considering modulo scheduling

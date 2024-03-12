@@ -16,7 +16,7 @@ class DFG;
 class Arc
 {
   public:
-    Arc(Node* fromNode, Node* toNode, int ID, int distance, DataDepType dep, int opOrder);
+    Arc(Node* fromNode, Node* toNode, int ID, int distance, DataDepType dep, int opOrder, nodePath brPath);
     ~Arc();
     // constructor to copy existing arc to the new DFG
     Arc(const Arc& originalArc, Node* newFromNode, Node* newToNode);
@@ -39,6 +39,9 @@ class Arc
     // return the unique ID of this arc
     int getId();
 
+    // return the branch path of this arc
+    nodePath getPath();
+
   private:
     // edge from inNode to outNode
     Node* from;
@@ -47,6 +50,7 @@ class Arc
     int distance;
     DataDepType dependency;
     int operandOrder;
+    nodePath brPath;
 };
 
 struct Const_Arc
@@ -54,6 +58,7 @@ struct Const_Arc
   int fromNodeId;
   int toNodeId;
   int opOrder;
+  nodePath brPath;
 };
 
 #endif

@@ -141,9 +141,6 @@ Mapper::Mapper(CGRA_Architecture cgraInfo, Mapping_Policy mappingPolicy)
   // rng here at construction
   std::random_device rd;
   rng = std::mt19937(rd());
-  asapFeasible = new schedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
-  alapFeasible = new schedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
-  modSchedule = new moduloSchedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
 }
 
 
@@ -160,49 +157,169 @@ Mapper::generateMap(Parser* myParser)
   myParser->ParseDFG(originalDFG);
   DEBUG("[Mapper]Done parsing DFG");
 
-  originalDFG->preProcess(cgraInfo.MAX_NODE_INDEGREE, cgraInfo.MAX_NODE_OUTDEGREE);
-  DEBUG("[Mapper]Done preprocessing DFG");
+  DFG* trueDFG = nullptr;
+  DFG* falseDFG = nullptr;
+  bool split = false;
+  if (originalDFG->canBeSplit()) {
+    DEBUG("[Mapper]DFG can be split, padding first");
+    originalDFG->padPath();
+    DEBUG("[Mapper]Padding path done");
+    // preprocess first
+    originalDFG->preProcess(cgraInfo.MAX_NODE_INDEGREE, cgraInfo.MAX_NODE_OUTDEGREE);
+    DEBUG("[Mapper]Done preprocessing DFG");
+    // then split
+    split = true;
+    std::tie(trueDFG, falseDFG) = originalDFG->split();
+    DEBUG("[Mapper]DFG split complete");
+  }
 
-  // get the recMII
-  int recMII  = originalDFG->calculateRecMII();
-  DEBUG("[Mapper]Done calculation RecMII of the DFG as " << recMII);
+  // from here on, if the DFG is split, mapping processes are done to trueDFG and falseDFG
+  // if not split, it is done to original DFG
 
-  // resMII
-  int resMII = ceil(float(originalDFG->getNodeSize()) / cgraSize);
-  DEBUG("[Mapper]Done calculating resMII as " << resMII);
+  // we will set the 2 path as the same II for now
+  // mapping for 2 different IIs will be too complicated
 
-  // find memory resource MII
-  int memMII = ceil(float(originalDFG->getLoadOpCount() + originalDFG->getStoreOpCount()) / cgraInfo.Y_Dim);
-  DEBUG("[Mapper]Done calculating memMII as " << memMII);
+  // maybe the same II and even the same length also? <---- this probably will naturally be solved by giving nodes 
+  // in common path the same mapping
 
-  // the MII is the largest of the three
-  int MII = recMII;
-  if (resMII > MII)
-    MII = resMII;
-  if(memMII > MII)
-    MII = memMII;
-  DEBUG("[Mapper]MII of the schedule is " << MII);
+  // here we have a reminder for CGRA mapping:
+  // if 2 nodes exist in 2 different modulo time slot, we don't have to care about them interferring each other?
+
+  // for the nodes that exist in both paths, they should be in the same modulo time slot
+  // for nodes only existing in one path, should not pay that much attention in modulo scheduling?
+  // in mapping though, if they have an edge with distance to common path, they should be mapped to the same location
+  // (at least the last routing node should)
+  // otherwise.....
+
+  // fusing nodes surely can work? but is it necessary?
+
+  // say length = II * n, then a kernel will have n stages, each consisting of II cycles
+  // then at any given time when the CGRA is running, there will be n kernel in fly, each at a different stage <- so at most 2^n versions?
+  // we suppose the 2 kernels will have the same II and also the same length(or not)?
+
+  // 1. nodes in a path with edge out towards common path:
+  //    if the edge has distance: all nodes should be mapped to the same location
+  //    if the edge has no distance: mapping nodes to the same location is more convinient?
+
+  // now: edge from eliminating sel node:
+  // if of common path and a path, need to change node ins data from field
+  // if of 2 different path, just map the 2 nodes at the same spot <--- add routing node in other path
+
+  // difference from dise:  1. don't need to modify PE
+  //                        2. instruction selection is done before comp is done 
+
+  // in a same iteration, the nodes from 2 paths can be mapped to the same location
+
+  // considering all this, mapping with 1 or 2 DFG is still a choice
+
+  // probably refactor everything..... 
+  // cause now mapping with 1 DFG is easier.....
+
+  // for MII calculation, we do it seperately for the normal DFG and split DFG
+  int MII = 0;
+  if (split) {
+    // split, II calculation is done seperately
+    DEBUG("[Mapper]Mapping for a split DFG");
+
+    // get the recMII
+    int trueRecMII  = trueDFG->calculateRecMII();
+    int falseRecMII  = falseDFG->calculateRecMII();
+    DEBUG("[Mapper]Done calculation RecMII of the trueDFG as " << trueRecMII << ", falseDFG as " << falseRecMII);
+
+    // resMII
+    int trueResMII = ceil(float(trueDFG->getNodeSize()) / cgraSize);
+    int falseResMII = ceil(float(falseDFG->getNodeSize()) / cgraSize);
+    DEBUG("[Mapper]Done calculating resMII of the trueDFG as " << trueResMII << ", falseDFG as " << falseResMII);
+
+    // find memory resource MII
+    int trueMemMII = ceil(float(trueDFG->getLoadOpCount() + trueDFG->getStoreOpCount()) / cgraInfo.Y_Dim);
+    int falseMemMII = ceil(float(falseDFG->getLoadOpCount() + falseDFG->getStoreOpCount()) / cgraInfo.Y_Dim);
+    DEBUG("[Mapper]Done calculating memMII of the trueDFG as " << trueMemMII << ", falseDFG as " << falseMemMII);
+
+    // the MII is the largest of the three
+    // for trueDFG
+    int trueMII = trueRecMII;
+    if (trueResMII > trueMII)
+      trueMII = trueResMII;
+    if(trueMemMII > trueMII)
+      trueMII = trueMemMII;
+    // for falseDFG
+    int falseMII = falseRecMII;
+    if (falseResMII > falseMII)
+      falseMII = falseResMII;
+    if(falseMemMII > falseMII)
+      falseMII = falseMemMII;
+    DEBUG("[Mapper]MII of the schedule is trueDFG: " << trueMII << ", falseDFG: " << falseMII);
+
+    // MII of the entire DFG is the larger of the 2
+    MII = (trueMII > falseMII) ? trueMII : falseMII;
+    DEBUG("[Mapper]MII of the entire schedule is " << MII);
+  } else {
+    // not split, mapping only for the originalDFG
+    DEBUG("[Mapper]Mapping for a regular DFG");
+    
+    //preprocess
+    originalDFG->preProcess(cgraInfo.MAX_NODE_INDEGREE, cgraInfo.MAX_NODE_OUTDEGREE);
+    DEBUG("[Mapper]Done preprocessing DFG");
+
+    // get the recMII
+    int recMII  = originalDFG->calculateRecMII();
+    DEBUG("[Mapper]Done calculation RecMII of the DFG as " << recMII);
+
+    // resMII
+    int resMII = ceil(float(originalDFG->getNodeSize()) / cgraSize);
+    DEBUG("[Mapper]Done calculating resMII as " << resMII);
+
+    // find memory resource MII
+    int memMII = ceil(float(originalDFG->getLoadOpCount() + originalDFG->getStoreOpCount()) / cgraInfo.Y_Dim);
+    DEBUG("[Mapper]Done calculating memMII as " << memMII);
+
+    // the MII is the largest of the three
+    MII = recMII;
+    if (resMII > MII)
+      MII = resMII;
+    if(memMII > MII)
+      MII = memMII;
+    DEBUG("[Mapper]MII of the schedule is " << MII);
+  }
+
+  // now the MII calculation is done, we do scheduling and placing on the original DFG
 
   // ASAP schedule
-  int length = scheduleASAP(originalDFG);
+  int length = 0;
+  // the ASAP schedule of nodeId:time
+  std::map<int, int> asapScheduleOrig;
+  std::tie(length, asapScheduleOrig) = scheduleASAP(originalDFG);
   DEBUG("[Mapper]ASAP schedule successful with length of " << length);
 
   // ALAP schedule
-  scheduleALAP(originalDFG, length);
+  // the ALAP schedule of nodeId:time
+  std::map<int, int> alapScheduleOrig;
+  alapScheduleOrig = scheduleALAP(originalDFG, length);
   DEBUG("[Mapper]ALAP schedule successful");
 
   // ASAP Feasible
-  length = scheduleASAPFeasible(originalDFG);
+  // the ASAP schedule considering resources available
+  schedule* asapFeasibleOrig = new schedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
+  length = scheduleASAPFeasible(originalDFG, asapFeasibleOrig);
   DEBUG("[Mapper]ASAP Feasible schedule successful with length of " << length);
 
   // ALAP Feasible
-  scheduleALAPFeasible(originalDFG, MII);
+  // the ALAP schedule considering resources available
+  schedule* alapFeasibleOrig = new schedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
+  scheduleALAPFeasible(originalDFG, length, alapFeasibleOrig, asapFeasibleOrig);
   DEBUG("[Mapper]ALAP Feasible schedule successful");
 
   DEBUG("[Mapper]Done premapping with II of " << MII);
 
   // get nodes sorted
-  std::vector<Node*> sortedNodes = getSortedNodes(originalDFG);
+  std::vector<Node*> sortedNodes = getSortedNodes(originalDFG, asapFeasibleOrig);
+
+  // initialize the schedules
+  // the modulo schedule
+  moduloSchedule* modScheduleOrig = new moduloSchedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
+  // the time extanded CGRA
+  CGRA* timeExCgraOrig;
 
   int currentII = MII;
   while (currentII <= mappingPolicy.MAX_II) {
@@ -210,19 +327,19 @@ Mapper::generateMap(Parser* myParser)
     // Fraction of scheduling space based on user input.
     int lambda =  mappingPolicy.LAMBDA * cgraSize * currentII * originalDFG->getNodeSize();
     for (int attempt = 0; attempt < lambda; attempt++) {
-      DEBUG("[Mapper]attempt: " << attempt << "/" << lambda << "");
+      DEBUG("[Mapper]attempt: " << attempt << "/" << lambda);
       bool modScheduleSuccess = false;
       DFG* routeDFG = nullptr;
       // here we do modulo schedule
       for (int modAttempt = 0; modAttempt < mappingPolicy.MODULO_SCHEDULING_ATTEMPTS; modAttempt++) {
         DEBUG("[Mapper]modulo schedule attempt " << modAttempt << " of " << mappingPolicy.MODULO_SCHEDULING_ATTEMPTS);
-        if (scheduleModulo(originalDFG, sortedNodes, currentII)) {
+        if (scheduleModulo(originalDFG, sortedNodes, currentII, modScheduleOrig, asapFeasibleOrig, alapFeasibleOrig)) {
           DEBUG("[Mapper]Modulo schedule complete and successful");
-          modSchedule->print(originalDFG, "original");
+          modScheduleOrig->print(originalDFG, "original");
           // next, for nodes that can't be immediately accessed, insert routing nodes
           // a new DFG to insert all the routing nodes inserted
           routeDFG = new DFG(*originalDFG);
-          if (!insertRoute(routeDFG)) {
+          if (!insertRoute(routeDFG, modScheduleOrig)) {
             DEBUG("[Mapper]insert routing failed, retry modulo schedule");
             continue;
           } else {
@@ -238,12 +355,13 @@ Mapper::generateMap(Parser* myParser)
         currentII++;
         break;
       }
-      modSchedule->print(routeDFG, "route");
-      timeExCgra = new CGRA(cgraInfo.X_Dim, cgraInfo.Y_Dim, currentII);
+      modScheduleOrig->print(routeDFG, "route");
+      timeExCgraOrig = new CGRA(cgraInfo.X_Dim, cgraInfo.Y_Dim, currentII);
+      exit(2);
       // now falcon mapping
-      bool placeSuccess = falconPlace(routeDFG, currentII);
+      bool placeSuccess = falconPlace(routeDFG, currentII, timeExCgraOrig, modScheduleOrig);
       if (placeSuccess) {
-        timeExCgra->print();
+        timeExCgraOrig->print();
         return true;
       } 
     } // end of iterating through attempts
@@ -255,7 +373,7 @@ Mapper::generateMap(Parser* myParser)
 
 
 std::tuple<bool, int>
-Mapper::checkModulo(Node* node)
+Mapper::checkModulo(Node* node, moduloSchedule* modSchedule, schedule* alapFeasible)
 {
   bool canSchedule = true;
   int scheduleTime = alapFeasible->getScheduleTime(node);
@@ -275,7 +393,8 @@ Mapper::checkModulo(Node* node)
 
 
 bool
-Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
+Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II,
+                      moduloSchedule* modSchedule, schedule* asapFeasible, schedule* alapFeasible)
 {
   DEBUG("[Modulo]Start");
   modSchedule->clear();
@@ -295,13 +414,13 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
         continue;
       if (node->isLoadDataBusRead() || node->isStoreDataBusWrite()) {
         // check if mem related node is ready for scheduling
-        if (!(std::get<0>(checkModulo(node->getMemRelatedNode()))))
+        if (!(std::get<0>(checkModulo(node->getMemRelatedNode(), modSchedule, alapFeasible))))
           continue;
       }
-      if (std::get<0>(checkModulo(node))) {
+      if (std::get<0>(checkModulo(node, modSchedule, alapFeasible))) {
         // node ready for modulo scheduling
         // update slack
-        int slack = std::get<1>(checkModulo(node)) - asapFeasible->getScheduleTime(node);
+        int slack = std::get<1>(checkModulo(node, modSchedule, alapFeasible)) - asapFeasible->getScheduleTime(node);
         if (slack < lowestSlack) {
           lowestSlack = slack;
           scheduleNode = node;
@@ -318,9 +437,10 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
     }
     DEBUG("[Modulo]Scheduling node: " << scheduleNode->getId());
     // now we check the time this node can be scheduled at
-    int startTime = getModConstrainedTime(scheduleNode);
+    int startTime = getModConstrainedTime(scheduleNode, modSchedule, asapFeasible);
     // check loop carried dependencies of the node to schedule
     // as in, the node should start after LCD node is finished
+    // this is made sure through the sorted nodes
     for(Node* pred : scheduleNode->getExDepPredPrevIter()) {
       if (!modSchedule->isScheduled(pred))
         FATAL("[Modulo]ERROR!Loop carried preds should be scheduled first");
@@ -329,7 +449,7 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
       if (earliestStart > startTime)
         startTime = earliestStart;
     }
-    int endTime = std::get<1>(checkModulo(scheduleNode));
+    int endTime = std::get<1>(checkModulo(scheduleNode, modSchedule, alapFeasible));
     DEBUG("[Modulo]start time: " << startTime <<", end time: " << endTime);
     if (startTime > endTime) {
       DEBUG("[Modulo]Failed: startTime > endTime");
@@ -354,13 +474,13 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
         addNode = scheduleNode->getMemRelatedNode();
         // we've made sure related node is also ready earlier
         // add node should be scheduled a cycle earlier than data node for load
-        int latestAdd = std::get<1>(checkModulo(addNode));
+        int latestAdd = std::get<1>(checkModulo(addNode, modSchedule, alapFeasible));
         if (latestAdd < (scheduleTime - 1)) {
           // latest address node schedule time earlier than intended, try another time
           continue;
         } else {
           // lateset address node schedule time later than intended, can be scheduled
-          if (modSchedule->memLdResAvailable(scheduleTime - 1)) {
+          if (modSchedule->memLdResAvailable(addNode->getBrPath(), scheduleTime - 1)) {
             // enough resources, schedule both nodes
             modSchedule->scheduleLd(addNode, scheduleNode, scheduleTime - 1);
             scheduled = true;
@@ -383,14 +503,14 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
       } else if (scheduleNode->isStoreDataBusWrite()) {
         // with stores, note that we've skipped address generators earlier
         Node* addNode = scheduleNode->getMemRelatedNode();
-        int latestAdd = std::get<1>(checkModulo(addNode));
+        int latestAdd = std::get<1>(checkModulo(addNode, modSchedule, alapFeasible));
         // for store, both address node and data node are scheduled at time
         if (latestAdd < scheduleTime) {
           // latest address node schedule time earlier than intended, try another time
           continue;
         } else {
           // lateset address node schedule time later than intended, can be scheduled
-          if (modSchedule->memStResAvailable(scheduleTime)) {
+          if (modSchedule->memStResAvailable(addNode->getBrPath(), scheduleTime)) {
             // enough resources, schedule both nodes
             modSchedule->scheduleSt(addNode, scheduleNode, scheduleTime);
             scheduled = true;
@@ -412,7 +532,7 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
 
       } else {
         // regular nodes
-        if (modSchedule->resAvailable(scheduleTime)) {
+        if (modSchedule->resAvailable(scheduleNode->getBrPath(), scheduleTime)) {
           modSchedule->scheduleOp(scheduleNode, scheduleTime);
           DEBUG("[Modulo]Schedule successful");
           scheduled = true;
@@ -439,7 +559,7 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II)
 
 
 int
-Mapper::getModConstrainedTime(Node* node)
+Mapper::getModConstrainedTime(Node* node, moduloSchedule* modSchedule, schedule* asapFeasible)
 {
   bool constrained = false;
   int constrainedTime = INT32_MIN;
@@ -461,58 +581,10 @@ Mapper::getModConstrainedTime(Node* node)
 }
 
 
-bool
-Mapper::isModConstrainedBy(Node* source, Node* pred)
-{
-  std::set<Node*> visited;
-  std::queue<Node*> toVisit;
-  toVisit.push(source);
-  while (!toVisit.empty()) {
-    Node* node = toVisit.front();
-    toVisit.pop();
-    // skip visited nodes
-    if (visited.find(node) != visited.end()) 
-      continue;
-    visited.insert(node);
-    if (!modSchedule->isScheduled(node))
-      continue;
-    // nodes in same iter
-    if (node != source) {
-      for (Node* succ : node->getSuccSameIterExMemDep()) {
-        // skip visited nodes
-        if (visited.find(succ) != visited.end()) 
-          continue;
-        // skip not mod scheduled
-        if (!modSchedule->isScheduled(succ))
-          continue;
-        // also check if node constrains the succ
-        if (modSchedule->getScheduleTime(node) + node->getLatency() < modSchedule->getScheduleTime(succ)) {
-          if (succ == pred)
-            return true;
-        }
-        toVisit.push(succ);
-      }
-    }
-    // nodes in next iter
-    for (Node* succ : node->getExDepSuccNextIter()) {
-      // skip visited nodes
-      if (visited.find(succ) != visited.end()) 
-        continue;
-      // skip not mod scheduled
-      if (!modSchedule->isScheduled(succ))
-        continue;
-      if (succ == pred)
-        return true;
-      toVisit.push(succ);
-    }
-  }
-  return false;
-}
-
-
-int 
+std::tuple<int, std::map<int, int>>
 Mapper::scheduleASAP(DFG* myDFG)
 {
+  std::map<int, int> schedule;
   DEBUG("[ASAP]started");
   // set of nodes to be scheduled
   std::vector<int> toSchedule;
@@ -524,7 +596,7 @@ Mapper::scheduleASAP(DFG* myDFG)
 
   // start nodes are scheduled at time 0
   for (int node : toSchedule) {
-    asapSchedule[node] = 0;
+    schedule[node] = 0;
     DEBUG("[ASAP]node: " << node << " scheduled at 0" );
   }
   
@@ -545,20 +617,20 @@ Mapper::scheduleASAP(DFG* myDFG)
       int scheduleTime = 0;
       std::vector<Node*> prevNodes = myDFG->getNode(nodeId)->getPrevSameIter();
       for (Node* prevNode : prevNodes) {
-        if (asapSchedule.find(prevNode->getId()) == asapSchedule.end()) {
+        if (schedule.find(prevNode->getId()) == schedule.end()) {
           // prev node not scheduled, this node not ready
           canSchedule = false;
           break;
         } else {
           // get the earliest time for this node limited by prevNode
-          int ristrictTime = asapSchedule[prevNode->getId()] + prevNode->getLatency();
+          int ristrictTime = schedule[prevNode->getId()] + prevNode->getLatency();
           if (scheduleTime < ristrictTime)
             scheduleTime = ristrictTime;
         }
       }
       if (canSchedule) {
         // node can be scheduled
-        asapSchedule[nodeId] = scheduleTime;
+        schedule[nodeId] = scheduleTime;
         DEBUG("[ASAP]node: " << nodeId << " scheduled at " << scheduleTime);
         toSchedule.push_back(nodeId);
         if (latestTime < scheduleTime)
@@ -574,14 +646,15 @@ Mapper::scheduleASAP(DFG* myDFG)
     toSchedule.clear();
   }
   // all nodes scheduled
-  return latestTime + 1;
+  return std::make_tuple(latestTime + 1, schedule);
 }
 
 
-void 
+std::map<int, int> 
 Mapper::scheduleALAP(DFG* myDFG, int length)
 {
   DEBUG("[ALAP]Started");
+  std::map<int, int> alapSchedule;
   // set of nodes to be scheduled
   std::vector<int> toSchedule;
 
@@ -639,11 +712,12 @@ Mapper::scheduleALAP(DFG* myDFG, int length)
     toSchedule.clear();
   }
   // all nodes scheduled
+  return alapSchedule;
 }
 
 
 std::tuple<bool, int> 
-Mapper::checkASAP(Node* node)
+Mapper::checkASAP(Node* node, schedule* asapFeasible)
 {
   bool canSchedule = true;
   int scheduleTime = 0;
@@ -664,7 +738,7 @@ Mapper::checkASAP(Node* node)
 
 
 int 
-Mapper::scheduleASAPFeasible(DFG* myDFG)
+Mapper::scheduleASAPFeasible(DFG* myDFG, schedule* asapFeasible)
 {
   DEBUG("[ASAP Feasible]start");
   // set of nodes to be scheduled
@@ -694,16 +768,8 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
 
       for (int t = 0; t < mappingPolicy.MAX_LATENCY; t++) {
         // find a time slot
-        // since we want to place nodes with inter iter dependency
-        // in the same physical PE
-        if (asapFeasible->hasInterIterConfilct(node, t)) {
-          continue;
-        }
-        if (asapFeasible->hasInterIterConfilct(dataNode, t + 1)) {
-          continue;
-        }
         // now to check mem resources
-        if (asapFeasible->memLdResAvailable(t)) {
+        if (asapFeasible->memLdResAvailable(node->getBrPath(), t)) {
           asapFeasible->scheduleLd(node, dataNode, t);
           DEBUG("[ASAP Feasible]load add node: " << nodeId << " scheduled at " << t);
           DEBUG("[ASAP Feasible]load data node: " << dataNode->getId() << " scheduled at " << t + 1);
@@ -729,11 +795,8 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
     } else {
       //find a time slot
       for (int t = 0; t < mappingPolicy.MAX_LATENCY; t++) {
-        if (!asapFeasible->resAvailable(t)) {
+        if (!asapFeasible->resAvailable(node->getBrPath(), t)) {
           // all pe used at time slot t
-          continue;
-        }
-        if (asapFeasible->hasInterIterConfilct(node, t)) {
           continue;
         }
         asapFeasible->scheduleOp(node, t);
@@ -779,25 +842,19 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       Node* node = myDFG->getNode(nodeId);
       bool canSchedule = true;
       int scheduleTime = 0;
-      std::tie(canSchedule, scheduleTime) = checkASAP(node);
+      std::tie(canSchedule, scheduleTime) = checkASAP(node, asapFeasible);
 
       // also check related node
       Node* relatedNode = node->getMemRelatedNode();
       bool canScheduleRel = true;
       int scheduleTimeRel = 0;
-      std::tie(canScheduleRel, scheduleTimeRel) = checkASAP(relatedNode);
+      std::tie(canScheduleRel, scheduleTimeRel) = checkASAP(relatedNode, asapFeasible);
       // make sure both nodes are ready
       if (canSchedule && canScheduleRel) {
         // latest time of the 2
         int startTime = (scheduleTime < scheduleTimeRel) ? scheduleTimeRel : scheduleTime;
         for (int t = startTime; t < mappingPolicy.MAX_LATENCY; t++) {
           // start from lastest time
-          if (asapFeasible->hasInterIterConfilct(node, t)) {
-            continue;
-          }
-          if (asapFeasible->hasInterIterConfilct(relatedNode, t)) {
-            continue;
-          }
           if (node->isLiveOut()) {
             // for live out node, we need to schedule it after loop control node
             Node* loopCtrlNode = myDFG->getLoopCtrlNode();
@@ -813,7 +870,7 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
             }
             DEBUG("[ASAP Feasible]" << nodeId << " live out, with ctrl " << loopCtrlNode->getId());
           }
-          if (asapFeasible->memStResAvailable(t)) {
+          if (asapFeasible->memStResAvailable(node->getBrPath(), t)) {
             asapFeasible->scheduleSt(node, relatedNode, t);
             DEBUG("[ASAP Feasible]store node: " << nodeId << " scheduled at " << t);
             DEBUG("[ASAP Feasible]store node: " << relatedNode->getId() << " scheduled at " << t);
@@ -849,11 +906,9 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       bool canSchedule = true;
       int scheduleTime = 0;
       // check the earliest time to schedule the node
-      std::tie(canSchedule, scheduleTime) = checkASAP(node);
+      std::tie(canSchedule, scheduleTime) = checkASAP(node, asapFeasible);
       if (canSchedule) {
         for (int t = scheduleTime; t < mappingPolicy.MAX_LATENCY; t++) {
-          if (asapFeasible->hasInterIterConfilct(node, t))
-            continue;
           if (node->isLiveOut()) {
             // for live out node, we need to schedule it after loop control node
             Node* loopCtrlNode = myDFG->getLoopCtrlNode();
@@ -870,7 +925,7 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
             DEBUG("[ASAP Feasible]live out node: " << nodeId << ", ctrl node: " << loopCtrlNode->getId());
           }
           // check resource available
-          if (asapFeasible->resAvailable(t)) {
+          if (asapFeasible->resAvailable(node->getBrPath(), t)) {
             asapFeasible->scheduleOp(node, t);
             DEBUG("[ASAP Feasible]node: " << nodeId << " scheduled at " << t);
             //successfully scheduled an operation
@@ -912,20 +967,16 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
       }
       bool canScheduleAdd = true;
       int scheduleTimeAdd = 0;
-      std::tie(canScheduleAdd, scheduleTimeAdd) = checkASAP(addNode);
+      std::tie(canScheduleAdd, scheduleTimeAdd) = checkASAP(addNode, asapFeasible);
 
       bool canScheduleData = true;
       int scheduleTimeData = 0;
-      std::tie(canScheduleData, scheduleTimeData) = checkASAP(dataNode);
+      std::tie(canScheduleData, scheduleTimeData) = checkASAP(dataNode, asapFeasible);
       
       if (canScheduleAdd && canScheduleData) {
         int startTime = (scheduleTimeAdd < (scheduleTimeData - 1)) ? (scheduleTimeData - 1) : scheduleTimeAdd;
         for (int t = startTime; t < mappingPolicy.MAX_LATENCY; t++) {
-          if (asapFeasible->hasInterIterConfilct(addNode, t))
-            continue;
-          if (asapFeasible->hasInterIterConfilct(dataNode, t + 1))
-            continue;
-          if (asapFeasible->memLdResAvailable(t)) {
+          if (asapFeasible->memLdResAvailable(node->getBrPath(), t)) {
             asapFeasible->scheduleLd(addNode, dataNode, t);
             DEBUG("[ASAP Feasible]load add node: " << addNode->getId() << " scheduled at " << t);
             DEBUG("[ASAP Feasible]load data node: " << dataNode->getId() << " scheduled at " << t + 1);
@@ -960,10 +1011,10 @@ Mapper::scheduleASAPFeasible(DFG* myDFG)
 
 
 std::tuple<bool, int> 
-Mapper::checkALAP(Node* node, int II)
+Mapper::checkALAP(Node* node, int length, schedule* alapFeasible)
 {
   bool canSchedule = true;
-  int scheduleTime = INT32_MAX;
+  int scheduleTime = length - 1;
   // first check succ nodes
   std::vector<Node*> succNodes = node->getSuccSameIterExMemDep();
   if (succNodes.size() > 0) {
@@ -977,34 +1028,31 @@ Mapper::checkALAP(Node* node, int II)
           scheduleTime = restrictTime;
       }
     }
-  } else {
-    // this is before the next apprearance of the node
-    scheduleTime = asapFeasible->getScheduleTime(node) + II - node->getLatency();
   }
   return std::make_tuple(canSchedule, scheduleTime);
 }
 
 
 void
-Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
+Mapper::scheduleALAPFeasible(DFG* myDFG, int length, schedule* alapFeasible, schedule* asapFeasible)
 {
   DEBUG("[ALAP Feasible]start");
   // nodes left to be scheduled
   std::set<int> rest = myDFG->getNodeIdSet();
   // start with nodes without succ in same iter
   for (Node* node : myDFG->getEndNodes()) {
+    DEBUG("[ALAP Feasible]Mapping end node " << node->getId());
     // if there are nodes scheduled through an iter
     bool scheduled = false;
     // the last time this node can be scheduled at
-    int lastTime = asapFeasible->getScheduleTime(node) + II - node->getLatency();
+    // previously, we kind of want to ensure in mod schedule
+    // a node will be mapped before the next iter of pred is lauched
+    // but now with full routing, this should not matter
+    int lastTime = length - 1;
     if (node->isLoadDataBusRead()) {
       Node* addNode = node->getMemRelatedNode();
       for (int t = lastTime; t > -1; t--) {
-        if (alapFeasible->hasInterIterConfilct(addNode, t - 1))
-          continue;
-        if (alapFeasible->hasInterIterConfilct(node, t))
-          continue;
-        if (alapFeasible->memLdResAvailable(t - 1)) {
+        if (alapFeasible->memLdResAvailable(addNode->getBrPath(), t - 1)) {
           // enough resources
           alapFeasible->scheduleLd(addNode, node, t - 1);
           DEBUG("[ALAP Feasible]load add node: " << addNode->getId() << " scheduled at " << t - 1);
@@ -1018,11 +1066,7 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
     } else if (node->isStoreDataBusWrite()) {
       Node* addNode = node->getMemRelatedNode();
       for (int t = lastTime; t > -1; t--) {
-        if (alapFeasible->hasInterIterConfilct(addNode, t))
-          continue;
-        if (alapFeasible->hasInterIterConfilct(node, t))
-          continue;
-        if (alapFeasible->memStResAvailable(t)) {
+        if (alapFeasible->memStResAvailable(addNode->getBrPath(), t)) {
           alapFeasible->scheduleSt(addNode, node, t);
           DEBUG("[ALAP Feasible]store add node: " << addNode->getId() << " scheduled at " << t);
           DEBUG("[ALAP Feasible]store data node: " << node->getId() << " scheduled at " << t);
@@ -1035,10 +1079,10 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
       } // end of iterating through time
     } else {
       for (int t = lastTime; t > -1; t--) {
-        if (alapFeasible->hasInterIterConfilct(node, t))
-          continue;
         if (node->isLoopCtrl()) {
-          // loop control node shoud be before live out nodes
+          // loop control node shoud be before live out nodes, this ensures that
+          // if this proves to be too restricting, causing II to increase, we could move this
+          // to in modulo scheduling instead
           std::vector<Node*> liveOutNodes = myDFG->getLiveOutNodes();
           bool constrained = false;
           for (Node* liveOutNode : liveOutNodes) {
@@ -1052,7 +1096,7 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
           else
             DEBUG("[ALAP Feasible]loop ctrl node: " << node->getId());
         }
-        if (alapFeasible->resAvailable(t)) {
+        if (alapFeasible->resAvailable(node->getBrPath(), t)) {
           alapFeasible->scheduleOp(node, t);
           DEBUG("[ALAP Feasible]node: " << node->getId() << " scheduled at " << t);
           //successfully scheduled an operation
@@ -1080,22 +1124,18 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
         Node* relatedNode = node->getMemRelatedNode();
         bool canSchedule = true;
         int scheduleTime = 0;
-        std::tie(canSchedule, scheduleTime) = checkALAP(node, II);
+        std::tie(canSchedule, scheduleTime) = checkALAP(node, length, alapFeasible);
 
         // also check related node
         bool canScheduleRel = true;
         int scheduleTimeRel = 0;
-        std::tie(canScheduleRel, scheduleTimeRel) = checkALAP(relatedNode, II);
+        std::tie(canScheduleRel, scheduleTimeRel) = checkALAP(relatedNode, length, alapFeasible);
 
         if (canSchedule & canScheduleRel) {
           // earlier of the two
-          int lasttTime = (scheduleTime < scheduleTimeRel) ? scheduleTime : scheduleTimeRel;
-          for (int t = lasttTime; t > -1; t--) {
-            if (alapFeasible->hasInterIterConfilct(node, t))
-              continue;
-            if (alapFeasible->hasInterIterConfilct(relatedNode, t))
-              continue;
-            if (alapFeasible->memStResAvailable(t)) {
+          int lastTime = (scheduleTime < scheduleTimeRel) ? scheduleTime : scheduleTimeRel;
+          for (int t = lastTime; t > -1; t--) {
+            if (alapFeasible->memStResAvailable(node->getBrPath(), t)) {
               alapFeasible->scheduleSt(node, relatedNode, t);
               DEBUG("[ALAP Feasible]store node: " << relatedNode->getId() << " scheduled at " << t);
               DEBUG("[ALAP Feasible]store node: " << node->getId() << " scheduled at " << t);
@@ -1119,20 +1159,16 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
         }
         bool canScheduleAdd = true;
         int scheduleTimeAdd = 0;
-        std::tie(canScheduleAdd, scheduleTimeAdd) = checkALAP(addNode, II);
+        std::tie(canScheduleAdd, scheduleTimeAdd) = checkALAP(addNode, length, alapFeasible);
 
         bool canScheduleData = true;
         int scheduleTimeData = 0;
-        std::tie(canScheduleData, scheduleTimeData) = checkALAP(dataNode, II);
+        std::tie(canScheduleData, scheduleTimeData) = checkALAP(dataNode, length, alapFeasible);
         
         if (canScheduleAdd && canScheduleData) {
           int lastTime = (scheduleTimeAdd < (scheduleTimeData - 1)) ? scheduleTimeAdd : (scheduleTimeData - 1);
           for (int t = lastTime; t > -1; t--) {
-            if (alapFeasible->hasInterIterConfilct(addNode, t))
-              continue;
-            if (alapFeasible->hasInterIterConfilct(dataNode, t + 1))
-              continue;
-            if (alapFeasible->memLdResAvailable(t)) {
+            if (alapFeasible->memLdResAvailable(addNode->getBrPath(), t)) {
               // enough resources
               alapFeasible->scheduleLd(addNode, dataNode, t);
               DEBUG("[ALAP Feasible]load add node: " << addNode->getId() << " scheduled at " << t);
@@ -1147,13 +1183,12 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
         //regular node
         bool canSchedule = true;
         int scheduleTime = 0;
-        std::tie(canSchedule, scheduleTime) = checkALAP(node, II);
+        std::tie(canSchedule, scheduleTime) = checkALAP(node, length, alapFeasible);
         if (canSchedule) {
           for (int t = scheduleTime; t > -1; t--) {
-            if (alapFeasible->hasInterIterConfilct(node, t))
-              continue;
             if (node->isLoopCtrl()) {
               // make sure loop control is before all live out nodes
+              // again, this could be moved to modulo scheduling if proves to be too restricting
               std::vector<Node*> liveOutNodes = myDFG->getLiveOutNodes();
               bool constrained = false;
               for (Node* liveOutNode : liveOutNodes) {
@@ -1167,7 +1202,7 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
               else
                 DEBUG("[ALAP Feasible]loop ctrl node: " << node->getId());
             }
-            if (alapFeasible->resAvailable(t)) {
+            if (alapFeasible->resAvailable(node->getBrPath(), t)) {
               alapFeasible->scheduleOp(node, t);
               DEBUG("[ALAP Feasible]node: " << nodeId << " scheduled at " << t);
               //successfully scheduled an operation
@@ -1189,7 +1224,7 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int II)
 
 
 std::vector<Node*>
-Mapper::getSortedNodes(DFG* myDFG)
+Mapper::getSortedNodes(DFG* myDFG, schedule* asapFeasible)
 {
   std::vector<std::set<Node*>> sortedSets;
   std::set<Node*> visitedNodes;
@@ -1243,7 +1278,7 @@ Mapper::getSortedNodes(DFG* myDFG)
 
 
 bool
-Mapper::insertRoute(DFG* myDFG)
+Mapper::insertRoute(DFG* myDFG, moduloSchedule* modSchedule)
 {
   DEBUG("[Route]Started");
   // first get routes needed
@@ -1278,21 +1313,39 @@ Mapper::insertRoute(DFG* myDFG)
         needRoute.insert(needRouteIt, std::make_tuple(succ, needTime));
       }
     } // end of checking all succs
+    // for the path of the routing node, if there are nodes needed routing belonging to not only 
+    // one path, the routing node should be of none path
     if (!needRoute.empty()) {
       // if there need routing to succs for this node
       DEBUG("[Route]Node: " << nodeId << " with ready time: " << readyTime << " needs routing to");
+      // here we check which path the routing node should belong to
       // lastest copy of the data ready at time
       int curReadyTime = readyTime;
       // lastest copy of the data ready at node
       Node* curReadyNode = node;
-      for (auto needRouteIt : needRoute) {
+      for (auto needRouteIt = needRoute.begin(); needRouteIt != needRoute.end(); ++needRouteIt) {
         // data is needed at node
-        Node* needNode = std::get<0>(needRouteIt);
+        Node* needNode = std::get<0>(*needRouteIt);
         // data is needed at time
-        int needTime = std::get<1>(needRouteIt);
+        int needTime = std::get<1>(*needRouteIt);
+        nodePath routePath = needNode->getBrPath();
+        // check what path this routing node should belong to
+        for (auto restIt = needRouteIt; restIt != needRoute.end(); ++restIt) {
+          // the path of the node currentry iterated on
+          nodePath path = std::get<0>(*restIt)->getBrPath();
+          if (path == none) {
+            // if a later needNode is of none path, the route should be of none path
+            routePath = none;
+            break;
+          } else if (path != routePath) {
+            // if both paths exist in later need nodes, the route should be of none path
+            routePath = none;
+            break;
+          }
+        }
         DEBUG("[Route]Succ: " << needNode->getId() << " need time: " << needTime);
         while (curReadyTime < needTime) {
-          if (!modSchedule->resAvailable(curReadyTime)) {
+          if (!modSchedule->resAvailable(routePath, curReadyTime)) {
             DEBUG("[Route]Not enough resources for a routing node at time " << curReadyTime);
             DEBUG("[Route]Getting a new modulo schedule");
             return false;
@@ -1302,7 +1355,7 @@ Mapper::insertRoute(DFG* myDFG)
           routeNode* newRouteNode = new routeNode(curReadyNode, curReadyNode->getBrPath());
           myDFG->insertNode(newRouteNode);
           // connect it to the prev node
-          myDFG->makeArc(curReadyNode, newRouteNode, 0, TrueDep, 0);
+          myDFG->makeArc(curReadyNode, newRouteNode, 0, TrueDep, 0, none);
           // modulo shcedule the new route node
           modSchedule->scheduleOp(newRouteNode, curReadyTime);
           DEBUG("[Route]Route Node: " << newRouteNode->getId() << " at time " << curReadyTime << " added");
@@ -1314,7 +1367,8 @@ Mapper::insertRoute(DFG* myDFG)
         Arc* arcOld = myDFG->getArc(node, needNode);
         myDFG->removeArc(arcOld->getId());
         // connect it to ready node
-        myDFG->makeArc(curReadyNode, needNode, arcOld->getDistance(), arcOld->getDependency(), arcOld->getOperandOrder());
+        myDFG->makeArc(curReadyNode, needNode, arcOld->getDistance(), 
+                      arcOld->getDependency(), arcOld->getOperandOrder(), arcOld->getPath());
       } // end of checking all routes needed to be added
     }
   } // end of checking all nodes
@@ -1323,7 +1377,7 @@ Mapper::insertRoute(DFG* myDFG)
 
 
 bool
-Mapper::falconPlace(DFG* myDFG, int II)
+Mapper::falconPlace(DFG* myDFG, int II, CGRA* timeExCgra, moduloSchedule* modSchedule)
 {
   DEBUG("[Falcon]Start placing");  
   /**
@@ -1375,16 +1429,16 @@ Mapper::falconPlace(DFG* myDFG, int II)
           timeExCgra->removeNode(node);
         }
         // now based on the mapping status, get free coordinates this node can be mapped to
-        std::vector<PE*> potentialPos = getPotentialPos(node);
+        std::vector<PE*> potentialPos = getPotentialPos(node, timeExCgra, modSchedule);
         if (potentialPos.empty()) {
           DEBUG("[Falcon]No position, remapping");
           // no position for this node, try to remap and find a potential position
-          bool remapSuccess = remapBasic(node);
+          bool remapSuccess = remapBasic(node, timeExCgra, modSchedule);
           // in falcon, it goes as: shallow->shallow_n->1deep
           if (!remapSuccess)
-            remapSuccess = remapCurrT(node, myDFG);
+            remapSuccess = remapCurrT(node, myDFG, timeExCgra, modSchedule);
           if (!remapSuccess)
-            remapSuccess = remapAdjT(node, myDFG);
+            remapSuccess = remapAdjT(node, myDFG, timeExCgra, modSchedule);
           if (!remapSuccess) {
             // all remap done and node is still not mapped
             nodeSetToMap.insert(node->getId());
@@ -1438,9 +1492,6 @@ Mapper::falconPlace(DFG* myDFG, int II)
     if (placementFound) {
       // valid placement found
       DEBUG("[Falcon]Placement success at attempt: " << attempt);
-      #ifndef NDEBUG
-        timeExCgra->print();
-      #endif
       return true;
     } else {
       // no valid placement found during this attempt
@@ -1455,7 +1506,7 @@ Mapper::falconPlace(DFG* myDFG, int II)
 
 
 std::vector<PE*>
-Mapper::getPotentialPos(Node* node)
+Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedule)
 {
   DEBUG("[PotentialPos]Finding potential position for node: " << node->getId());
   bool mapped = false;
@@ -1733,7 +1784,7 @@ Mapper::getPotentialPos(Node* node)
 
 
 bool
-Mapper::remapBasic(Node* failedNode)
+Mapper::remapBasic(Node* failedNode, CGRA* timeExCgra, moduloSchedule* modSchedule)
 {
   DEBUG("[Remap Basic]Remapping failed node " << failedNode->getId());
   // first get all the mapped preds and succs constraining the node, we try and remap the constraints
@@ -1775,7 +1826,7 @@ Mapper::remapBasic(Node* failedNode)
       positionsLeft.pop_back();
       timeExCgra->removeNode(constraint);
     } else {
-      potentialPos = getPotentialPos(constraint);
+      potentialPos = getPotentialPos(constraint, timeExCgra, modSchedule);
       // shuffle to potentialPos here since potentialPos is ordered
       std::shuffle(potentialPos.begin(), potentialPos.end(), rng);
     }
@@ -1793,7 +1844,7 @@ Mapper::remapBasic(Node* failedNode)
     }
     if (constraintIt == (int)mappedNodes.size()) {
       // found a position composition for all constraints
-      auto remapPos = getPotentialPos(failedNode);
+      auto remapPos = getPotentialPos(failedNode, timeExCgra, modSchedule);
       if (!remapPos.empty()) {
         // there is position for this node, choose a random one for now
         std::uniform_int_distribution<std::size_t> uni(0, remapPos.size() - 1);
@@ -1822,7 +1873,7 @@ Mapper::remapBasic(Node* failedNode)
 
 
 bool 
-Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
+Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule* modSchedule)
 {
   DEBUG("[Remap T]Remapping failed node: " << failedNode->getId());
   
@@ -1869,7 +1920,7 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
     timeExCgra->mapNode(constraint, originalConsPos[constraint]);
   
   // now do a basic remap
-  bool basicSuccess = remapBasic(failedNode);
+  bool basicSuccess = remapBasic(failedNode, timeExCgra, modSchedule);
   if (basicSuccess) {
     // now we remap all the stored node in current time slot
     DEBUG("[Remap T]Remapping all " << mappedNodes.size() << \
@@ -1881,7 +1932,7 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
       std::shuffle(mappedNodes.begin(), mappedNodes.end(), rng);
       for (int nodeToMap : mappedNodes) {
         Node* remapNode = myDFG->getNode(nodeToMap);
-        auto potentialPos = getPotentialPos(remapNode);
+        auto potentialPos = getPotentialPos(remapNode, timeExCgra, modSchedule);
         if (potentialPos.empty()) {
           // remap attempt failed
           DEBUG("[Remap T]Attempt failed, starting over");
@@ -1895,7 +1946,7 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
             // redo basic remap to try and create greater success rate
             DEBUG("[Remap T]Redoing basic remap");
             timeExCgra->removeNode(failedNode);
-            remapBasic(failedNode);
+            remapBasic(failedNode, timeExCgra, modSchedule);
           }
           break;
         } else {
@@ -1930,7 +1981,7 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG)
 
 
 bool
-Mapper::remapAdjT(Node* failedNode, DFG* myDFG)
+Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule* modSchedule)
 {
   DEBUG("[Remap Adj]Remapping failed node: " << failedNode->getId());
 
@@ -1993,7 +2044,7 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG)
     timeExCgra->mapNode(cons, originalConsPos[cons]);
   
   // now do the basic remap
-  bool basicSuccess = remapBasic(failedNode);
+  bool basicSuccess = remapBasic(failedNode, timeExCgra, modSchedule);
   if (basicSuccess) {
     // basic remap success, now we need to remap all the mapped nodes in time slots
     // here we also have a choice to remap a time slot at a time, don't know if that will be better
@@ -2005,7 +2056,7 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG)
       std::shuffle(mappedNodes.begin(), mappedNodes.end(), rng);
       for (int nodeToMap : mappedNodes) {
         Node* remapNode = myDFG->getNode(nodeToMap);
-        auto potentialPos = getPotentialPos(remapNode);
+        auto potentialPos = getPotentialPos(remapNode, timeExCgra, modSchedule);
         if (potentialPos.empty()) {
           // remap attempt failed
           DEBUG("[Remap Adj]Attempt failed, starting over");
@@ -2019,7 +2070,7 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG)
             // redo basic remap to try and create greater success rate
             DEBUG("[Remap Adj]Redoing basic remap");
             timeExCgra->removeNode(failedNode);
-            remapBasic(failedNode);
+            remapBasic(failedNode, timeExCgra, modSchedule);
           }
           break;
         } else {
