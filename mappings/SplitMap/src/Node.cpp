@@ -24,6 +24,7 @@ Node::Node(Instruction_Operation ins, Datatype dt, int laten, int id, std::strin
   outputDataBus = false;
   liveOut = false;
   loopCtrl = false;
+  mergedNode = nullptr;
 }
 
 
@@ -43,6 +44,7 @@ Node::Node(const Node& originalNode)
   inputDataBus = originalNode.inputDataBus;
   storeOutputAddressBus = originalNode.storeOutputAddressBus;
   outputDataBus = originalNode.outputDataBus;
+  mergedNode = nullptr;
 }
 
 
@@ -494,6 +496,22 @@ Node::isLoopCtrl()
   return this->loopCtrl;
 }
 
+
+void
+Node::setMergeNode(Node* node)
+{
+  if (mergedNode != nullptr)
+    if (mergedNode != node)
+      FATAL("[Merge Node]ERROR! A node can't be merged with more than 1 node");
+  mergedNode = node;
+}
+
+
+Node*
+Node::getMergedNode()
+{
+  return mergedNode;
+}
 
 /***********************routeNode********************************/
 routeNode::routeNode(Node* prevNode, nodePath path) :

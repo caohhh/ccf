@@ -5,6 +5,7 @@
 #include "CGRA.h"
 #include <iomanip>
 #include <algorithm>
+#include <sstream>
 
 /*****************CGRA******************************/
 CGRA::CGRA(int xDim, int yDim, int II)
@@ -23,10 +24,10 @@ CGRA::CGRA(int xDim, int yDim, int II)
 
 
 PE*
-CGRA::getPeMapped(int nodeId)
+CGRA::getPeMapped(Node* node)
 {
   for (auto pe : peSet) {
-    if (pe->getNode() == nodeId)
+    if (pe->getNode(node->getBrPath()) == node->getId())
       return pe;
   }
   return nullptr;
@@ -100,30 +101,24 @@ CGRA::print()
     for (int x = 0; x < xDim; x++) {
       for (int y = 0; y < yDim; y++) {
         PE* pe = getPe(x, y, time);
-        std::cout << std::setw(10);
-        if (pe->getNode() == -1)
-          std::cout << "F";
-        else
-          std::cout << pe->getNode();
-      }
-      std::cout << std::endl;
-    }
-  }
-}
-
-
-void
-CGRA::print(std::vector<PE*> pes)
-{
-  for (int time = 0; time < II; time++) {
-    std::cout << "Time: " << time << std::endl;
-    for (int x = 0; x < xDim; x++) {
-      for (int y = 0; y < yDim; y++) {
-        PE* pe = getPe(x, y, time);
-        if (std::find(pes.begin(), pes.end(), pe) != pes.end())
-          std::cout << std::setw(10) << pe->getNode() << "(X)";
-        else
-          std::cout << std::setw(10) << pe->getNode();
+        std::cout << std::setw(15);
+        std::string os;
+        bool mapped = false;
+        if (pe->getNode(none) != -1) {
+          os += std::to_string(pe->getNode(none)) + "(N"+ std::to_string(pe->getIter(none)) +")";
+          mapped = true;
+        }
+        if (pe->getNode(true_path) != -1) {
+          os += std::to_string(pe->getNode(true_path)) + "(T"+ std::to_string(pe->getIter(true_path)) +")";
+          mapped = true;
+        }
+        if (pe->getNode(false_path) != -1) {
+          os += std::to_string(pe->getNode(false_path)) + "(F"+ std::to_string(pe->getIter(false_path)) +")";
+          mapped = true;
+        }
+        if (!mapped)
+          os = "S";
+        std::cout << os;
       }
       std::cout << std::endl;
     }
@@ -173,14 +168,14 @@ CGRA::isAccessable(PE* fromPE, PE* toPE)
 
 
 void
-CGRA::mapNode(Node* node, PE* pe)
+CGRA::mapNode(Node* node, PE* pe, int iter)
 {
-  pe->mapNode(node->getId());
+  pe->mapNode(node, iter);
   if (node->isMemNode()) {
     int xCoor = std::get<0>(pe->getCoord());
     int t = std::get<2>(pe->getCoord());
     Row* row = getRow(xCoor, t);
-    row->mapNode(node);
+    row->mapNode(node, iter);
   }
 }
 
@@ -188,7 +183,9 @@ CGRA::mapNode(Node* node, PE* pe)
 void
 CGRA::removeNode(Node* node)
 {
-  PE* mappedPe = getPeMapped(node->getId());
+  PE* mappedPe = getPeMapped(node);
+  if (mappedPe == nullptr)
+    return;
   mappedPe->removeNode(node->getId());
   if (node->isMemNode()) {
     Row* row = getRow(std::get<0>(mappedPe->getCoord()), std::get<2>(mappedPe->getCoord()));
@@ -212,14 +209,9 @@ PE::PE(int x, int y, int t)
   this->x = x;
   this->y = y;
   this->t = t;
-  nodeId = -1;
-}
-
-
-int
-PE::getNode()
-{
-  return nodeId;
+  mappedNodes[none] = std::make_tuple(-1, -1);
+  mappedNodes[true_path] = std::make_tuple(-1, -1);
+  mappedNodes[false_path] = std::make_tuple(-1, -1);
 }
 
 
@@ -231,25 +223,82 @@ PE::getCoord()
 
 
 void
-PE::mapNode(int nodeId)
+PE::mapNode(Node* node, int iter)
 {
-  this->nodeId = nodeId;
+  mappedNodes[node->getBrPath()] = std::make_tuple(node->getId(), iter);
 }
 
 
 void
 PE::removeNode(int nodeId)
-{
-  if (this->nodeId != nodeId)
+{ 
+  bool removed = false;
+  for (auto mappedNodesIt : mappedNodes) {
+    if (std::get<0>(mappedNodesIt.second) == nodeId) {
+      mappedNodes[mappedNodesIt.first] = std::make_tuple(-1, -1);
+      removed = true;
+      break;
+    }
+  }
+  if (!removed)
     FATAL("[PE]ERROR! removing a node not mapped to this PE");
-  this->nodeId = -1;
 }
 
 
 void
 PE::clear()
 {
-  nodeId = -1;
+  mappedNodes[none] = std::make_tuple(-1, -1);
+  mappedNodes[true_path] = std::make_tuple(-1, -1);
+  mappedNodes[false_path] = std::make_tuple(-1, -1);
+}
+
+
+bool
+PE::available(nodePath path, int iter)
+{
+  // first check for none path
+  if (std::get<0>(mappedNodes[none]) != -1)
+    return false;
+  // now based on the given path
+  nodePath oppoPath;
+  if (path == none) {
+    // first the none path
+    if (std::get<0>(mappedNodes[true_path]) == -1 && std::get<0>(mappedNodes[false_path]) == -1)
+      return true;
+    else
+      return false;
+  } else if (path == true_path)
+    oppoPath = false_path;
+  else
+    oppoPath = true_path;
+  
+  // for true or false path
+  if (std::get<0>(mappedNodes[path]) != -1)
+    return false;
+
+  // none path and path empty, check opposite path
+  if (std::get<0>(mappedNodes[oppoPath]) == -1)
+    return true;
+  else {
+    if (std::get<1>(mappedNodes[oppoPath]) == iter) {
+      // the mapped node of opposite path is of the same iter, can be safely mapped to the same PE
+      return true;
+    } else
+      return false;
+  }
+}
+
+int
+PE::getNode(nodePath path)
+{
+  return std::get<0>(mappedNodes[path]);
+}
+
+int
+PE::getIter(nodePath path)
+{
+  return std::get<1>(mappedNodes[path]);
 }
 
 /************************Row******************************/
@@ -257,22 +306,85 @@ Row::Row(int x, int t)
 {
   this->x = x;
   this->t = t;
-  this->dataNodeId = -1;
-  this->addNodeId = -1;
-  this->read = false;
-  this->write = false;
+  dataNodeId[none] = std::make_tuple(-1, -1);
+  dataNodeId[true_path] = std::make_tuple(-1, -1);
+  dataNodeId[false_path] = std::make_tuple(-1, -1);
+
+  addNodeId[none] = std::make_tuple(-1, -1);
+  addNodeId[true_path] = std::make_tuple(-1, -1); 
+  addNodeId[false_path] = std::make_tuple(-1, -1);
 }
 
 
 bool
-Row::memResAvailable()
+Row::addAvailable(nodePath path, int iter)
 {
-  if (!read && !write)
-    return true;
-  else if (read && write)
-    FATAL("[Row]Row: <" << x << ", " << t <<"> used for read and write");
-  else 
+  // first check for none path
+  if (std::get<0>(addNodeId[none]) != -1)
     return false;
+  // now based on the given path
+  nodePath oppoPath;
+  if (path == none) {
+    // first the none path
+    if (std::get<0>(addNodeId[true_path]) == -1 && std::get<0>(addNodeId[false_path]) == -1)
+      return true;
+    else
+      return false;
+  } else if (path == true_path)
+    oppoPath = false_path;
+  else
+    oppoPath = true_path;
+  
+  // for true or false path
+  if (std::get<0>(addNodeId[path]) != -1)
+    return false;
+
+  // none path and path empty, check opposite path
+  if (std::get<0>(addNodeId[oppoPath]) == -1)
+    return true;
+  else {
+    if (std::get<1>(addNodeId[oppoPath]) == iter) {
+      // the mapped node of opposite path is of the same iter, can be safely mapped to the same PE
+      return true;
+    } else
+      return false;
+  }
+}
+
+
+bool
+Row::dataAvailable(nodePath path, int iter)
+{
+  // first check for none path
+  if (std::get<0>(dataNodeId[none]) != -1)
+    return false;
+  // now based on the given path
+  nodePath oppoPath;
+  if (path == none) {
+    // first the none path
+    if (std::get<0>(dataNodeId[true_path]) == -1 && std::get<0>(dataNodeId[false_path]) == -1)
+      return true;
+    else
+      return false;
+  } else if (path == true_path)
+    oppoPath = false_path;
+  else
+    oppoPath = true_path;
+  
+  // for true or false path
+  if (std::get<0>(dataNodeId[path]) != -1)
+    return false;
+
+  // none path and path empty, check opposite path
+  if (std::get<0>(dataNodeId[oppoPath]) == -1)
+    return true;
+  else {
+    if (std::get<1>(dataNodeId[oppoPath]) == iter) {
+      // the mapped node of opposite path is of the same iter, can be safely mapped to the same PE
+      return true;
+    } else
+      return false;
+  }
 }
 
 
@@ -284,22 +396,19 @@ Row::getCoord()
 
 
 void
-Row::mapNode(Node* node)
+Row::mapNode(Node* node, int iter)
 {
   if (!node->isMemNode())
     FATAL("[Row]ERROR! Mapping a non-mem node to a row");
+  nodePath path = node->getBrPath();
   if (node->isLoadAddressGenerator()) {
-    read = true;
-    addNodeId = node->getId();
+    addNodeId[path] = std::make_tuple(node->getId(), iter);
   } else if (node->isLoadDataBusRead()) {
-    read = true;
-    dataNodeId = node->getId();
+    dataNodeId[path] = std::make_tuple(node->getId(), iter);
   } else if (node->isStoreAddressGenerator()) {
-    write = true;
-    addNodeId = node->getId();
+    addNodeId[path] = std::make_tuple(node->getId(), iter);
   } else if (node->isStoreDataBusWrite()) {
-    write = true;
-    dataNodeId = node->getId();
+    dataNodeId[path] = std::make_tuple(node->getId(), iter);
   }
 }
 
@@ -307,40 +416,32 @@ Row::mapNode(Node* node)
 void
 Row::removeNode(Node* node)
 {
-  if (read) {
-    read = false;
-    if (node->isLoadAddressGenerator()) {
-      if (addNodeId == node->getId())
-        addNodeId = -1;
-      else 
-        FATAL("[Row]ERROR! read add node not matching");
-    } else if (node->isLoadDataBusRead()) {
-      if (dataNodeId == node->getId())
-        dataNodeId = -1;
-      else 
-        FATAL("[Row]ERROR! read data node not matching");
-    } else 
-      FATAL("[Row]ERROR! read writing not matching");
-  } else if (write) {
-    if (node->isStoreAddressGenerator()) {
-      addNodeId = -1;
-      if (dataNodeId == -1)
-        write = false;
-    } else if (node->isStoreDataBusWrite()) {
-      dataNodeId = -1;
-      if (addNodeId == -1)
-        write = false;
-    }
+  nodePath path = node->getBrPath();
+  if (node->isLoadAddressGenerator() || node->isStoreAddressGenerator()) {
+    // node is add gen
+    if (std::get<0>(addNodeId[path]) != node->getId())
+      FATAL("[Row]ERROR! Removing a not mapped address node");
+    else
+      addNodeId[path] = std::make_tuple(-1, -1);
+  } else if (node->isLoadDataBusRead() || node->isStoreDataBusWrite()) {
+    // node is data node
+    if (std::get<0>(dataNodeId[path]) != node->getId())
+      FATAL("[Row]ERROR! Removing a not mapped data node");
+    else
+      dataNodeId[path] = std::make_tuple(-1, -1);
   } else
-    FATAL("[Row]ERROR!removing node from a row not mapped");
+    FATAL("[Row]ERROR! Removing a non-mem node");
 }
 
 
 void
 Row::clear()
 {
-  dataNodeId = -1;
-  addNodeId = -1;
-  read = false;
-  write = false;
+  dataNodeId[none] = std::make_tuple(-1, -1);
+  dataNodeId[true_path] = std::make_tuple(-1, -1);
+  dataNodeId[false_path] = std::make_tuple(-1, -1);
+
+  addNodeId[none] = std::make_tuple(-1, -1);
+  addNodeId[true_path] = std::make_tuple(-1, -1); 
+  addNodeId[false_path] = std::make_tuple(-1, -1);
 }

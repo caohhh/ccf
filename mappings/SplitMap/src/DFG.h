@@ -108,6 +108,10 @@ class DFG
     // pad a paths of a DFG with routing nodes so that edges with branch path always connects to a node of the path
     void padPath();
 
+    // this is to merge nodes of the 2 paths that should be mapped to the same location
+    // that is nodes with arcs of their path to the same node
+    void mergeNodes();
+
   private:
     // set of nodes in the graph
     std::vector<Node*> nodeSet;

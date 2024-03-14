@@ -720,3 +720,34 @@ DFG::padPath()
     } // end of iterating through arcs
   } // end of iterating through toPad
 }
+
+
+void
+DFG::mergeNodes()
+{
+  // map of the nodes to merge, where the key is the common toNode of the 2 nodes to merge
+  std::map<Node*, std::vector<Node*>> toMerge;
+  // first we iterate through the arc set to get all the arcs with a path
+  for (auto arc : arcSet) {
+    if (arc->getPath() != none) {
+      // if the arc is of none path, add it to the to merge list
+      if (arc->getToNode()->getBrPath() != none)
+        FATAL("[Merge Nodes]ERROR! Edge with a path should be to a node of none path");
+      if (arc->getFromNode()->getBrPath() != arc->getPath())
+        FATAL("[Merge Nodes]ERROR! Edge with a path should be from a node of the same path");
+      toMerge[arc->getToNode()].push_back(arc->getFromNode());
+    }
+  }
+  // now we check each toMerge and set the nodes
+  for (auto toMergeIt : toMerge) {
+    std::vector<Node*> nodesToMerge = toMergeIt.second;
+    if (nodesToMerge.size() != 2)
+      FATAL("[Merge Nodes]ERROR! There should always be 2 nodes to merge");
+    if (nodesToMerge[0]->getBrPath() == nodesToMerge[1]->getBrPath())
+      FATAL("[Merge Nodes]ERROR! The 2 nodes to merge should be of different paths");
+    // now all checks are done, merge the 2 nodes
+    nodesToMerge[0]->setMergeNode(nodesToMerge[1]);
+    nodesToMerge[1]->setMergeNode(nodesToMerge[0]);
+    DEBUG("[Merge Nodes]Merged nodes: " << nodesToMerge[0]->getId() << ", " << nodesToMerge[1]->getId());
+  }
+}

@@ -227,9 +227,10 @@ schedule::getMaxTime()
 
 /************moduloSchedule**************/
 
-moduloSchedule::moduloSchedule(int xDim, int yDim) :
+moduloSchedule::moduloSchedule(int xDim, int yDim, int length) :
 schedule(xDim, yDim)
 {
+  this->length = length;
 }
 
 
@@ -251,14 +252,23 @@ moduloSchedule::resAvailable(nodePath path, int scheduleTime)
   int modTime = scheduleTime % II;
 
   // pe used
-  int peU;
-
+  int peU = 0;
+  // for other iterations
+  for (int t = 0; t < length; t++) {
+    if ((t % II) == modTime && t != scheduleTime) {
+      // time slots that will be mapped together
+      int truePe = peUsed[std::make_tuple(true_path, t)];
+      int falsePe = peUsed[std::make_tuple(false_path, t)];
+      peU += peUsed[std::make_tuple(none, t)] + ((truePe > falsePe) ? truePe : falsePe);
+    }
+  }
+  // for this iteration, which would be of scheduleTime
   if (path == none) {
-    int truePe = peUsed[std::make_tuple(true_path, modTime)];
-    int falsePe = peUsed[std::make_tuple(false_path, modTime)];
-    peU = peUsed[std::make_tuple(none, modTime)] + ((truePe > falsePe) ? truePe : falsePe);
+    int truePe = peUsed[std::make_tuple(true_path, scheduleTime)];
+    int falsePe = peUsed[std::make_tuple(false_path, scheduleTime)];
+    peU += peUsed[std::make_tuple(none, scheduleTime)] + ((truePe > falsePe) ? truePe : falsePe);
   } else {
-    peU = peUsed[std::make_tuple(path, modTime)] + peUsed[std::make_tuple(none, modTime)];
+    peU += peUsed[std::make_tuple(path, scheduleTime)] + peUsed[std::make_tuple(none, scheduleTime)];
   }
 
   if (peU < cgraSize)
@@ -276,7 +286,7 @@ moduloSchedule::scheduleOp(Node* node, int time)
   if (!resAvailable(path, time))
     return;
   //allocate resource
-  peUsed[std::make_tuple(path, modTime)]++;
+  peUsed[std::make_tuple(path, time)]++;
   // schedule the node
   nodeSchedule[node->getId()] = time;
   timeSchedule[time].push_back(node->getId());
@@ -293,32 +303,64 @@ moduloSchedule::memLdResAvailable(nodePath path, int scheduleTime)
   int modTimeData = (scheduleTime + 1) % II;
 
   // add bus used
-  int addU;
+  int addU = 0;
   // data bus used
-  int dataU;
+  int dataU = 0;
   // pe used at address time slot
-  int peAddU;
+  int peAddU = 0;
   // pe used at data time slot
-  int peDataU;
+  int peDataU = 0;
 
+  // first for add node
+  // for other iterations
+  for (int t = 0; t < length; t++) {
+    if ((t % II) == modTimeAdd && t != scheduleTime) {
+      // time slots that will be mapped together
+      int truePe = peUsed[std::make_tuple(true_path, t)];
+      int falsePe = peUsed[std::make_tuple(false_path, t)];
+      peAddU += peUsed[std::make_tuple(none, t)] + ((truePe > falsePe) ? truePe : falsePe);
+      int trueAdd = addBusUsed[std::make_tuple(true_path, t)];
+      int falseAdd = addBusUsed[std::make_tuple(false_path, t)];
+      addU += addBusUsed[std::make_tuple(none, t)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
+    }
+  }
+  // for this iteration, which would be of scheduleTime
   if (path == none) {
-    int trueAdd = addBusUsed[std::make_tuple(true_path, modTimeAdd)];
-    int falseAdd = addBusUsed[std::make_tuple(false_path, modTimeAdd)];
-    int trueData = dataBusUsed[std::make_tuple(true_path, modTimeData)];
-    int falseData = dataBusUsed[std::make_tuple(false_path, modTimeData)];
-    int truePeAdd = peUsed[std::make_tuple(true_path, modTimeAdd)];
-    int falsePeAdd = peUsed[std::make_tuple(false_path, modTimeAdd)];
-    int truePeData = peUsed[std::make_tuple(true_path, modTimeData)];
-    int falsePeData = peUsed[std::make_tuple(false_path, modTimeData)];
-    addU = addBusUsed[std::make_tuple(none, modTimeAdd)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
-    dataU = dataBusUsed[std::make_tuple(none, modTimeData)] + ((trueData > falseData) ? trueData : falseData);
-    peAddU = peUsed[std::make_tuple(none, modTimeAdd)] + ((truePeAdd > falsePeAdd) ? truePeAdd : falsePeAdd);
-    peDataU = peUsed[std::make_tuple(none, modTimeData)] + ((truePeData > falsePeData) ? truePeData : falsePeData);
+    int truePe = peUsed[std::make_tuple(true_path, scheduleTime)];
+    int falsePe = peUsed[std::make_tuple(false_path, scheduleTime)];
+    peAddU += peUsed[std::make_tuple(none, scheduleTime)] + ((truePe > falsePe) ? truePe : falsePe);
+    int trueAdd = addBusUsed[std::make_tuple(true_path, scheduleTime)];
+    int falseAdd = addBusUsed[std::make_tuple(false_path, scheduleTime)];
+    addU += addBusUsed[std::make_tuple(none, scheduleTime)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
   } else {
-    addU = addBusUsed[std::make_tuple(path, modTimeAdd)] + addBusUsed[std::make_tuple(none, modTimeAdd)];
-    dataU = dataBusUsed[std::make_tuple(path, modTimeData)] + dataBusUsed[std::make_tuple(none, modTimeData)];
-    peAddU = peUsed[std::make_tuple(path, modTimeAdd)] + peUsed[std::make_tuple(none, modTimeAdd)];
-    peDataU = peUsed[std::make_tuple(path, modTimeData)] + peUsed[std::make_tuple(none, modTimeData)];
+    peAddU += peUsed[std::make_tuple(path, scheduleTime)] + peUsed[std::make_tuple(none, scheduleTime)];
+    addU += addBusUsed[std::make_tuple(path, scheduleTime)] + addBusUsed[std::make_tuple(none, scheduleTime)];
+  }
+
+  // next for data node
+  // for other iterations
+  for (int t = 0; t < length; t++) {
+    if ((t % II) == modTimeData && t != (scheduleTime + 1)) {
+      // time slots that will be mapped together
+      int truePe = peUsed[std::make_tuple(true_path, t)];
+      int falsePe = peUsed[std::make_tuple(false_path, t)];
+      peDataU += peUsed[std::make_tuple(none, t)] + ((truePe > falsePe) ? truePe : falsePe);
+      int trueData = dataBusUsed[std::make_tuple(true_path, t)];
+      int falseData = dataBusUsed[std::make_tuple(false_path, t)];
+      dataU += dataBusUsed[std::make_tuple(none, t)] + ((trueData > falseData) ? trueData : falseData);
+    }
+  }
+  // for this iteration, which would be of scheduleTime
+  if (path == none) {
+    int truePe = peUsed[std::make_tuple(true_path, scheduleTime + 1)];
+    int falsePe = peUsed[std::make_tuple(false_path, scheduleTime + 1)];
+    peDataU += peUsed[std::make_tuple(none, scheduleTime + 1)] + ((truePe > falsePe) ? truePe : falsePe);
+    int trueData = dataBusUsed[std::make_tuple(true_path, scheduleTime + 1)];
+    int falseData = dataBusUsed[std::make_tuple(false_path, scheduleTime + 1)];
+    dataU += dataBusUsed[std::make_tuple(none, scheduleTime + 1)] + ((trueData > falseData) ? trueData : falseData);
+  } else {
+    peDataU += peUsed[std::make_tuple(path, scheduleTime + 1)] + peUsed[std::make_tuple(none, scheduleTime + 1)];
+    dataU += dataBusUsed[std::make_tuple(path, scheduleTime + 1)] + dataBusUsed[std::make_tuple(none, scheduleTime + 1)];
   }
 
   if (!(addU < perRowMem * xDim))
@@ -345,10 +387,10 @@ moduloSchedule::scheduleLd(Node* addNode, Node* dataNode, int time)
   if (!memLdResAvailable(path, time))
     return;
   // allocate resources
-  addBusUsed[std::make_tuple(path, modTimeAdd)]++;
-  dataBusUsed[std::make_tuple(path, modTimeData)]++;
-  peUsed[std::make_tuple(path, modTimeAdd)]++;
-  peUsed[std::make_tuple(path, modTimeData)]++;
+  addBusUsed[std::make_tuple(path, time)]++;
+  dataBusUsed[std::make_tuple(path, time + 1)]++;
+  peUsed[std::make_tuple(path, time)]++;
+  peUsed[std::make_tuple(path, time + 1)]++;
   //schedule operations
   nodeSchedule[addNode->getId()] = time;
   nodeSchedule[dataNode->getId()] = time + 1;
@@ -368,26 +410,42 @@ moduloSchedule::memStResAvailable(nodePath path, int scheduleTime)
   int modTime = scheduleTime % II;
 
   // add bus used
-  int addU;
+  int addU = 0;
   // data bus used
-  int dataU;
+  int dataU = 0;
   // pe used
-  int peU;
+  int peU = 0;
 
+  // for other iterations
+  for (int t = 0; t < length; t++) {
+    if ((t % II) == modTime && t != scheduleTime) {
+      // time slots that will be mapped together
+      int truePe = peUsed[std::make_tuple(true_path, t)];
+      int falsePe = peUsed[std::make_tuple(false_path, t)];
+      peU += peUsed[std::make_tuple(none, t)] + ((truePe > falsePe) ? truePe : falsePe);
+      int trueAdd = addBusUsed[std::make_tuple(true_path, t)];
+      int falseAdd = addBusUsed[std::make_tuple(false_path, t)];
+      addU += addBusUsed[std::make_tuple(none, t)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
+      int trueData = dataBusUsed[std::make_tuple(true_path, t)];
+      int falseData = dataBusUsed[std::make_tuple(false_path, t)];
+      dataU += dataBusUsed[std::make_tuple(none, t)] + ((trueData > falseData) ? trueData : falseData);
+    }
+  }
+  // for this iteration, which would be of scheduleTime
   if (path == none) {
-    int trueAdd = addBusUsed[std::make_tuple(true_path, modTime)];
-    int falseAdd = addBusUsed[std::make_tuple(false_path, modTime)];
-    int trueData = dataBusUsed[std::make_tuple(true_path, modTime)];
-    int falseData = dataBusUsed[std::make_tuple(false_path, modTime)];
-    int truePe = peUsed[std::make_tuple(true_path, modTime)];
-    int falsePe = peUsed[std::make_tuple(false_path, modTime)];
-    addU = addBusUsed[std::make_tuple(none, modTime)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
-    dataU = dataBusUsed[std::make_tuple(none, modTime)] + ((trueData > falseData) ? trueData : falseData);
-    peU = peUsed[std::make_tuple(none, modTime)] + ((truePe > falsePe) ? truePe : falsePe);
+    int truePe = peUsed[std::make_tuple(true_path, scheduleTime)];
+    int falsePe = peUsed[std::make_tuple(false_path, scheduleTime)];
+    peU += peUsed[std::make_tuple(none, scheduleTime)] + ((truePe > falsePe) ? truePe : falsePe);
+    int trueAdd = addBusUsed[std::make_tuple(true_path, scheduleTime)];
+    int falseAdd = addBusUsed[std::make_tuple(false_path, scheduleTime)];
+    addU += addBusUsed[std::make_tuple(none, scheduleTime)] + ((trueAdd > falseAdd) ? trueAdd : falseAdd);
+    int trueData = dataBusUsed[std::make_tuple(true_path, scheduleTime)];
+    int falseData = dataBusUsed[std::make_tuple(false_path, scheduleTime)];
+    dataU += dataBusUsed[std::make_tuple(none, scheduleTime)] + ((trueData > falseData) ? trueData : falseData);
   } else {
-    addU = addBusUsed[std::make_tuple(path, modTime)] + addBusUsed[std::make_tuple(none, modTime)];
-    dataU = dataBusUsed[std::make_tuple(path, modTime)] + dataBusUsed[std::make_tuple(none, modTime)];
-    peU = peUsed[std::make_tuple(path, modTime)] + peUsed[std::make_tuple(none, modTime)];
+    peU += peUsed[std::make_tuple(path, scheduleTime)] + peUsed[std::make_tuple(none, scheduleTime)];
+    addU += addBusUsed[std::make_tuple(path, scheduleTime)] + addBusUsed[std::make_tuple(none, scheduleTime)];
+    dataU += dataBusUsed[std::make_tuple(path, scheduleTime)] + dataBusUsed[std::make_tuple(none, scheduleTime)];
   }
 
   if (!(addU < perRowMem * xDim))
@@ -412,9 +470,9 @@ moduloSchedule::scheduleSt(Node* storeNode, Node* storeRelatedNode, int time)
   if (!memStResAvailable(path, time))
     return;
   //allocate resources
-  addBusUsed[std::make_tuple(path, modTime)]++;
-  dataBusUsed[std::make_tuple(path, modTime)]++;
-  peUsed[std::make_tuple(path, modTime)] += 2;
+  addBusUsed[std::make_tuple(path, time)]++;
+  dataBusUsed[std::make_tuple(path, time)]++;
+  peUsed[std::make_tuple(path, time)] += 2;
   //schedule both operations
   nodeSchedule[storeNode->getId()] = time;
   nodeSchedule[storeRelatedNode->getId()] = time;
@@ -530,4 +588,11 @@ moduloSchedule::getModScheduleTime(Node* node)
     return nodeScheduleMod[node->getId()];
   else
     return -1;
+}
+
+
+int
+moduloSchedule::getIter(Node* node)
+{
+  return (int)floor(nodeSchedule[node->getId()] / II);
 }

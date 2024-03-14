@@ -21,7 +21,7 @@ class CGRA
     ~CGRA();
 
     // return the PE this node is mapped at
-    PE* getPeMapped(int nodeId);
+    PE* getPeMapped(Node* node);
 
     // return the PE at the given coordinate
     PE* getPe(int x, int y, int t);
@@ -41,14 +41,11 @@ class CGRA
     // print the current mapping of the CGRA
     void print();
 
-    // print the current mapping of the CGRA with the provided PEs marked
-    void print(std::vector<PE*>);
-
     // returns if toPE can access data produced by fromPE
     bool isAccessable(PE* fromPE, PE* toPE);
 
     // map a node at the given PE
-    void mapNode(Node* node, PE* pe);
+    void mapNode(Node* node, PE* pe, int iter);
 
     // remove a mapped node
     void removeNode(Node* node);
@@ -75,20 +72,26 @@ class PE
     PE(int x, int y, int t);
     ~PE();
 
-    // returns the uid of the node mapped at the PE, -1 for unmapped
-    int getNode();
-
     // returns the <x, y, t> coordinate of the PE
     std::tuple<int, int, int> getCoord();
 
-    // map a node with the ID at the PE
-    void mapNode(int nodeId);
+    // map a node at the PE
+    void mapNode(Node* node, int iter);
     
     // remove a node with the ID at the PE
     void removeNode(int nodeId);
 
     // remove mapped node
     void clear();
+
+    // if the PE is available to map a node in path at the given iter
+    bool available(nodePath path, int iter);
+
+    // get the id of the node mapped to a certain path, -1 for no node mapped
+    int getNode(nodePath path);
+
+    // returns the iteration number of the given path
+    int getIter(nodePath path);
 
   private:
     // x coordinate of the PE
@@ -97,8 +100,8 @@ class PE
     int y;
     // t coordinate of the time extanded PE
     int t;
-    // id of the node mapped here, -1 for no node mapped
-    int nodeId;
+    // map of <path: <nodeId, node iter>>
+    std::map<nodePath, std::tuple<int, int>> mappedNodes;
 };
 
 class Row
@@ -107,14 +110,17 @@ class Row
     Row(int y, int t);
     ~Row();
 
-    // returns if this row's memory resource is available
-    bool memResAvailable();
+    // returns if this row's address bus is available of a certain path
+    bool addAvailable(nodePath path, int iter);
+
+    // returns if this row's data bus is available of a certain path
+    bool dataAvailable(nodePath path, int iter);
 
     // returns the <x, t> coordinate of the row
     std::tuple<int, int> getCoord();
 
     // map a mem node at the given row
-    void mapNode(Node* node);
+    void mapNode(Node* node, int iter);
     
     // remove a mem node at the given row
     void removeNode(Node* node);
@@ -127,14 +133,10 @@ class Row
     int x;
     // t coordinate of the row
     int t;
-    // id for the data node, -1 for no node
-    int dataNodeId;
-    // id for the address node, -1 for no node
-    int addNodeId;
-    // if this row is used for mem read
-    bool read;
-    // if this row is used for mem write
-    bool write;
+    // id for the data node, map of <path: <nodeId, node iter>>
+    std::map<nodePath, std::tuple<int, int>> dataNodeId;
+    // id for the address node, map of <path: <nodeId, node iter>>
+    std::map<nodePath, std::tuple<int, int>> addNodeId;
 };
 
 #endif //__SPLITMAP_CGRA_H__

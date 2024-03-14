@@ -67,7 +67,7 @@ class schedule
 class moduloSchedule : public schedule
 {
   public:
-    moduloSchedule(int xDim, int yDim);
+    moduloSchedule(int xDim, int yDim, int length);
     ~moduloSchedule();
 
     // set the II for this modulo schedule
@@ -107,9 +107,12 @@ class moduloSchedule : public schedule
     // returns the modulo schedule time node is scheduled at
     int getModScheduleTime(Node* node);
 
+    // get the iteration this node belongs to, from latest to earliest
+    int getIter(Node* node);
 
   private:
     int II;
+    int length;
     // map of node : mod time
     std::map<int, int> nodeScheduleMod;
     // map of mod time : nodeID scheduled at mod time

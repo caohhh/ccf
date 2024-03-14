@@ -143,6 +143,12 @@ class Node
     // return if the node is a loop control node
     bool isLoopCtrl();
 
+    // set the node this node is to be merged with
+    void setMergeNode(Node* node);
+
+    // returns the id of the merged node, nullptr for not merged
+    Node* getMergedNode();
+
   protected:
     // unique id of Node in DFG
     int uid;
@@ -182,6 +188,8 @@ class Node
     bool liveOut;
     // if this node is a loop control node
     bool loopCtrl;
+    // for split mapping, the node this node is merged with
+    Node* mergedNode;
 };
 
 

@@ -173,47 +173,8 @@ Mapper::generateMap(Parser* myParser)
     DEBUG("[Mapper]DFG split complete");
   }
 
-  // from here on, if the DFG is split, mapping processes are done to trueDFG and falseDFG
-  // if not split, it is done to original DFG
-
-  // we will set the 2 path as the same II for now
-  // mapping for 2 different IIs will be too complicated
-
-  // maybe the same II and even the same length also? <---- this probably will naturally be solved by giving nodes 
-  // in common path the same mapping
-
-  // here we have a reminder for CGRA mapping:
-  // if 2 nodes exist in 2 different modulo time slot, we don't have to care about them interferring each other?
-
-  // for the nodes that exist in both paths, they should be in the same modulo time slot
-  // for nodes only existing in one path, should not pay that much attention in modulo scheduling?
-  // in mapping though, if they have an edge with distance to common path, they should be mapped to the same location
-  // (at least the last routing node should)
-  // otherwise.....
-
-  // fusing nodes surely can work? but is it necessary?
-
-  // say length = II * n, then a kernel will have n stages, each consisting of II cycles
-  // then at any given time when the CGRA is running, there will be n kernel in fly, each at a different stage <- so at most 2^n versions?
-  // we suppose the 2 kernels will have the same II and also the same length(or not)?
-
-  // 1. nodes in a path with edge out towards common path:
-  //    if the edge has distance: all nodes should be mapped to the same location
-  //    if the edge has no distance: mapping nodes to the same location is more convinient?
-
-  // now: edge from eliminating sel node:
-  // if of common path and a path, need to change node ins data from field
-  // if of 2 different path, just map the 2 nodes at the same spot <--- add routing node in other path
-
   // difference from dise:  1. don't need to modify PE
   //                        2. instruction selection is done before comp is done 
-
-  // in a same iteration, the nodes from 2 paths can be mapped to the same location
-
-  // considering all this, mapping with 1 or 2 DFG is still a choice
-
-  // probably refactor everything..... 
-  // cause now mapping with 1 DFG is easier.....
 
   // for MII calculation, we do it seperately for the normal DFG and split DFG
   int MII = 0;
@@ -317,7 +278,7 @@ Mapper::generateMap(Parser* myParser)
 
   // initialize the schedules
   // the modulo schedule
-  moduloSchedule* modScheduleOrig = new moduloSchedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
+  moduloSchedule* modScheduleOrig = new moduloSchedule(cgraInfo.X_Dim, cgraInfo.Y_Dim, length);
   // the time extanded CGRA
   CGRA* timeExCgraOrig;
 
@@ -356,8 +317,11 @@ Mapper::generateMap(Parser* myParser)
         break;
       }
       modScheduleOrig->print(routeDFG, "route");
+
+      // here we add a step to parse for nodes of different path that need to be mapped to the same location
+      routeDFG->mergeNodes();    
+
       timeExCgraOrig = new CGRA(cgraInfo.X_Dim, cgraInfo.Y_Dim, currentII);
-      exit(2);
       // now falcon mapping
       bool placeSuccess = falconPlace(routeDFG, currentII, timeExCgraOrig, modScheduleOrig);
       if (placeSuccess) {
@@ -1430,7 +1394,7 @@ Mapper::falconPlace(DFG* myDFG, int II, CGRA* timeExCgra, moduloSchedule* modSch
         Node* node = myDFG->getNode(mappingQueue.front());
         mappingQueue.pop();
         DEBUG("[Falcon]Mapping node: " << node->getId());
-        if (timeExCgra->getPeMapped(node->getId()) != nullptr) {
+        if (timeExCgra->getPeMapped(node) != nullptr) {
           DEBUG("[Falcon]Node already placed, remove to find a new location for it");
           timeExCgra->removeNode(node);
         }
@@ -1463,34 +1427,21 @@ Mapper::falconPlace(DFG* myDFG, int II, CGRA* timeExCgra, moduloSchedule* modSch
           // the PE selected to map the node on
           PE* selPE = potentialPos.at(uni(rng));
           // map the node
-          timeExCgra->mapNode(node, selPE);
+          timeExCgra->mapNode(node, selPE, modSchedule->getIter(node));
           DEBUG("[Falcon]Mapped at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
                   std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
           #ifndef NDEBUG
             timeExCgra->print();
           #endif
-        }        
+        }
         // now we add next nodes to map
-        if (mappingMode == 5) {
-          // mode 5 maps pred
-          for (auto pred : node->getPrevNodes()) {
-            if (nodeSetToMap.find(pred->getId()) != nodeSetToMap.end()) {
-              mappingQueue.push(pred->getId());
-              nodeSetToMap.erase(pred->getId());
-            }
-          }
-        } else {
-          // other mode maps succ
-          for (auto succ : node->getNextNodes()) {
-            // next we add succs of the node to the queue
-            if (nodeSetToMap.find(succ->getId()) != nodeSetToMap.end()) {
-              mappingQueue.push(succ->getId());
-              nodeSetToMap.erase(succ->getId());
-            }
+        for (auto succ : node->getNextNodes()) {
+          // next we add succs of the node to the queue
+          if (nodeSetToMap.find(succ->getId()) != nodeSetToMap.end()) {
+            mappingQueue.push(succ->getId());
+            nodeSetToMap.erase(succ->getId());
           }
         }
-        if (!placementFound)
-          break;
       } // end of mappingQueue not empty
       if (!placementFound)
         break;
@@ -1515,14 +1466,17 @@ std::vector<PE*>
 Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedule)
 {
   DEBUG("[PotentialPos]Finding potential position for node: " << node->getId());
+  // the potential positions to return
+  std::vector<PE*> potentialPos;
+
   bool mapped = false;
   PE* mappedPe = nullptr;
   // if the node is already mapped, we first remove the node and map it at the same PE in the end
-  if (timeExCgra->getPeMapped(node->getId()) != nullptr) {
+  if (timeExCgra->getPeMapped(node) != nullptr) {
     // node already mapped
     // first note down the PE
     mapped = true;
-    mappedPe = timeExCgra->getPeMapped(node->getId());
+    mappedPe = timeExCgra->getPeMapped(node);
     // remove the node
     timeExCgra->removeNode(node);
   }
@@ -1530,21 +1484,23 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
   std::vector<Node*> mappedPreds;
   std::vector<Node*> mappedSuccs;
   for (Node* pred : node->getPrevNodes()) {
-    if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+    if (timeExCgra->getPeMapped(pred) != nullptr) {
       // pred is mapped
       mappedPreds.push_back(pred);
     }
   } // end of iterating through preds
   for (Node* succ : node->getNextNodes()) {
-    if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+    if (timeExCgra->getPeMapped(succ) != nullptr) {
       // the succ is mapped
       mappedSuccs.push_back(succ);
     }
   } // end of iterating through succs
   DEBUG("[PotentialPos]Number of mapped preds: " << mappedPreds.size() << " succs: " << mappedSuccs.size());
-  // the potential positions to return
-  std::vector<PE*> potentialPos;
 
+  // iteration of this node in the modulo schedule
+  int iter = modSchedule->getIter(node);
+  // path this node belongs to
+  nodePath path = node->getBrPath();
   // for mem nodes, there are more restrictions
   if (node->isMemNode()) {
     if (node->isLoadAddressGenerator()) {
@@ -1558,20 +1514,20 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
         if (!dataNode->isLoadDataBusRead())
           FATAL("[PotentialPos]ERROR! Load add gen succ not a read");
         // made sure there is only one succ: data read
-        int xCoor = std::get<0>(timeExCgra->getPeMapped(dataNode->getId())->getCoord());
+        int xCoor = std::get<0>(timeExCgra->getPeMapped(dataNode)->getCoord());
         Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
-        if (row->memResAvailable()) {
+        if (row->addAvailable(path, iter)) {
           for (auto pe: timeExCgra->getPeAtRow(row)) {
-            if (pe->getNode() == -1)
+            if (pe->available(path, iter))
               potentialPos.push_back(pe);
           } // end of iterating through PEs at row
         }
       } else { // end of mapped succ size > 0
         // with no mapped succ, get all free rows
         for (auto row : timeExCgra->getRowAtTime(modSchedule->getModScheduleTime(node))) {
-          if (row->memResAvailable()) {
+          if (row->addAvailable(path, iter)) {
             for (auto pe: timeExCgra->getPeAtRow(row)) {
-              if (pe->getNode() == -1)
+              if (pe->available(path, iter))
                 potentialPos.push_back(pe);
             } // end of iterating through PEs at row
           }
@@ -1586,7 +1542,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
         // if this pos is removed
         bool removed = false;
         for (auto pred : mappedPreds) {
-          PE* predPE = timeExCgra->getPeMapped(pred->getId());
+          PE* predPE = timeExCgra->getPeMapped(pred);
           if (!timeExCgra->isAccessable(predPE, *posIt)) {
             // not accessable, remove this pos
             posIt = potentialPos.erase(posIt);
@@ -1607,20 +1563,20 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
         Node* addNode = mappedPreds[0];
         if (!addNode->isLoadAddressGenerator())
           FATAL("[PotentialPos]ERROR! read node pred node add gen");
-        int xCoor = std::get<0>(timeExCgra->getPeMapped(addNode->getId())->getCoord());
+        int xCoor = std::get<0>(timeExCgra->getPeMapped(addNode)->getCoord());
         Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
-        if (row->memResAvailable()) {
+        if (row->dataAvailable(path, iter)) {
           for (auto pe: timeExCgra->getPeAtRow(row)) {
-            if (pe->getNode() == -1)
+            if (pe->available(path, iter))
               potentialPos.push_back(pe);
           } // end of iterating through PEs at row
         }
       } else { // end of mapped pred size > 0
         // with no mapped pred, get all free rows
         for (auto row : timeExCgra->getRowAtTime(modSchedule->getModScheduleTime(node))) {
-          if (row->memResAvailable()) {
+          if (row->dataAvailable(path, iter)) {
             for (auto pe: timeExCgra->getPeAtRow(row)) {
-              if (pe->getNode() == -1)
+              if (pe->available(path, iter))
                 potentialPos.push_back(pe);
             } // end of iterating through PEs at row
           }
@@ -1632,7 +1588,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
         // if this pos is removed
         bool removed = false;
         for (auto succ : mappedSuccs) {
-          PE* succPE = timeExCgra->getPeMapped(succ->getId());
+          PE* succPE = timeExCgra->getPeMapped(succ);
           if (!timeExCgra->isAccessable(*posIt, succPE)) {
             // not accessable, remove this pos
             posIt = potentialPos.erase(posIt);
@@ -1649,18 +1605,20 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
       if (mappedSuccs.size() > 0) {
         // there should only be 1 succ
         Node* dataNode = mappedSuccs[0];
-        int xCoor = std::get<0>(timeExCgra->getPeMapped(dataNode->getId())->getCoord());
+        int xCoor = std::get<0>(timeExCgra->getPeMapped(dataNode)->getCoord());
         Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
-        for (auto pe: timeExCgra->getPeAtRow(row)) {
-          if (pe->getNode() == -1)
-            potentialPos.push_back(pe);
-        } // end of iterating through PEs at row
+        if (row->addAvailable(path, iter)) {
+          for (auto pe: timeExCgra->getPeAtRow(row)) {
+            if (pe->available(path, iter))
+              potentialPos.push_back(pe);
+          } // end of iterating through PEs at row
+        }
       } else {
         // with no mapped succ, get all free rows
         for (auto row : timeExCgra->getRowAtTime(modSchedule->getModScheduleTime(node))) {
-          if (row->memResAvailable()) {
+          if (row->addAvailable(path, iter)) {
             for (auto pe: timeExCgra->getPeAtRow(row)) {
-              if (pe->getNode() == -1)
+              if (pe->available(path, iter))
                 potentialPos.push_back(pe);
             } // end of iterating through PEs at row
           }
@@ -1672,7 +1630,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
         // if this pos is removed
         bool removed = false;
         for (auto pred : mappedPreds) {
-          PE* predPE = timeExCgra->getPeMapped(pred->getId());
+          PE* predPE = timeExCgra->getPeMapped(pred);
           if (!timeExCgra->isAccessable(predPE, *posIt)) {
             // not accessable, remove this pos
             posIt = potentialPos.erase(posIt);
@@ -1699,18 +1657,20 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
       }
       if (addPred != nullptr) {
         // address gen pred mapped, row fixed
-        int xCoor = std::get<0>(timeExCgra->getPeMapped(addPred->getId())->getCoord());
+        int xCoor = std::get<0>(timeExCgra->getPeMapped(addPred)->getCoord());
         Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
-        for (auto pe: timeExCgra->getPeAtRow(row)) {
-          if (pe->getNode() == -1)
-            potentialPos.push_back(pe);
+        if (row->dataAvailable(path, iter)) {
+          for (auto pe: timeExCgra->getPeAtRow(row)) {
+            if (pe->available(path, iter))
+              potentialPos.push_back(pe);
+        }
         } // end of iterating through PEs at row
       } else {
         // add gen pred not mapped, can choose all rows with mem res available
         for (auto row : timeExCgra->getRowAtTime(modSchedule->getModScheduleTime(node))) {
-          if (row->memResAvailable()) {
+          if (row->dataAvailable(path, iter)) {
             for (auto pe: timeExCgra->getPeAtRow(row)) {
-              if (pe->getNode() == -1)
+              if (pe->available(path, iter))
                 potentialPos.push_back(pe);
             } // end of iterating through PEs at row
           }
@@ -1721,7 +1681,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
         for (; posIt != potentialPos.end(); ) {
           // if this pos is removed
           bool removed = false;
-          PE* predPE = timeExCgra->getPeMapped(dataPred->getId());
+          PE* predPE = timeExCgra->getPeMapped(dataPred);
           if (!timeExCgra->isAccessable(predPE, *posIt)) {
             // not accessable, remove this pos
             posIt = potentialPos.erase(posIt);
@@ -1740,7 +1700,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
     // normal nodes
     // first get all the free PEs at time based on modulo schedule
     for (auto pe : timeExCgra->getPeAtTime(modSchedule->getModScheduleTime(node))) {
-      if (pe->getNode() == -1)
+      if (pe->available(path, iter))
         potentialPos.push_back(pe);
     } // end of iterating through PEs at modulo schedule time
 
@@ -1750,7 +1710,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
       // if this pos is removed
       bool removed = false;
       for (auto pred : mappedPreds) {
-        PE* predPE = timeExCgra->getPeMapped(pred->getId());
+        PE* predPE = timeExCgra->getPeMapped(pred);
         if (!timeExCgra->isAccessable(predPE, *posIt)) {
           // not accessable, remove this pos
           posIt = potentialPos.erase(posIt);
@@ -1768,7 +1728,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
       // if this pos is removed
       bool removed = false;
       for (auto succ : mappedSuccs) {
-        PE* succPE = timeExCgra->getPeMapped(succ->getId());
+        PE* succPE = timeExCgra->getPeMapped(succ);
         if (!timeExCgra->isAccessable(*posIt, succPE)) {
           // not accessable, remove this pos
           posIt = potentialPos.erase(posIt);
@@ -1781,10 +1741,28 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
     } // end of iterating through potential positions
   } // end of not a mem node
 
+  // last we check if the node has a mapped merged node
+  if (node->getMergedNode() != nullptr) {
+    // the node has a merged node, check if it is mapped
+    if (timeExCgra->getPeMapped(node->getMergedNode()) != nullptr) {
+      // the merged node is mapped, potential position should only be the position the merged node is mapped at
+      bool found = false;
+      for (auto pos : potentialPos) {
+        if (pos == timeExCgra->getPeMapped(node->getMergedNode())) {
+          found = true;
+          break;
+        }
+      }
+      potentialPos.clear();
+      if (found)
+        potentialPos.push_back(timeExCgra->getPeMapped(node->getMergedNode()));
+    }
+  }
+
   DEBUG("[PotentialPos]Potential Pos Size " << potentialPos.size());
   // restore the mapped node
   if (mapped) 
-    timeExCgra->mapNode(node, mappedPe);
+    timeExCgra->mapNode(node, mappedPe, iter);
   return potentialPos;
 }
 
@@ -1799,18 +1777,18 @@ Mapper::remapBasic(Node* failedNode, CGRA* timeExCgra, moduloSchedule* modSchedu
   // the original PE mapped for potential restore
   std::map<int, PE*> originalPos; 
   for (Node* pred : failedNode->getPrevNodes()) {
-    if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+    if (timeExCgra->getPeMapped(pred) != nullptr) {
       // pred is mapped
       mappedNodes.push_back(pred);
-      originalPos[pred->getId()] = timeExCgra->getPeMapped(pred->getId());
+      originalPos[pred->getId()] = timeExCgra->getPeMapped(pred);
       timeExCgra->removeNode(pred);
     }
   } // end of iterating through preds
   for (Node* succ : failedNode->getNextNodes()) {
-    if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+    if (timeExCgra->getPeMapped(succ) != nullptr) {
       // the succ is mapped
       mappedNodes.push_back(succ);
-      originalPos[succ->getId()] = timeExCgra->getPeMapped(succ->getId());
+      originalPos[succ->getId()] = timeExCgra->getPeMapped(succ);
       timeExCgra->removeNode(succ);
     }
   } // end of iterating through succs
@@ -1842,7 +1820,7 @@ Mapper::remapBasic(Node* failedNode, CGRA* timeExCgra, moduloSchedule* modSchedu
       constraintIt--;
       useLeft = true;
     } else {
-      timeExCgra->mapNode(constraint, potentialPos.back());
+      timeExCgra->mapNode(constraint, potentialPos.back(), modSchedule->getIter(constraint));
       potentialPos.pop_back();
       positionsLeft.push_back(potentialPos);
       constraintIt++;
@@ -1856,7 +1834,7 @@ Mapper::remapBasic(Node* failedNode, CGRA* timeExCgra, moduloSchedule* modSchedu
         std::uniform_int_distribution<std::size_t> uni(0, remapPos.size() - 1);
         PE* selPE = remapPos.at(uni(rng));
         // map the node
-        timeExCgra->mapNode(failedNode, selPE);
+        timeExCgra->mapNode(failedNode, selPE, modSchedule->getIter(failedNode));
         DEBUG("[Remap Basic]Remap success at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
                 std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
         #ifndef NDEBUG
@@ -1872,7 +1850,7 @@ Mapper::remapBasic(Node* failedNode, CGRA* timeExCgra, moduloSchedule* modSchedu
   // remap failed, need to restore the constraint's location
   DEBUG("[Remap Basic]Remap failed, restoring constraints' location");
   for (auto constraint : mappedNodes) {
-    timeExCgra->mapNode(constraint, originalPos[constraint->getId()]);
+    timeExCgra->mapNode(constraint, originalPos[constraint->getId()], modSchedule->getIter(constraint));
   }
   return false;
 }
@@ -1888,18 +1866,18 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedul
   // also store the original positions of the constraints
   std::map<Node*, PE*> originalConsPos; 
   for (Node* pred : failedNode->getPrevNodes()) {
-    if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+    if (timeExCgra->getPeMapped(pred) != nullptr) {
       // pred is mapped
       mappedCons.push_back(pred);
-      originalConsPos[pred] = timeExCgra->getPeMapped(pred->getId());
+      originalConsPos[pred] = timeExCgra->getPeMapped(pred);
       timeExCgra->removeNode(pred);
     }
   } // end of iterating through preds
   for (Node* succ : failedNode->getNextNodes()) {
-    if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+    if (timeExCgra->getPeMapped(succ) != nullptr) {
       // the succ is mapped
       mappedCons.push_back(succ);
-      originalConsPos[succ] = timeExCgra->getPeMapped(succ->getId());
+      originalConsPos[succ] = timeExCgra->getPeMapped(succ);
       timeExCgra->removeNode(succ);
     }
   } // end of iterating through succs
@@ -1911,19 +1889,21 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedul
   std::vector<int> mappedNodes;
   std::map<int, PE*> originalPos;
   for (auto pe : timeExCgra->getPeAtTime(modSchedule->getModScheduleTime(failedNode))) {
-    if (pe->getNode() != -1) {
-      // note down the mapped nodes
-      mappedNodes.push_back(pe->getNode());
-      // store the previously PE mapped
-      originalPos[pe->getNode()] = pe;
-      // remove the node from map
-      timeExCgra->removeNode(myDFG->getNode(pe->getNode()));
-    } 
+    for (nodePath path : {none, true_path, false_path}) {
+      if (pe->getNode(path) != -1) {
+        // note down the mapped nodes
+        mappedNodes.push_back(pe->getNode(path));
+        // store the previously PE mapped
+        originalPos[pe->getNode(path)] = pe;
+        // remove the node from map
+        timeExCgra->removeNode(myDFG->getNode(pe->getNode(path)));
+      } 
+    }
   }
 
   // restore mapped constraints
   for (Node* constraint : mappedCons) 
-    timeExCgra->mapNode(constraint, originalConsPos[constraint]);
+    timeExCgra->mapNode(constraint, originalConsPos[constraint], modSchedule->getIter(constraint));
   
   // now do a basic remap
   bool basicSuccess = remapBasic(failedNode, timeExCgra, modSchedule);
@@ -1944,7 +1924,7 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedul
           DEBUG("[Remap T]Attempt failed, starting over");
           // remove all mapped nodes in this attempt
           for (int nodeId : mappedNodes) {
-            if (timeExCgra->getPeMapped(nodeId) != nullptr)
+            if (timeExCgra->getPeMapped(myDFG->getNode(nodeId)) != nullptr)
               timeExCgra->removeNode(myDFG->getNode(nodeId));
           }
           remapSuccess = false;
@@ -1961,7 +1941,7 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedul
           // the PE selected to map the node on
           PE* selPE = potentialPos.at(uni(rng));
           // map the node
-          timeExCgra->mapNode(remapNode, selPE);
+          timeExCgra->mapNode(remapNode, selPE, modSchedule->getIter(remapNode));
         }
       } // end of iterating through all nodes to map
       if (remapSuccess) {
@@ -1980,7 +1960,7 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedul
   // restore all the mapped nodes
   DEBUG("[Remap T]Failed, restoring locations of nodes in current time slot");
   for (auto nodeId : mappedNodes) {
-    timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId]);
+    timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId], modSchedule->getIter(myDFG->getNode(nodeId)));
   }
   return false;
 }
@@ -1998,18 +1978,18 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule
   // also store the original positions of the constraints
   std::map<Node*, PE*> originalConsPos; 
   for (Node* pred : failedNode->getPrevNodes()) {
-    if (timeExCgra->getPeMapped(pred->getId()) != nullptr) {
+    if (timeExCgra->getPeMapped(pred) != nullptr) {
       // pred is mapped
       mappedCons.push_back(pred);
-      originalConsPos[pred] = timeExCgra->getPeMapped(pred->getId());
+      originalConsPos[pred] = timeExCgra->getPeMapped(pred);
       timeExCgra->removeNode(pred);
     }
   } // end of iterating through preds
   for (Node* succ : failedNode->getNextNodes()) {
-    if (timeExCgra->getPeMapped(succ->getId()) != nullptr) {
+    if (timeExCgra->getPeMapped(succ) != nullptr) {
       // the succ is mapped
       mappedCons.push_back(succ);
-      originalConsPos[succ] = timeExCgra->getPeMapped(succ->getId());
+      originalConsPos[succ] = timeExCgra->getPeMapped(succ);
       timeExCgra->removeNode(succ);
     }
   } // end of iterating through succs
@@ -2035,19 +2015,21 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule
   // free the timeslots 
   for (int timeSlot : remapTimeSlots) {
     for (auto pe : timeExCgra->getPeAtTime(timeSlot)) {
-      if (pe->getNode() != -1) {
-        // note down the mapped nodes
-        mappedNodes.push_back(pe->getNode());
-        // store the previously PE mapped
-        originalPos[pe->getNode()] = pe;
-        // remove the node from map
-        timeExCgra->removeNode(myDFG->getNode(pe->getNode()));
-      } 
+      for (nodePath path : {none, true_path, false_path}) {
+        if (pe->getNode(path) != -1) {
+          // note down the mapped nodes
+          mappedNodes.push_back(pe->getNode(path));
+          // store the previously PE mapped
+          originalPos[pe->getNode(path)] = pe;
+          // remove the node from map
+          timeExCgra->removeNode(myDFG->getNode(pe->getNode(path)));
+        } 
+      }
     }
   }
   // restore the constraints
   for (Node* cons : mappedCons)
-    timeExCgra->mapNode(cons, originalConsPos[cons]);
+    timeExCgra->mapNode(cons, originalConsPos[cons], modSchedule->getIter(cons));
   
   // now do the basic remap
   bool basicSuccess = remapBasic(failedNode, timeExCgra, modSchedule);
@@ -2068,7 +2050,7 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule
           DEBUG("[Remap Adj]Attempt failed, starting over");
           // remove all mapped nodes in this attempt
           for (int nodeId : mappedNodes) {
-            if (timeExCgra->getPeMapped(nodeId) != nullptr)
+            if (timeExCgra->getPeMapped(myDFG->getNode(nodeId)) != nullptr)
               timeExCgra->removeNode(myDFG->getNode(nodeId));
           }
           remapSuccess = false;
@@ -2085,7 +2067,7 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule
           // the PE selected to map the node on
           PE* selPE = potentialPos.at(uni(rng));
           // map the node
-          timeExCgra->mapNode(remapNode, selPE);
+          timeExCgra->mapNode(remapNode, selPE, modSchedule->getIter(remapNode));
         }
       } // end of iterating through all nodes to map
       if (remapSuccess) {
@@ -2104,7 +2086,7 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule
   // restore all the mapped nodes
   DEBUG("[Remap Adj]Failed, restoring locations of nodes in current time slot");
   for (auto nodeId : mappedNodes) {
-    timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId]);
+    timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId], modSchedule->getIter(myDFG->getNode(nodeId)));
   }
   return false;
 }
