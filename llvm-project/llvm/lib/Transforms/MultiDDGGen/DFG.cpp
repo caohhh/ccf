@@ -546,7 +546,7 @@ NODE* DFG::get_Node(std::string name){
 NODE* DFG::get_Node(Value* ins)
 {
   if (ins->getValueID() == llvm::Value::ConstantIntVal)
-    errs() << "WARNNING!!!!!Getting a constant int node with LLVM value, will most likely cause problem" << "\n";
+    errs() << "WARNNING!!!!!Getting a constant int node with LLVM value, will most likely cause problem, check to DFG to make sure" << "\n";
   std::vector<NODE*>::iterator iNode1;
   for (iNode1 = _node_Set.begin(); iNode1 != _node_Set.end(); iNode1++)
   {

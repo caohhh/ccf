@@ -262,6 +262,7 @@ getDistance(Instruction *insFrom, Instruction *insTo, std::vector<BasicBlock *> 
 static std::tuple<Datatype, unsigned> 
 getDatatype(Type* T, int bitWidth)
 {
+  DEBUG("inside get datatype\n");
   Datatype dt;
   unsigned size = 0;
   bool isPrimitive = false;
@@ -472,6 +473,7 @@ class MultiDDGGen : public LoopPass {
 MultiDDGGen::MultiDDGGen()
   : LoopPass(ID)
 {
+  loadBlock = nullptr;
 }
 
 
@@ -1208,15 +1210,17 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
   }
 
   // now for other instructions, iterate through operands
-  for (unsigned int j = 0; j < BI->getNumOperands(); j++) {
-    Value *operandVal = BI->getOperand(j);
-    DEBUG(" j: " << j << "\n");
+  for (unsigned int oprandNo = 0; oprandNo < BI->getNumOperands(); oprandNo++) {
+    Value *operandVal = BI->getOperand(oprandNo);
+    DEBUG(" opNo.: " << oprandNo << "\n");
     DEBUG(" val_id: " << operandVal->getValueID() << "\n");
     
     //constant values can be immediate
     //if it is greater than immediate field; instruction generation should treat it as nonrecurring value
     if (operandVal->getValueID() == llvm::Value::ConstantIntVal) {
       DEBUG("  is constintval\n");
+      // here we can either make a change that all of the same LLVM value only have 1 node
+      // or add in an extra attribute stating the ownership of a constant
       int constVal = 0;
       if (dyn_cast<llvm::ConstantInt>(operandVal)->getBitWidth() > 1)
         constVal = dyn_cast<llvm::ConstantInt>(operandVal)->getSExtValue();
@@ -1237,11 +1241,10 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       DEBUG("  inserted new constant int id: " << nodeFrom->get_ID() <<"\n");
       nodeFrom->setDatatype(dt);
       loopDFG->insert_Node(nodeFrom);
-      nodeFrom->setDatatype(dt); 
       nodeTo = loopDFG->get_Node(BI);
       // since for store there are 2 nodes, the arc is skipped to later
       if (BI->getOpcode() != Instruction::Store)
-        loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, 0, TrueDep, j);
+        loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, 0, TrueDep, oprandNo);
       continue;
     } else if (operandVal->getValueID() == llvm::Value::ConstantFPVal) {
       DEBUG("  in constFPval\n");
@@ -1270,7 +1273,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       nodeTo = loopDFG->get_Node(BI);
       // since for store there are 2 nodes, the arc is skipped to later
       if (BI->getOpcode() != Instruction::Store)
-        loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, 0, TrueDep,j);
+        loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, 0, TrueDep,oprandNo);
       continue;
     } else if (operandVal->getValueID() == llvm::Value::BasicBlockVal) {
       DEBUG("  !!BasicBlockVal Detected!! Not considered yet\\n");
@@ -1333,7 +1336,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
           liveInNodefile << CGRA_loadDataID << "\t" << ld_data << "\t" << "ld_data_" + ptrName << "\t" << livein_datatype <<"\n";
 
           liveInEdgefile << CGRA_loadAddID << "\t" << CGRA_loadDataID << "\t0\tLRE\t0\n";
-          liveInEdgefile << CGRA_loadDataID << "\t" << nodeTo->get_ID() << "\t0\tTRU\t" << j << "\n";
+          liveInEdgefile << CGRA_loadDataID << "\t" << nodeTo->get_ID() << "\t0\tTRU\t" << oprandNo << "\n";
           liveInEdgefile << nodeFrom->get_ID() << "\t" << CGRA_loadAddID << "\t0\tTRU\t0\n";
         } else { // end of in livein map or already global variable
           // node not present, not added as a livin variable during update livein
@@ -1363,7 +1366,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
           liveInNodefile << CGRA_loadDataID << "\t" << ld_data << "\t" << "ld_data_" + ptrName << "\t" << livein_datatype <<"\n";
 
           liveInEdgefile << CGRA_loadAddID << "\t" << CGRA_loadDataID << "\t0\tLRE\t0\n";
-          liveInEdgefile << CGRA_loadDataID << "\t" << nodeTo->get_ID() << "\t0\tTRU\t" << j << "\n";
+          liveInEdgefile << CGRA_loadDataID << "\t" << nodeTo->get_ID() << "\t0\tTRU\t" << oprandNo << "\n";
           liveInEdgefile << nodeFrom->get_ID() << "\t" << CGRA_loadAddID << "\t0\tTRU\t0\n";
         } else // end of is livein or global var
           distance = getDistance(cast<Instruction>(operandVal), BI, bbs,loopLatch);
@@ -1434,7 +1437,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       }
 
       DEBUG("  nodeFrom: " << nodeFrom->get_Name() << " - nodeTo: " << nodeTo->get_Name() << "\n");
-      loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, distance,dep,j);
+      loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, distance,dep,oprandNo);
     } // end of value not a constant
   } // end of iterating through operands
 
@@ -1592,14 +1595,15 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
             // first get the constant
             DEBUG("constant index\n");
             std::string constName = nodeOp->get_Name();
+            DEBUG("constName: " << constName << "\n");
             char* tempStr = new char[constName.length()+1];
             strcpy(tempStr,constName.c_str());
             sscanf(tempStr, "%*[^-0123456789]%d",&constIndex);
+            DEBUG("constIndex: " << constIndex << "\n");
 
             // now calculate the offset
             // can be pointer, array or struct
             unsigned offset = 0;
-            Type* nextType;
             if (elementType->isPointerTy()) {
               auto [dummyType, size] = getDatatype(nextType, nextType->getPrimitiveSizeInBits()/8);             
               offset = constIndex * size;
@@ -2024,23 +2028,6 @@ MultiDDGGen::updateLiveOutVariables(Instruction* BI, DFG* loopDFG, Loop* L, unsi
   // here to insert load instructions
   // since there are dedicated loop exits and we onlly deal with one
   // unique exit block now
-  // first insert a basic block between latch and the loop exit
-  // to be the load block
-  if (loadBlock == nullptr) {
-    // create a load basic block between latch and exit
-    DEBUG("creating a new basic block for loading liveout variables\n");
-    BasicBlock* loopExit = L->getUniqueExitBlock();
-    loadBlock = loadBlock->Create(loopExit->getContext(), ".acceleration", loopExit->getParent(), nullptr);
-    irChanged = true;
-    // not considering loop exit with phi nodes since we specified the loop exit will only have
-    // a single predecessor
-    loadBlock->moveAfter(L->getLoopLatch());
-    DEBUG("created load block" << loadBlock->getName() << "\n");
-    BranchInst* loadblkBranchInst;
-    loadblkBranchInst = loadblkBranchInst->Create(loopExit, loadBlock);
-    DEBUG("terminator for load block is " << *loadblkBranchInst <<"\n");
-    // need to remember to jump to this block later when removing the loop
-  }
   auto *TI = loadBlock->getTerminator();
   LoadInst* loadGlobal = new LoadInst(T, gPtr, "", TI);
   // now replace all the usage outside of loop
@@ -2416,14 +2403,24 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   liveInNodefile.close();
   liveInEdgefile.close();
 
-  // Write TripCount as 1 in file, done for compatability reasons
-  std::ofstream lpTCfile;
-  newPath = "./CGRAExec/L" + osLoopID.str() + "/loop_iterations.txt";
-  lpTCfile.open(newPath.c_str());
-  lpTCfile << 1;
-  lpTCfile.close();
-
   // now for the liveouts
+  // first insert a basic block between latch and the loop exit
+  // to be the load block
+  if (loadBlock == nullptr) {
+    // create a load basic block between latch and exit
+    DEBUG("creating a new basic block for loading liveout variables\n");
+    BasicBlock* loopExit = L->getUniqueExitBlock();
+    loadBlock = loadBlock->Create(loopExit->getContext(), ".acceleration", loopExit->getParent(), nullptr);
+    irChanged = true;
+    // not considering loop exit with phi nodes since we specified the loop exit will only have
+    // a single predecessor
+    loadBlock->moveAfter(L->getLoopLatch());
+    DEBUG("created load block" << loadBlock->getName() << "\n");
+    BranchInst* loadblkBranchInst;
+    loadblkBranchInst = loadblkBranchInst->Create(loopExit, loadBlock);
+    DEBUG("terminator for load block is " << *loadblkBranchInst <<"\n");
+    // need to remember to jump to this block later when removing the loop
+  }
   newPath = "./CGRAExec/L" + osLoopID.str() + "/liveout_node.txt";
   liveoutNodefile.open(newPath.c_str());
   newPath = "./CGRAExec/L" + osLoopID.str() + "/liveout_edge.txt";
@@ -2551,7 +2548,9 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   DEBUG("Loop Number is " << *LoopNumber << "\n");
   Instruction *newInst = CallInst::Create(hook, LoopNumber, "");
   DEBUG("newInst = " << *newInst << "\n");
+  DEBUG(loadBlock->getName() << "\n");
   loadBlock->getInstList().push_front(newInst);
+  DEBUG("Insert function call complete\n");
 
   // Update total Number of Loops
   std::ofstream totalLoopsfile;
@@ -2559,6 +2558,7 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   totalLoopsfile.open(totalLoopsfilefilename.c_str());
   totalLoopsfile << totalLoops;
   totalLoopsfile.close();
+  DEBUG("Update loop count complete\n");
 
   DEBUG("runOnLoop went well\n"); 
 
