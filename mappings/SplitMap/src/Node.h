@@ -46,6 +46,9 @@ class Node
     // sets the node as self loop, and set the self loop arc
     void setSelfLoop(Arc* loopArc);
 
+    // reset the self loop status of the node
+    void resetSelfLoop();
+
     //add a new incomming edge
     void addPredArc(Arc* predArc);
 

@@ -205,10 +205,11 @@ DFG::removeArc(int arcId)
 {
   for (auto arcIt = arcSet.begin(); arcIt != arcSet.end(); arcIt++) {
     if ((*arcIt)->getId() == arcId) {
-      // ignore self loop for now
       if ((*arcIt)->getFromNode() != (*arcIt)->getToNode()) {
         (*arcIt)->getFromNode()->removeSuccArc(arcId);
         (*arcIt)->getToNode()->removePredArc(arcId);
+      } else {
+        (*arcIt)->getFromNode()->resetSelfLoop();
       }
       // delete arc from set
       arcSet.erase(arcIt, arcIt + 1);
@@ -750,4 +751,11 @@ DFG::mergeNodes()
     nodesToMerge[1]->setMergeNode(nodesToMerge[0]);
     DEBUG("[Merge Nodes]Merged nodes: " << nodesToMerge[0]->getId() << ", " << nodesToMerge[1]->getId());
   }
+}
+
+
+std::vector<Const_Arc>
+DFG::getConstArcs()
+{
+  return constArcSet;
 }

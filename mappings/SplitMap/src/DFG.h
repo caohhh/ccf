@@ -80,6 +80,9 @@ class DFG
     // returns set of arc indexes of this DFG
     std::set<int> getArcIdSet();
 
+    // returns the const arc vector
+    std::vector<Const_Arc> getConstArcs();
+
     // return a set of nodes without any child in current iteration
     std::vector<Node*> getEndNodes();
 

@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <sstream>
+#include <fstream>
 
 /*****************CGRA******************************/
 CGRA::CGRA(int xDim, int yDim, int II)
@@ -203,6 +204,19 @@ CGRA::clear()
     row->clear();
 }
 
+
+void
+CGRA::dump(std::string cgraFile)
+{
+  std::ofstream dumpFile;
+  dumpFile.open(cgraFile);
+  dumpFile << II << std::endl;
+  for (PE* pe : peSet) {
+    dumpFile << pe->dump();
+  }
+  dumpFile.close();
+}
+
 /************************PE******************************/
 PE::PE(int x, int y, int t)
 {
@@ -301,6 +315,19 @@ PE::getIter(nodePath path)
   return std::get<1>(mappedNodes[path]);
 }
 
+
+std::string
+PE::dump()
+{
+  std::string info;
+  for (nodePath path : {none, true_path, false_path}) {
+    // node ID
+    info += std::to_string(std::get<0>(mappedNodes[path])) + "\t";
+    // iteration
+    info += std::to_string(std::get<1>(mappedNodes[path])) + "\n";
+  }
+  return info;
+}
 /************************Row******************************/
 Row::Row(int x, int t)
 {

@@ -98,8 +98,10 @@ int main(int argc, char *argv[])
   Mapper* falconMapper = new Mapper(cgraInfo, mappingPolicy);
   mapSuccess = falconMapper->generateMap(myParser);
   
-  if (mapSuccess)
+  if (mapSuccess) {
     DEBUG("[main]Mapping is completed and successfull");
+    falconMapper->dumpKernel();
+  }
   else
     FATAL("[main]Sorry no mapping was found for max II " << mappingPolicy.MAX_II); 
   return 0;

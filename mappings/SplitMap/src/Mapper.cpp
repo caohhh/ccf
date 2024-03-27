@@ -5,6 +5,8 @@
 #include "Mapper.h"
 #include <queue>
 #include <algorithm>
+#include <fstream>
+#include <iostream>
 
 namespace 
 {
@@ -141,6 +143,8 @@ Mapper::Mapper(CGRA_Architecture cgraInfo, Mapping_Policy mappingPolicy)
   // rng here at construction
   std::random_device rd;
   rng = std::mt19937(rd());
+  finishedCGRA = nullptr;
+  finalDFG = nullptr;
 }
 
 
@@ -326,6 +330,8 @@ Mapper::generateMap(Parser* myParser)
       bool placeSuccess = falconPlace(routeDFG, currentII, timeExCgraOrig, modScheduleOrig);
       if (placeSuccess) {
         timeExCgraOrig->print();
+        finishedCGRA = timeExCgraOrig;
+        finalDFG = routeDFG;
         return true;
       } 
     } // end of iterating through attempts
@@ -2089,4 +2095,87 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule
     timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId], modSchedule->getIter(myDFG->getNode(nodeId)));
   }
   return false;
+}
+
+
+void
+Mapper::dumpKernel()
+{
+  if (finishedCGRA == nullptr)
+    FATAL("[Dump Kernel]ERROR! Mapping not finished");
+
+  // first we dump the CGRA mapping infos
+  finishedCGRA->dump("CGRA.sch");
+  DEBUG("[Dump Kernel]Dump CGRA complete");
+  // next we dump the node data source infos
+  // this should be for all nodes in the node set:
+  // nodeid, op type, source1, source2, source3, 
+  // for a node we need node id: op type, all the data source id
+  if (finalDFG == nullptr)
+    FATAL("[Dump Kernel]ERROR! Mapping not finished");
+  std::ofstream nodeDumpFile;
+  nodeDumpFile.open("node.sch");
+  for (int id : finalDFG->getNodeIdSet()) {
+    Node* node = finalDFG->getNode(id);
+    if (node->hasSelfLoop())
+      FATAL("[Dump Kernel]Need to add self loop support");
+    std::string nodeDump;
+    // id info
+    nodeDump += std::to_string(id) + "\t";
+    // node op type info
+    nodeDump += std::to_string((int)(node->getIns())) + "\t";
+    // get all the data sources
+    // a map of each operand order to its data source node
+    std::map<int, std::vector<int>> dataSources;
+    // first for the non-constants
+    for (auto prev : node->getPrevNodes()) {
+      Arc* prevArc = finalDFG->getArc(prev, node);
+      dataSources[prevArc->getOperandOrder()].push_back(prev->getId());
+    }
+    // next for the constants
+    for (auto constArc : finalDFG->getConstArcs()) {
+      if (constArc.toNodeId == id)
+        dataSources[constArc.opOrder].push_back(constArc.fromNodeId);
+    }
+    // now we check the source info, first for the merge nodes
+    for (auto it : dataSources) {
+      // check for merged nodes
+      if (it.second.size() > 1) {
+        if (it.second.size() != 2)
+          FATAL("[Dump Kernel]ERROR! Should be at most 2 nodes of the same op order");
+        Node* node0 = finalDFG->getNode(it.second[0]);
+        Node* node1 = finalDFG->getNode(it.second[1]);
+        if (node0->getMergedNode() != node1 || node1->getMergedNode() != node0)
+          FATAL("[Dump Kernel]ERROR! Merged nodes not matching");
+      }
+      // check op order in bounds
+      if (it.first != 0 && it.first != 1 && it.first != 2)
+        FATAL("[Dump Kernel]ERROR! Op order is " << it.first);
+    } // end of iterating through dataSources
+    // now output all 3 ops
+    for (int i : {0, 1, 2}) {
+      if (dataSources[i].empty())
+        nodeDump += std::to_string(-1) + "\t";
+      else {
+        if (dataSources[i].size() == 1)
+          nodeDump += std::to_string(dataSources[i][0]) + "\t";
+        else {
+          Node* nodeT;
+          Node* nodeF;
+          if (finalDFG->getNode(dataSources[i][0])->getBrPath() == true_path) {
+            nodeT = finalDFG->getNode(dataSources[i][0]);
+            nodeF = finalDFG->getNode(dataSources[i][1]);
+          } else {
+            nodeF = finalDFG->getNode(dataSources[i][0]);
+            nodeT = finalDFG->getNode(dataSources[i][1]);
+          }
+          nodeDump += "T" + std::to_string(nodeT->getId()) + "F" + std::to_string(nodeF->getId()) + "\t";
+        }
+      }
+    }
+    nodeDump += "\n";   
+    nodeDumpFile << nodeDump;
+  } // end of iterating through nodeId set
+  nodeDumpFile.close();
+  DEBUG("[Dump Kernel]Dump node info complete");
 }

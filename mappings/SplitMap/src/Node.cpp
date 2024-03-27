@@ -120,6 +120,13 @@ Node::setSelfLoop(Arc* loopArc)
 
 
 void
+Node::resetSelfLoop()
+{
+  selfLoop = false;
+}
+
+
+void
 Node::addPredArc(Arc* predArc)
 {
   incommingArcs.push_back(predArc);

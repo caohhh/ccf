@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <tuple>
+#include <string>
 #include "definitions.h"
 #include "Node.h"
 
@@ -53,6 +54,11 @@ class CGRA
     // clear all mapped nodes
     void clear();
 
+    // dump all the finished mapping
+    // in the format of node path, node id, iteration
+    // PEs are ordered in y->x->t
+    void dump(std::string cgraFile);
+
   private:
     // size x of this CGRA, as in number of rows
     int xDim;
@@ -92,6 +98,10 @@ class PE
 
     // returns the iteration number of the given path
     int getIter(nodePath path);
+
+    // dump all the node info in this PE in a string format for kernel dump
+    // in the format of: path, node ID, iteration of all 3 paths
+    std::string dump();
 
   private:
     // x coordinate of the PE

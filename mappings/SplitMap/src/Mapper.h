@@ -24,6 +24,9 @@ class Mapper
     // map with falcon algo, returns if mapping is successful
     bool generateMap(Parser* myParser);
 
+    // with mapping done, output the finished kernel mapping
+    void dumpKernel();
+
   private:
     // target cgra architecture
     CGRA_Architecture cgraInfo;
@@ -33,6 +36,10 @@ class Mapper
     unsigned cgraSize;
     // rng
     std::mt19937 rng;
+    // cgra with the finished mapping
+    CGRA* finishedCGRA;
+    // the final DFG
+    DFG* finalDFG;
 
 
     /**
