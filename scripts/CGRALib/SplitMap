@@ -27,6 +27,7 @@ srcIR="clang -w -g -O3 -mllvm -force-vector-width=1 -Wpadded -fno-unroll-loops -
 LIB="";
 zero=0;
 MakeType=2;
+split=-1;
 
 j=1
 for i in "$@"
@@ -56,6 +57,13 @@ do
         echo "Compiling for ARM!"
         target_arm=1;
     fi
+
+    if [[ "$i" == *-split* ]]
+    then
+        echo "split mapping"
+        split=0;
+    fi
+
     ((j = j + 1))
 done
 
@@ -169,7 +177,7 @@ if [[ $target_arm == 0 ]]; then
     llvm-dis temp.bc -o combinedIR.ll
     echo "MultiDDGGen Pass"
     # here for MultiDDGGenk, the -split can be changed to indicate the split location
-    opt -enable-new-pm=0 -load ${install_path}/lib/LLVMMultiDDGGen.so -MultiDDGGen combinedIR.ll -split 0 -o MultiDDGGen.bc
+    opt -enable-new-pm=0 -load ${install_path}/lib/LLVMMultiDDGGen.so -MultiDDGGen combinedIR.ll -split $split -o MultiDDGGen.bc
     echo "CGRAGen Pass Complete"
     llvm-dis MultiDDGGen.bc -o MultiDDGGen.ll
     cp MultiDDGGen.bc combinedIR.bc
@@ -241,11 +249,13 @@ if [ -d "CGRAExec" ]; then
         llvmnode="$(find . -name "*.txt" | grep -i loop | grep -i node)"
 
         # now do the mapping
-        map="$ccf_root/mappings/SplitMap/Release"
-        # nodefile="$dir/DFGFiles"
+        map="$ccf_root/mappings/SplitMap/bin"
         echo "mapping with SplitMap"
         $map/SplitMap -EDGE $llvmedge -NODE $llvmnode -X $X -Y $Y -R $R -MSA $MSA -MAPII $MAPII -MAX_MAP $MAX_MAP -MAX_II $MAX_II -LAMBDA $LAMBDA
         
+        insgen="$ccf_root/InstructionGenerator/SplitMap_insgen/bin"
+        $insgen/insgen $X $Y $llvmnode node.sch CGRA.sch  liveout_node.txt liveout_edge.txt Control_Node.txt livein_edge.txt
+
         exit 1
 
         $nodefile/nodefile $llvmnode DUMP_node.txt > final_node.txt
