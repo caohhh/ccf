@@ -2000,7 +2000,7 @@ MultiDDGGen::updateLiveOutVariables(Instruction* BI, DFG* loopDFG, Loop* L, unsi
   // routing node from such nodes to support liveout data
   if (outputNode->get_Instruction() == cond_select || 
       (outputNode->get_Instruction() == cgra_select && outputNode->getBranchIndex() != -1)) { 
-    NODE* routeNode = new NODE(add, 1, nodeID++, "route", NULL, bbIdx);
+    NODE* routeNode = new NODE(route, 1, nodeID++, "route", NULL, bbIdx);
     routeNode->setDatatype(outputNode->getDatatype());
     loopDFG->insert_Node(routeNode);
     loopDFG->make_Arc(outputNode, routeNode, edgeID++, 0, TrueDep, 0);

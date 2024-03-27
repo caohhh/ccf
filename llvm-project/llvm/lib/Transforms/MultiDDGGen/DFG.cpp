@@ -771,7 +771,7 @@ void DFG::Dot_Print_DFG(std::string filename)
     if (_node_Set[i]->is_Mem_Operation()) {
       dotFile << "\n" << _node_Set[i]->get_ID() << " [color=blue, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
     } else if (_node_Set[i]->is_Routing_Operation()) {
-      dotFile << "\n" << _node_Set[i]->get_ID() << " [color=green ];\n";
+      dotFile << "\n" << _node_Set[i]->get_ID() << " [color=green, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
     } else if (_node_Set[i]->is_Phi_Operation()) {
       dotFile << "\n" << _node_Set[i]->get_ID() << " [shape=box, color=red, label=\"" << _node_Set[i]->get_Name() << "\\n" << _node_Set[i]->Op_To_String() << "\"";
     } else if (_node_Set[i]->is_ConditionalSelect_Operation()) {
