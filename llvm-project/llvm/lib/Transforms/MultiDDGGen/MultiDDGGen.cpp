@@ -1335,9 +1335,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
           liveInNodefile << CGRA_loadAddID << "\t" << ld_add << "\t" << "ld_add_" + ptrName << "\t" << livein_datatype << "\n";
           liveInNodefile << CGRA_loadDataID << "\t" << ld_data << "\t" << "ld_data_" + ptrName << "\t" << livein_datatype <<"\n";
 
-          liveInEdgefile << CGRA_loadAddID << "\t" << CGRA_loadDataID << "\t0\tLRE\t0\n";
-          liveInEdgefile << CGRA_loadDataID << "\t" << nodeTo->get_ID() << "\t0\tTRU\t" << oprandNo << "\n";
-          liveInEdgefile << nodeFrom->get_ID() << "\t" << CGRA_loadAddID << "\t0\tTRU\t0\n";
+          liveInEdgefile << nodeFrom->get_ID() << "\t" << nodeTo->get_ID() << "\t0\tTRU\t" << oprandNo << "\n";
         } else { // end of in livein map or already global variable
           // node not present, not added as a livin variable during update livein
           // and not already a global variable
@@ -1365,9 +1363,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
           liveInNodefile << CGRA_loadAddID << "\t" << ld_add << "\t" << "ld_add_" + ptrName << "\t" << livein_datatype << "\n";
           liveInNodefile << CGRA_loadDataID << "\t" << ld_data << "\t" << "ld_data_" + ptrName << "\t" << livein_datatype <<"\n";
 
-          liveInEdgefile << CGRA_loadAddID << "\t" << CGRA_loadDataID << "\t0\tLRE\t0\n";
-          liveInEdgefile << CGRA_loadDataID << "\t" << nodeTo->get_ID() << "\t0\tTRU\t" << oprandNo << "\n";
-          liveInEdgefile << nodeFrom->get_ID() << "\t" << CGRA_loadAddID << "\t0\tTRU\t0\n";
+          liveInEdgefile << nodeFrom->get_ID() << "\t" << nodeTo->get_ID() << "\t0\tTRU\t" << oprandNo << "\n";
         } else // end of is livein or global var
           distance = getDistance(cast<Instruction>(operandVal), BI, bbs,loopLatch);
       }
@@ -2017,9 +2013,7 @@ MultiDDGGen::updateLiveOutVariables(Instruction* BI, DFG* loopDFG, Loop* L, unsi
   unsigned int liveout_datatype = (unsigned int) (nodeGvar->getDatatype()); 
   //Generate file for live-out
   liveoutNodefile << outputNode->get_ID() << "\t" << outputNode->get_Instruction() << "\t" << outputNode->get_Name() << "\t" << 0 << "\t" <<liveout_datatype << "\n";
-  liveoutNodefile << CGRA_ConstantID << "\t" << constant << "\t" << gPtrName << "\t" << 0 << "\t" << liveout_datatype << "\n";
-  liveoutNodefile << CGRA_storeAddID << "\t" << st_add << "\t" << "st_add_" + gPtrName << "\t" << alignment << "\t" << liveout_datatype << "\n";
-  liveoutNodefile << CGRA_storeDataID << "\t" << st_data << "\t" << "st_data_" + gPtrName << "\t" << 0 << "\t" << liveout_datatype << "\n";
+  liveoutNodefile << CGRA_ConstantID << "\t" << constant << "\t" << gPtrName << "\t" << 0 << "\t" << alignment << "\t" << liveout_datatype << "\n";
 
   liveoutEdgefile << CGRA_storeAddID << "\t" << CGRA_storeDataID << "\t0\tSRE\t0\n";
   liveoutEdgefile << outputNode->get_ID() << "\t" << CGRA_storeDataID << "\t0\tTRU\t0\n";

@@ -254,7 +254,7 @@ if [ -d "CGRAExec" ]; then
         $map/SplitMap -EDGE $llvmedge -NODE $llvmnode -X $X -Y $Y -R $R -MSA $MSA -MAPII $MAPII -MAX_MAP $MAX_MAP -MAX_II $MAX_II -LAMBDA $LAMBDA
         
         insgen="$ccf_root/InstructionGenerator/SplitMap_insgen/bin"
-        $insgen/insgen $X $Y $llvmnode node.sch CGRA.sch  liveout_node.txt liveout_edge.txt Control_Node.txt livein_edge.txt
+        $insgen/insgen $X $Y $llvmnode node.sch CGRA.sch liveout_node.txt liveout_edge.txt Control_Node.txt livein_edge.txt livein_node.txt ../../$obj
 
         exit 1
 
