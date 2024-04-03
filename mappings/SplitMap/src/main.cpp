@@ -53,6 +53,8 @@ int main(int argc, char *argv[])
         cgraInfo.X_Dim = atoi(argv[i + 1]);
       } else if (std::strcmp(argv[i], "-Y") == 0) {
         cgraInfo.Y_Dim = atoi(argv[i + 1]);
+        if (cgraInfo.Y_Dim < 2)
+          FATAL("[main]ERROR! Y dimension need to be at least 2");
       } else if (std::strcmp(argv[i], "-R") == 0) {
         cgraInfo.R_Size = atoi(argv[i + 1]);
         if (cgraInfo.R_Size == 0)

@@ -10,6 +10,7 @@
 #include "Instruction.h"
 
 #include <algorithm>
+#include <fstream>
 
 namespace
 {
@@ -316,7 +317,7 @@ CGRA::generateLiveinLoad(std::map<int, uint32_t> liveinAdd, std::map<int, int> l
       liveinAll.push_back(std::make_pair(x, liveinRow));
   } // end of iterating through x
   // now that we get all the liveins, construct a time: load graph for each row
-  // the time for each load is 2, so the total time will be 2 * max row time
+  // the time for each load is 2, so the total time will be 3 * max row time
   if (liveinAll.empty())
     return;
   // the max length of a row load
@@ -325,9 +326,9 @@ CGRA::generateLiveinLoad(std::map<int, uint32_t> liveinAdd, std::map<int, int> l
     if (liveinRow.second.size() > maxT)
       maxT = liveinRow.second.size();
   }
-  DEBUG("[Live In]Live in length " << maxT * 2);
+  DEBUG("[Live In]Live in length " << maxT * 3);
   // populate the load in instructions
-  for (unsigned t = 0; t < maxT * 2; t++) {
+  for (unsigned t = 0; t < maxT * 3; t++) {
     for (int x = 0; x < xSize; x++) {
       for (int y = 0; y < ySize; y++) {
         loadInIns.push_back(Instruction::noopIns);
@@ -351,26 +352,200 @@ CGRA::generateLiveinLoad(std::map<int, uint32_t> liveinAdd, std::map<int, int> l
       if (liveinAlign.find(liveinId) == liveinAlign.end())
         FATAL("[Live In]ERROR! Can't get live in alignment");
       uint32_t alignment = liveinAlign[liveinId];
-      // first the address ins, 2 PEs are used, the PE to the right of load PE will provide the address
-      // we do this by a OR of address with itself
+      // t=0: add provide, t=1: addgen, t=2: data
       auto addProvide = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, Instruction::Immediate, 
                                     Instruction::Immediate, 0, 0, 0, false, false, false, address);
-      loadInIns[t * (xSize * ySize) + x * ySize + (y + 1) % ySize] = addProvide;
-      DEBUG("[Live In]PE <" << t << ", " << x << ", " << (y + 1) % ySize << ">: address provide ins: " << std::hex << addProvide);
-      auto addGen = Instruction::encodePIns(Instruction::int32, Instruction::address_generator, 
-                                  Instruction::Right, Instruction::Immediate, Instruction::Self, 0, 0, 0, alignment);
       loadInIns[t * (xSize * ySize) + x * ySize + y] = addProvide;
-      DEBUG("[Live In]PE <" << t << ", " << x << ", " << y << ">: address generate ins: " << std::hex << addGen);
+      DEBUG("[Live In]PE <" << t << ", " << x << ", " << y << ">: address provide ins: " << std::hex << addProvide);
+      auto addGen = Instruction::encodePIns(Instruction::int32, Instruction::address_generator, 
+                                  Instruction::Self, Instruction::Immediate, Instruction::Self, 0, 0, 0, alignment);
+      loadInIns[(t + 1) * (xSize * ySize) + x * ySize + y] = addGen;
+      DEBUG("[Live In]PE <" << t + 1 << ", " << x << ", " << y << ">: address generate ins: " << std::hex << addGen);
       // now the load in ins
       auto dataIns = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
                                   Instruction::DataBus, Instruction::Immediate, 0, 0, regNo, true, false, false, 0); 
-      loadInIns[(t + 1) * (xSize * ySize) + x * ySize + y] = addProvide;
-      DEBUG("[Live In]PE <" << t + 1 << ", " << x << ", " << y << ">: data ins: " << std::hex << dataIns);
+      loadInIns[(t + 2) * (xSize * ySize) + x * ySize + y] = dataIns;
+      DEBUG("[Live In]PE <" << t + 2 << ", " << x << ", " << y << ">: data ins: " << std::hex << dataIns);
+      t += 3;
+    } // end of iterating through loads in a row
+  } // end of iterating through all loads
+}
+
+
+void 
+CGRA::generateLiveOutStore(std::map<int, uint32_t> liveOutAdd, std::map<int, int> liveOutAlign)
+{
+  // since all pe at the same physical coord will have the same reg
+  // all liveins, <x: livein in row x>
+  std::vector<std::pair<int, std::vector<std::tuple<int, int, int>>>> liveOutAll;
+  // we just check pe at t = 0
+  for (int x = 0; x < xSize; x++) {
+    // since only one mem op is done in a row
+    // <livein ID, y, R>
+    std::vector<std::tuple<int, int, int>> liveOutRow;
+    for (int y = 0; y < ySize; y++) {
+      PE* pe = peSet[x * ySize + y];
+      // get the live out nodes
+      auto liveOut = pe->getLiveOut();
+      for (auto loIt : liveOut) {
+        int liveOutId = loIt.first;
+        int regNo = loIt.second;
+        liveOutRow.push_back(std::make_tuple(liveOutId, y, regNo));
+      }
+    } // end of iterating through y
+    if (!liveOutRow.empty())
+      liveOutAll.push_back(std::make_pair(x, liveOutRow));
+  } // end of iterating through x
+  // now that we get all the liveouts, construct a time: load graph for each row
+  if (liveOutAll.empty())
+    return;
+  // the max length of a row load
+  unsigned maxT = 0;
+  for (auto liveOutRow : liveOutAll) {
+    if (liveOutRow.second.size() > maxT)
+      maxT = liveOutRow.second.size();
+  }
+  // time for each store will be 2 cycle: add provive -> addgen, data
+  DEBUG("[Live Out]Live out length " << maxT * 2);
+  // populate the store out instructions
+  for (unsigned t = 0; t < maxT * 2; t++) {
+    for (int x = 0; x < xSize; x++) {
+      for (int y = 0; y < ySize; y++) {
+        storeOutIns.push_back(Instruction::noopIns);
+      }
+    }
+  }
+  // now generate each store out: addgen and storeout
+  for (auto liveOutRow : liveOutAll) {
+    int x = liveOutRow.first;
+    auto storeInfo = liveOutRow.second;
+    int t = 0;
+    for (auto store : storeInfo) {
+      int liveOutId = std::get<0>(store);
+      int y = std::get<1>(store);
+      int regNo = std::get<2>(store);
+      // get the address for the liveoutId
+      if (liveOutAdd.find(liveOutId) == liveOutAdd.end())
+        FATAL("[Live Out]ERROR! Can't get live out address, id: " << liveOutId);
+      uint32_t address = liveOutAdd[liveOutId];
+      // also get the alignment
+      if (liveOutAlign.find(liveOutId) == liveOutAlign.end())
+        FATAL("[Live Out]ERROR! Can't get live out alignment");
+      uint32_t alignment = liveOutAlign[liveOutId];
+      // for store, addgen and data provide will be at the same cycle
+      auto addProvide = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, Instruction::Immediate, 
+                                      Instruction::Immediate, 0, 0, 0, false, false, false, address);
+      storeOutIns[t * (xSize * ySize) + x * ySize + (y + 1) % ySize] = addProvide;
+      DEBUG("[Live Out]PE <" << t << ", " << x << ", " << (y + 1) % ySize << ">: address provide ins: " << std::hex << addProvide);
+      auto addGen = Instruction::encodePIns(Instruction::int32, Instruction::address_generator, 
+                                  Instruction::Self, Instruction::Immediate, Instruction::Self, 0, 0, 0, alignment);
+      storeOutIns[(t + 1) * (xSize * ySize) + x * ySize + (y + 1) % ySize] = addGen;
+      DEBUG("[Live Out]PE <" << t + 1 << ", " << x << ", " << (y + 1) % ySize << ">: address generate ins: " << std::hex << addGen);
+      // now the store out ins
+      auto dataIns = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
+                                  Instruction::Register, Instruction::Immediate, regNo, 0, 0, false, false, true, 0); 
+      storeOutIns[(t + 1) * (xSize * ySize) + x * ySize + y] = dataIns;
+      DEBUG("[Live Out]PE <" << t + 1 << ", " << x << ", " << y << ">: data ins: " << std::hex << dataIns);
       t += 2;
     } // end of iterating through loads in a row
   } // end of iterating through all loads
 }
 
+
+void
+CGRA::dumpIns()
+{
+  // first the live in store
+  std::ofstream liveIn("live_in.bin", std::ios::out | std::ios::binary);
+  // Write the number of instruction first
+  unsigned numIns = loadInIns.size();
+  liveIn.write(reinterpret_cast<const char*>(&numIns), sizeof(numIns));
+  // Write the instructions to the file
+  for (auto ins : loadInIns) {
+    liveIn.write(reinterpret_cast<const char*>(&ins), sizeof(ins));
+  }
+  liveIn.close();
+  // next kernel
+  std::ofstream kernel("kernel.bin", std::ios::out | std::ios::binary);
+  // also the iteration info
+  std::ofstream iteration("iter.bin", std::ios::out | std::ios::binary);
+  // 3 for true path, false path, prologue 
+  numIns = xSize * ySize * II * 3;
+  kernel.write(reinterpret_cast<const char*>(&numIns), sizeof(numIns));
+  // number of time extanded PEs
+  unsigned numPe = xSize * ySize * II;
+  iteration.write(reinterpret_cast<const char*>(&numPe), sizeof(numPe));
+  // Write the instructions to the file
+  for (int t = 0; t < II; t++) {
+    for (int x = 0; x < xSize; x++) {
+      for (int y = 0; y < ySize; y++) {
+        PE* pe = peSet[t * (xSize * ySize) + x * ySize + y];
+        auto insT = pe->getInsWord().first;
+        auto insF = pe->getInsWord().second;
+        auto insP = pe->getProIns();
+        auto IT = pe->getIter();
+        kernel.write(reinterpret_cast<const char*>(&insT), sizeof(insT));
+        kernel.write(reinterpret_cast<const char*>(&insF), sizeof(insF));
+        kernel.write(reinterpret_cast<const char*>(&insP), sizeof(insP));
+        iteration.write(reinterpret_cast<const char*>(&IT), sizeof(IT));
+      }
+    }
+  }
+  kernel.close();
+  iteration.close();
+  // last the liveout
+  std::ofstream liveOut("live_out.bin", std::ios::out | std::ios::binary);
+  // Write the number of instruction first
+  numIns = storeOutIns.size();
+  liveOut.write(reinterpret_cast<const char*>(&numIns), sizeof(numIns));
+  // Write the instructions to the file
+  for (auto ins : storeOutIns) {
+    liveOut.write(reinterpret_cast<const char*>(&ins), sizeof(ins));
+  }
+  liveOut.close();
+}
+
+
+void
+CGRA::showIns()
+{
+  std::cout << "Live in load:" << std::endl;
+  for (int t = 0; t < (int)(loadInIns.size() / (xSize * ySize)); t++) {
+    std::cout << "t = " << t << std::endl;
+    for (int x = 0; x < xSize; x++) {
+      for (int y = 0; y < ySize; y++) {
+        std::cout << "PE<" << x <<", " << y <<">: ";
+        std::cout << std::hex << loadInIns[t * (xSize * ySize) + x * ySize + y] << std::endl;
+      }
+    }
+  }
+
+  std::cout << "Kernel: " << std::endl;
+  for (int t = 0; t < II; t++) {
+    std::cout << "t = " << t << std::endl;
+    for (int x = 0; x < xSize; x++) {
+      for (int y = 0; y < ySize; y++) {
+        PE* pe = peSet[t * (xSize * ySize) + x * ySize + y];
+        std::cout << "PE<" << x <<", " << y <<">: ";
+        std::cout << "T: " << std::hex << pe->getInsWord().first;
+        std::cout << ", F: " << std::hex << pe->getInsWord().second;
+        std::cout << ", P: " << std::hex << pe->getProIns();
+        std::cout << ", IT: " << std::dec << pe->getIter() << std::endl;
+      }
+    }
+  }
+
+  std::cout << "Live out store:" << std::endl;
+  for (int t = 0; t < (int)(storeOutIns.size() / (xSize * ySize)); t++) {
+    std::cout << "t = " << t << std::endl;
+    for (int x = 0; x < xSize; x++) {
+      for (int y = 0; y < ySize; y++) {
+        std::cout << "PE<" << x <<", " << y <<">: ";
+        std::cout << std::hex << storeOutIns[t * (xSize * ySize) + x * ySize + y] << std::endl;
+      }
+    }
+  }
+}
 
 /*****************************PE***********************************************/
 
@@ -385,11 +560,10 @@ PE::PE(int t, int x, int y)
     nodes[path] =  nullptr;
     for (int i = 0; i < 3; i++) 
       sourceDirections[path][i] = noop;
-    insWord[path] = Instruction::noopIns;
   }
   iter = -1;
   phiOp = false;
-  proIns = Instruction::noopIns;
+  proIns = Instruction::prologueSkip;
 }
 
 
@@ -480,16 +654,22 @@ void
 PE::generateIns()
 {
   DEBUG("[genIns]Generating instruction word for PE <" << t << ", " << x << ", " << y << ">");
-  // instructions have 3 categories:
-  // normal, ptype, and ctype
+  // first check none path, if there is a node, then ins for both path will be the ins
+  // next, the ins will of their corresponding path
+  std::map<nodePath, uint64_t> insWordPath;
+  // if a path have node
+  std::map<nodePath, bool> haveNode;
+
   for (nodePath path : {none, true_path, false_path}) {
     // node if of the path
     if (nodeId[path] == -1) {
+      haveNode[path] = false;
       // if no node, use a default noop ins
-      insWord[path] = Instruction::noopIns;
-      DEBUG("[genIns]Noop ins word for path " << path << " is " << std::hex << insWord[path]);
+      insWordPath[path] = Instruction::noopIns;
+      DEBUG("[genIns]Noop ins word for path " << path << " is " << std::hex << insWordPath[path]);
     } else {
       // a valid node
+      haveNode[path] = true;
       Node* node = nodes[path];
       if (node == nullptr)
         FATAL("[genIns]ERROR! Node pointer not valid");
@@ -556,9 +736,9 @@ PE::generateIns()
           else
             FATAL("[genIns]ERROR! Can't find the register for live in");
         }
-        insWord[path] = Instruction::encodeCIns(Instruction::int32, opCode, loopExit, spBit, lMux, 
+        insWordPath[path] = Instruction::encodeCIns(Instruction::int32, opCode, loopExit, spBit, lMux, 
                         rMux, reg1, reg2, 0, false, brImm, imm);
-        DEBUG("[genIns]C type ins word for path " << path << " is " << std::hex << insWord[path]);
+        DEBUG("[genIns]C type ins word for path " << path << " is " << std::hex << insWordPath[path]);
 
       } else if (node->isPType()) {
         // p type instruction
@@ -633,8 +813,8 @@ PE::generateIns()
           else
             FATAL("[genIns]ERROR! Can't find the register for live in");
         }
-        insWord[path] = Instruction::encodePIns(Instruction::int32, opCode, lMux, rMux, pMux, reg1, reg2, regP, imm);
-        DEBUG("[genIns]P type ins word for path " << path << " is " << std::hex << insWord[path]);
+        insWordPath[path] = Instruction::encodePIns(Instruction::int32, opCode, lMux, rMux, pMux, reg1, reg2, regP, imm);
+        DEBUG("[genIns]P type ins word for path " << path << " is " << std::hex << insWordPath[path]);
       } else if (node->isPhi()) {
         // for phi type instructions, inside kernel it is just an route
         // we get the source from within the loop and do a orOp 0
@@ -648,32 +828,32 @@ PE::generateIns()
           // source 1 inside loop
           lMux = dirToMux(sourceDirections[path][1]);
         }
-        insWord[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
+        insWordPath[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
                                 lMux, Instruction::Immediate, 0, 0, 0, false, false, false, 0);
-        DEBUG("[genIns]Phi ins word for path " << path << " is " << std::hex << insWord[path]);
+        DEBUG("[genIns]Phi ins word for path " << path << " is " << std::hex << insWordPath[path]);
       } else {
         // regular ins word
         if (node->getOp() == ld_data) {
           // load data: will just be an or op with source from bus
-          insWord[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, 
+          insWordPath[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, 
                           false, Instruction::DataBus, Instruction::Immediate, 0, 0, 0, false, false, false, 0);
-          DEBUG("[genIns]LD ins word for path " << path << " is " << std::hex << insWord[path]);
+          DEBUG("[genIns]LD ins word for path " << path << " is " << std::hex << insWordPath[path]);
         } else if (node->getOp() == st_data) {
           // store data will be an or op of lmux with 0, with data bus asserted
           auto lMux = dirToMux(sourceDirections[path][1]);
           if (lMux == Instruction::Immediate)
             FATAL("[genIns]ERROR! Storing constant");
-          insWord[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
+          insWordPath[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
                           lMux, Instruction::Immediate, 0, 0, 0, false, false, true, 0);
-          DEBUG("[genIns]ST ins word for path " << path << " is " << std::hex << insWord[path]);
+          DEBUG("[genIns]ST ins word for path " << path << " is " << std::hex << insWordPath[path]);
         } else if (node->getOp() == route) {
           // route will be an or with 0
           auto lMux = dirToMux(sourceDirections[path][0]);
           if (lMux == Instruction::Immediate)
             FATAL("[genIns]ERROR! Routing constant");
-          insWord[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
+          insWordPath[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
                           lMux, Instruction::Immediate, 0, 0, 0, false, false, false, 0);
-          DEBUG("[genIns]Route ins word for path " << path << " is " << std::hex << insWord[path]);
+          DEBUG("[genIns]Route ins word for path " << path << " is " << std::hex << insWordPath[path]);
         } else {
           Instruction::OPCode opCode;
           switch (node->getOp()) {
@@ -756,13 +936,29 @@ PE::generateIns()
             else
               FATAL("[genIns]ERROR! Can't find the register for live in");
           }
-          insWord[path] = Instruction::encodeIns(Instruction::int32, opCode, false, false, 
+          insWordPath[path] = Instruction::encodeIns(Instruction::int32, opCode, false, false, 
                           lMux, rMux, reg1, reg2, 0, false, false, false, imm);
-          DEBUG("[genIns]Regular ins word for path " << path << " is " << std::hex << insWord[path]);
+          DEBUG("[genIns]Regular ins word for path " << path << " is " << std::hex << insWordPath[path]);
         }
       }
     }
   } // end of iterating through node path
+  // now depending on the haveNode, decide true and false path insWord
+  if (haveNode[none]) {
+    insWord = std::make_pair(insWordPath[none], insWordPath[none]);
+  } else {
+    uint64_t insTrue;
+    uint64_t insFalse;
+    if (haveNode[true_path])
+      insTrue = insWordPath[true_path];
+    else
+      insTrue = Instruction::noopIns;
+    if (haveNode[false_path])
+      insFalse = insWordPath[false_path];
+    else
+      insFalse = Instruction::noopIns;
+    insWord = std::make_pair(insTrue, insFalse);
+  }
 }
 
 
@@ -823,7 +1019,7 @@ PE::generatePrologue()
       // the op will be an OR with 0
       proIns = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
                     lMux, Instruction::Immediate, reg1, 0, 0, false, false, false, imm);
-      DEBUG("[Prologue]Phi ins word for path " << path << " is " << std::hex << insWord[path]);
+      DEBUG("[Prologue]Phi ins word is " << std::hex << proIns);
     }
   }
 }
@@ -840,4 +1036,32 @@ void
 PE::setLiveOut(std::map<int, int> liveOutReg)
 {
   this->liveOutReg = liveOutReg;
+}
+
+
+std::map<int, int> 
+PE::getLiveOut()
+{
+  return liveOutReg;
+}
+
+
+std::pair<uint64_t, uint64_t>
+PE::getInsWord()
+{
+  return insWord;
+}
+
+
+uint64_t
+PE::getProIns()
+{
+  return proIns;
+}
+
+
+int
+PE::getIter()
+{
+  return iter;
 }

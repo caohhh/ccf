@@ -42,6 +42,15 @@ class CGRA
     // generate load instructions for live ins
     void generateLiveinLoad(std::map<int, uint32_t> liveinAdd, std::map<int, int> liveinAlign);
 
+    // generate store instructions for live outs
+    void generateLiveOutStore(std::map<int, uint32_t> liveOutAdd, std::map<int, int> liveOutAlign);
+
+    // dump all the instructions
+    void dumpIns();
+
+    // show all the instructions in std out
+    void showIns();
+
   private:
     // set of all the time extanded PEs in this CGRA
     std::vector<PE*> peSet;
@@ -49,10 +58,13 @@ class CGRA
     int II;
     // x dimension size
     int xSize;
-    // y dimension size
+    // y dimension size, need to be at least 2
     int ySize;
     // load in istructions
     std::vector<uint64_t> loadInIns;
+    // store out istructions
+    std::vector<uint64_t> storeOutIns;
+
 
     // returns the PE a node is mapped to
     PE* getPE(int nodeId);
@@ -104,6 +116,18 @@ class PE
     // set the live out data register info
     void setLiveOut(std::map<int, int> liveOutReg);
 
+    // returns the <liveout id: reg No.>
+    std::map<int, int> getLiveOut();
+
+    // returns the <T, F> instruction word pair
+    std::pair<uint64_t, uint64_t> getInsWord();
+
+    // returns the prologue version of phi ins
+    uint64_t getProIns();
+
+    // returns the iteration num. this PE's op belongs to
+    int getIter();
+
   private:
     // x coord
     int x;
@@ -121,8 +145,8 @@ class PE
     std::map<nodePath, std::map<int, direction>> sourceDirections;
     // source constants of operaands
     std::map<nodePath, std::map<int, int>> sourceConstants;
-    // instruction word for each path
-    std::map<nodePath, uint64_t> insWord;
+    // instruction word for each path,<true path, false path>
+    std::pair<uint64_t, uint64_t> insWord;
     // the register no. each live in data is stored in
     std::map<int, int> liveinReg;
     // the register no. each live out data is stored in

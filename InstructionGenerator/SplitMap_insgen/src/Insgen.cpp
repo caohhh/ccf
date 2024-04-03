@@ -142,6 +142,8 @@ int main(int argc, char *argv[])
   // now the CGRA scheme
   int xSize = atoi(argv[1]);
   int ySize = atoi(argv[2]);
+  if (ySize < 2)
+    FATAL("[Insgen]ERROR! y size need to be at least 2");
   CGRA* cgra = nullptr;
   std::ifstream cgraSch(argv[5]);
   if (cgraSch.is_open()) {
@@ -309,9 +311,39 @@ int main(int argc, char *argv[])
   DEBUG("[Insgen]Done generating live in load instructions");
 
   // generate the store for liveout
+  // now get the address
+  std::map<int, uint32_t> liveOutAdd;
+  for (auto liveOutIt : liveOutName) {
+    // get the address for each live in
+    int nodeId = liveOutIt.first;
+    std::string nodeName = liveOutIt.second;
+    // command to get the address
+    std::string command;
+    command = "arm-linux-gnueabi-readelf -s ";
+    command += obj + " | grep -w \"";
+    command += nodeName + "\" | tr -s ' '|cut -d' ' -f3";
+    std::array<char, 128> buffer;
+    std::string result;
+    FILE* pipe = popen(command.c_str(), "r");
+    if (!pipe)
+      FATAL("[Insgen]ERROR! Can't start command to read in address");
+    while (fgets(buffer.data(), 128, pipe) != NULL)
+      result += buffer.data();
+    pclose(pipe);
+    uint32_t address = stoul(result, nullptr, 16);
+    liveOutAdd[nodeId] = address;
+    DEBUG("[Insgen]Live out node: " << std::dec << nodeId << ", name: " << nodeName << ", add: " << std::hex << address);
+  }
+  DEBUG("[Insgen]Done getting live out address");
 
-  // load in -> prologue -> kernel -> epilogue -> store out
+  // now generate the store instructions
+  cgra->generateLiveOutStore(liveOutAdd, liveOutAlign);
+  DEBUG("[Insgen]Done generating live out store instructions");
 
+  cgra->showIns();
+
+  cgra->dumpIns();
+  DEBUG("[Insgen]Instruction generation complete");
 
   return 0;
 }

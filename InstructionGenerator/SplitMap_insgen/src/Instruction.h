@@ -15,12 +15,11 @@
   63 62 61 | 60 59 58 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 | 34 | 33 32  | 31 ... 0
   DT       |    OpCode   | P  | C  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE | AB | DB | Unused | Immediate
 
-  P-Type Instruction Decode:
+  Predicated Instruction Decode:
   63 62 61 | 60 59 58 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 35 34 | 33 32  |31 ... 0
   DT       |    OpCode   | 1  | 0  |   LMUX   |   RMUX   |      R1     |      R2     |      RP     |    PMUX  | Unused |Immediate
   
-  new Condition Instruction replacing Loop Exit Instruction
-  with cond instructions, we currently ensure it will be an compare op
+  Condition Instruction 
   63 62 61 | 60 59 58 | 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 ... 26 | 25...0
   DT       |  OpCode  | SP | LE | 1  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE |   BrImm   | Imme
 */
@@ -230,7 +229,12 @@ uint64_t encodeIns(Datatype dType, OPCode opCode, bool pred, bool cond, PEInputM
           unsigned reg1, unsigned reg2, unsigned regW, bool we, bool aBus, bool dBus, int32_t imm);
 
 
+// no operation for the clock cycle
 const uint64_t noopIns = encodeIns(int32, NOOP, 0, 0, Self, Self, 0, 0, 0, false, false, false, 0);
+
+// for prologue, meaning this PE's operation is not a phi, we set the unused bit 33 as 1
+const uint64_t prologueSkip = 0x0000000300000000;
+
 
 
 /**
