@@ -20,7 +20,8 @@
 
 
 __attribute__((noinline))
-extern volatile unsigned get_clock(){
+extern volatile unsigned get_clock()
+{
   volatile unsigned ret;
   asm("sub r13, r13, #4");
   asm("str r12, [r13]");
@@ -32,272 +33,274 @@ extern volatile unsigned get_clock(){
   return ret;
 }
 
-unsigned prolog_index2 = 0; // for larger and multiple loops, prolog_size array got disturbed, this global replaces prolog_index 
-
-void readInstructionSize(){
-#ifdef DEBUG
-  printf("Reading instruction size for %d loops.\n", totalLoops);
-#endif
-  int loopID;
-  for(loopID=1; loopID<=totalLoops; loopID++){
-    FILE* epi,*pro,*kern;
+void readInstructionSize()
+{
+  #ifdef DEBUG
+    printf("Reading instruction size for %d loops.\n", totalLoops);
+  #endif
+  for (int loopID = 1; loopID <= totalLoops; loopID++) {
+    FILE *liveinFile, *liveoutFile, *kernFile, *iterFile;
     char loopno[25];
     char directoryPath[20] = "./CGRAExec/L";
     
     sprintf(loopno,"%d",loopID);
     strcat(directoryPath,loopno);
 
-    char epifile[40] = "";
-    char profile[40] = "";
-    char kernfile[40] = "";
+    char liveinfileName[40] = "";
+    char liveoutfileName[40] = "";
+    char kernfileName[40] = "";
+    char iterFileName[40] = "";
 
-    strcat(epifile,directoryPath);
-    strcat(epifile,"/epilog_ins.bin");
+    strcat(liveinfileName,directoryPath);
+    strcat(liveinfileName,"/live_in.bin");
     
-    strcat(profile,directoryPath);
-    strcat(profile,"/prolog_ins.bin");
+    strcat(liveoutfileName,directoryPath);
+    strcat(liveoutfileName,"/live_out.bin");
     
-    strcat(kernfile,directoryPath);
-    strcat(kernfile,"/kernel_ins.bin");
+    strcat(kernfileName,directoryPath);
+    strcat(kernfileName,"/kernel.bin");
 
-    epi=fopen(epifile,"rb");
-    pro=fopen(profile,"rb");
-    kern=fopen(kernfile,"rb");
-    
-    if(epi == NULL){
-      printf("FATAL: Cannot open file %s\n", epifile);
+    strcat(iterFileName,directoryPath);
+    strcat(iterFileName,"/iter.bin");
+
+    liveinFile = fopen(liveinfileName, "rb");
+    liveoutFile = fopen(liveoutfileName, "rb");
+    kernFile = fopen(kernfileName, "rb");
+    iterFile = fopen(iterFileName, "rb");
+
+    if (liveinFile == NULL) {
+      printf("FATAL: Cannot open file %s\n", liveinfileName);
       exit(1);
-    } else if(pro == NULL){
-      printf("FATAL: Cannot open file %s\n", profile);
+    } else if (liveoutFile == NULL) {
+      printf("FATAL: Cannot open file %s\n", liveoutfileName);
       exit(1);
-    } else if(kern == NULL){
-      printf("FATAL: Cannot open file %s\n", kernfile);
+    } else if (kernFile == NULL) {
+      printf("FATAL: Cannot open file %s\n", kernfileName);
+      exit(1);
+    } else if (iterFile == NULL) {
+      printf("FATAL: Cannot open file %s\n", iterFileName);
       exit(1);
     }
     
-    int episize,prosize,kernelsize;
-    int prolog_extend_size, prolog_version_size;
-    fread(&episize,sizeof(int),1,epi);
-    fread(&prosize,sizeof(int),1,pro);
-    fread(&prolog_extend_size, sizeof(int), 1, pro);
-    fread(&prolog_version_size, sizeof(int), 1, pro);
-    fread(&kernelsize,sizeof(int),1,kern);
-    int final_prolog_size = prosize + prolog_extend_size;
+    unsigned liveinSize, liveoutSize, kernelSize, iterSize;
+    fread(&liveinSize, sizeof(unsigned), 1,liveinFile);
+    fread(&liveoutSize, sizeof(unsigned), 1, liveoutFile);
+    fread(&kernelSize, sizeof(unsigned), 1, kernFile);
+    fread(&iterSize, sizeof(unsigned), 1, iterFile);
 
-    prolog_size[loopID-1] = final_prolog_size;
-    kernel_size[loopID-1] = kernelsize;
-    epilog_size[loopID-1] = episize;
+    livein_size[loopID - 1] = liveinSize;
+    kernel_size[loopID - 1] = kernelSize;
+    liveout_size[loopID - 1] = liveoutSize;
+    iter_size[loopID - 1] = iterSize;
 
-    fclose(epi);
-    fclose(pro);
-    fclose(kern);
+    fclose(liveinFile);
+    fclose(liveoutFile);
+    fclose(kernFile);
+    fclose(iterFile);
   }
 }
 
 int initializeParameters(unsigned int loopID)
 {
-#ifdef DEBUG
-  printf("cgra.c: Initialize Parameters - loopID: %d\n", loopID);
-#endif
-  unsigned int i=0;
+  #ifdef DEBUG
+    printf("cgra.c: Initialize Parameters - loopID: %d\n", loopID);
+  #endif
 
-  *(initCGRA + initCGRA_size*(loopID-1)) = 0x77e00000;
-  *(initCGRA + initCGRA_size*(loopID-1) + 1) = 0x77e00000; //1st instruction, 0xe7e00000 is the opcode for no operation
-  *(initCGRA + initCGRA_size*(loopID-1) + 2) = 0;	//II
-  *(initCGRA + initCGRA_size*(loopID-1) + 3) = 0;	//Epilog length
-  *(initCGRA + initCGRA_size*(loopID-1) + 4) = 0;	//Prolog length
-  *(initCGRA + initCGRA_size*(loopID-1) + 5) = 0;   //KERNEL COUNTER
-  *(initCGRA + initCGRA_size*(loopID-1) + 6) = 0;	//Live-Variable Store Epilog Lenth
-  *(initCGRA + initCGRA_size*(loopID-1) + 7) = 0;   //Prolog versions' length
+  *(initCGRA + initCGRA_size*(loopID-1)) = 0;	//Livein length
+  *(initCGRA + initCGRA_size*(loopID-1) + 1) = 0;	//II
+  *(initCGRA + initCGRA_size*(loopID-1) + 2) = 0;	//Liveout length
 
-  FILE* epi,*pro,*kern, *count, *config;
+  FILE *liveinFile, *liveoutFile, *kernFile, *iterFile, *configFile;
   char loopno[25];
   char directoryPath[20] = "./CGRAExec/L";
 
   sprintf(loopno,"%d",loopID);
   strcat(directoryPath,loopno);
 
-  char epifile[40] = "";
-  char profile[40] = "";
-  char kernfile[40] = "";
-  char liveOutfile[40] = "";
-  char configfile[40] = ""; 
+  char liveinFileName[40] = "";
+  char liveoutFileName[40] = "";
+  char kernFileName[40] = "";
+  char iterFileName[40] = "";
+  char configFileName[40] = "";
 
-  strcat(epifile,directoryPath);
-  strcat(epifile,"/epilog_ins.bin");
+  strcat(liveinFileName,directoryPath);
+  strcat(liveinFileName,"/live_in.bin");
 
-  strcat(profile,directoryPath);
-  strcat(profile,"/prolog_ins.bin");
+  strcat(liveoutFileName,directoryPath);
+  strcat(liveoutFileName,"/live_out.bin");
 
-  strcat(kernfile,directoryPath);
-  strcat(kernfile,"/kernel_ins.bin");
+  strcat(kernFileName,directoryPath);
+  strcat(kernFileName,"/kernel.bin");
 
-  strcat(configfile,directoryPath);
-  strcat(configfile,"/CGRA_config.txt");
+  strcat(iterFileName,directoryPath);
+  strcat(iterFileName,"/iter.bin");
+
+  strcat(configFileName, directoryPath);
+  strcat(configFileName, "/CGRA_config.txt");
+
+
   //Make some error checking for fopen and fread
-  epi=fopen(epifile,"rb");
-  pro=fopen(profile,"rb");
-  kern=fopen(kernfile,"rb");
-  config=fopen(configfile, "r");
+  liveinFile=fopen(liveinFileName,"rb");
+  liveoutFile=fopen(liveoutFileName,"rb");
+  kernFile=fopen(kernFileName,"rb");
+  iterFile = fopen(iterFileName, "rb");
+  configFile = fopen(configFileName, "r");
 
-  int episize,prosize,kernelsize, livevar_st_size;
-  int prolog_extend_size, prolog_version_size;
-  fread(&episize,sizeof(int),1,epi);
-  fread(&prosize,sizeof(int),1,pro);
-  fread(&prolog_extend_size, sizeof(int), 1, pro);
-  fread(&prolog_version_size, sizeof(int), 1, pro);
-  fread(&kernelsize,sizeof(int),1,kern);
-
-#ifdef DEBUG
-  printf("\n**********EPISIZE: %d*********\n",episize);
-  printf("\n**********PROSIZE: %d - PRO_EXT_SIZE: %d - PRO_VERSION_SIZE: %d*********\n",prosize, prolog_extend_size, prolog_version_size);
-  printf("\n**********KERNSIZE: %d*********\n",kernelsize);
-#endif
-
-  int final_prolog_size = prosize + prolog_extend_size;
-
-  int prolog_index = 0, kernel_index = 0, epilog_index = 0;
-  for(i = 1; i<loopID; i++){
-    prolog_index += prolog_size[i-1];
-    kernel_index += kernel_size[i-1];
-    epilog_index += epilog_size[i-1];
+  if (liveinFile == NULL) {
+    printf("FATAL: Cannot open file livein %s\n", liveinFileName);
+    exit(1);
+  } else if (liveoutFile == NULL) {
+    printf("FATAL: Cannot open file liveout %s\n", liveoutFileName);
+    exit(1);
+  } else if (kernFile == NULL) {
+    printf("FATAL: Cannot open file kernel %s\n", kernFileName);
+    exit(1);
+  } else if (iterFile == NULL) {
+    printf("FATAL: Cannot open file iter %s\n", iterFileName);
+    exit(1);
+  } else if (configFile == NULL) {
+    printf("FATAL: Cannot open file config %s\n", configFileName);
+    exit(1);
   }
 
-#ifdef DEBUG
-  printf("Prolog_index: %d - kernel_index: %d - epilog_index: %d\n", prolog_index, kernel_index, epilog_index);
-#endif
-  
-  fread(&epilog[epilog_index],sizeof(unsigned long long),episize,epi);
-  fread(&prolog[prolog_index2],sizeof(unsigned long long),final_prolog_size,pro);
-  fread(&kernel[kernel_index],sizeof(unsigned long long),kernelsize,kern);
+  int liveinSize,liveoutSize,kernelSize, iterSize;
+  fread(&liveinSize,sizeof(unsigned),1,liveinFile);
+  fread(&liveoutSize,sizeof(unsigned),1,liveoutFile);
+  fread(&kernelSize,sizeof(unsigned),1,kernFile);
+  fread(&iterSize,sizeof(unsigned),1,iterFile);
 
-  strcat(liveOutfile,directoryPath);
-  strcat(liveOutfile,"/livevar_st_ins_count.txt");
-  count=fopen(liveOutfile,"r");
-  fscanf(count, "%d", &livevar_st_size);
+  #ifdef DEBUG
+    printf("\n**********LIVEINSIZE: %d*********\n",liveinSize);
+    printf("\n**********LIVEOUTSIZE: %d*********\n",liveoutSize);
+    printf("\n**********KERNSIZE: %d*********\n",kernelSize);
+    printf("\n**********ITERSIZE: %d*********\n",iterSize);
+  #endif
+
+  int livein_index = 0, kernel_index = 0, iter_index = 0, liveout_index = 0;
+  for (unsigned i = 1; i < loopID; i++) {
+    livein_index += livein_size[i-1];
+    kernel_index += kernel_size[i-1];
+    iter_index += iter_size[i-1];
+    liveout_index += liveout_size[i-1];
+  }
+
+  #ifdef DEBUG
+    printf("livein_index: %d - kernel_index: %d - iter_index: %d - liveout_index: %d\n", 
+            livein_index, kernel_index, iter_index, liveout_index);
+  #endif
+  
+  fread(&livein[livein_index],sizeof(unsigned long long),liveinSize,liveinFile);
+  fread(&liveout[liveout_index],sizeof(unsigned long long),liveoutSize,liveoutFile);
+  fread(&kernel[kernel_index],sizeof(unsigned long long),kernelSize,kernFile);
+  fread(&iter[iter_index],sizeof(unsigned),iterSize,iterFile);
+
 
   char line[256];
   int XDim=0, YDim=0;
-  int iter=0; 
+  int lineNo=0; 
 
-  while(fgets(line, sizeof(line), config))
-  {
-    iter++;
-    if(iter==1)
+  while (fgets(line, sizeof(line), configFile)) {
+    lineNo++;
+    if (lineNo == 1)
       XDim = atoi(line);
-    else if(iter==2)
+    else if (lineNo == 2)
       YDim = atoi(line);
     else
       break;
   }
 
-#ifdef DEBUG
-  printf("\n************XDIM and YDim are %d, %d\n", XDim, YDim);
-#endif
-  int II = kernelsize/(XDim*YDim);
-  int epiLength = episize/(XDim*YDim);
-  int prolength = prosize/(XDim*YDim);
-  *(initCGRA + initCGRA_size*(loopID-1) + 2) = II;
-  *(initCGRA + initCGRA_size*(loopID-1) + 3) = epiLength;
-  *(initCGRA + initCGRA_size*(loopID-1) + 4) = prolength;
-  *(initCGRA + initCGRA_size*(loopID-1) + 6) = livevar_st_size/(XDim*YDim);
-  *(initCGRA + initCGRA_size*(loopID-1) + 7) = prolog_extend_size/(XDim*YDim);
-  *(initCGRA + initCGRA_size*(loopID-1) + 8) = prolog_version_size/(XDim*YDim);
+  #ifdef DEBUG
+    printf("\n************XDIM and YDim are %d, %d\n", XDim, YDim);
+  #endif
 
-  fclose(epi);
-  fclose(pro);
-  fclose(kern);
-  fclose(count);
-  fclose(config);
-#ifdef DEBUG
-  printf("Printing prolog:\n");
-  for(i=0; i<final_prolog_size; i++)
-    printf("%d: %lx - %llx\n", i, &prolog[i], prolog[i]);
-  printf("Printing kernel:\n");
-  for(i=0; i<kernelsize; i++)
-    printf("%d: %lx - %llx\n", i, &kernel[i], kernel[i]);
-  printf("Printing epilog:\n");
-  for(i=0; i<episize; i++)
-    printf("%d: %lx - %llx\n", i, &epilog[i], epilog[i]);
-#endif
+  int II = kernelSize/(XDim*YDim*3);
+  int liveinLength = liveinSize/(XDim*YDim);
+  int liveoutLength = liveoutSize/(XDim*YDim);
 
-  char loopitfile[40] = "";
-  strcat(loopitfile,directoryPath);
-  strcat(loopitfile,"/kernel_count.txt");
+  *(initCGRA + initCGRA_size*(loopID-1)) = liveinLength;
+  *(initCGRA + initCGRA_size*(loopID-1) + 1) = II;
+  *(initCGRA + initCGRA_size*(loopID-1) + 2) = liveoutLength;
 
-  int kernelCount = 0;
-  count=fopen(loopitfile,"r");
-  fscanf(count, "%d", &kernelCount);
-  fclose(count);
+  fclose(liveinFile);
+  fclose(liveoutFile);
+  fclose(kernFile);
+  fclose(configFile);
+  fclose(iterFile);
 
-  *(initCGRA + initCGRA_size*(loopID-1) + 5) = kernelCount; 
+  #ifdef DEBUG
+    printf("Printing Livein:\n");
+    for(unsigned i=0; i<liveinSize; i++)
+      printf("%d: %lx - %llx\n", i, &livein[i], livein[i]);
+    printf("Printing kernel:\n");
+    for(unsigned i=0; i<kernelSize; i++)
+      printf("%d: %lx - %llx\n", i, &kernel[i], kernel[i]);
+    printf("Printing iter:\n");
+    for(unsigned i=0; i<iterSize; i++)
+      printf("%d: %lx - %d\n", i, &iter[i], iter[i]);
+    printf("Printing Liveout:\n");
+    for(unsigned i=0; i<liveoutSize; i++)
+      printf("%d: %lx - %llx\n", i, &liveout[i], liveout[i]);
+  #endif
 
-#ifdef DEBUG
-  printf("From FILE: PROLOGPC= %lx, EPILOGPC=%lx,  KernelPC=%lx\n",(unsigned long) (&prolog[prolog_index2]),(unsigned long) (&epilog[epilog_index]),(unsigned long) (&kernel[kernel_index]));
-#endif
 
-  prologPtr[loopID-1] = (unsigned long long) (&prolog[prolog_index2]);
-  epilogPtr[loopID-1] = (unsigned long long) (&epilog[epilog_index]);
+  #ifdef DEBUG
+    printf("From FILE: LIVEINPC= %lx, LIVEOUTPC=%lx,  KernelPC=%lx\n",
+    (unsigned long) (&livein[livein_index]),(unsigned long) (&liveout[liveout_index]),(unsigned long) (&kernel[kernel_index]));
+  #endif
+
+  liveinPtr[loopID-1] = (unsigned long long) (&livein[livein_index]);
+  liveoutPtr[loopID-1] = (unsigned long long) (&liveout[liveout_index]);
   kernelPtr[loopID-1] = (unsigned long long) (&kernel[kernel_index]);
+  iterPtr[loopID-1] = (unsigned long long) (&iter[iter_index]);
 
-  prolog_index2 += final_prolog_size;
   return 0;
 }
 
 int configureCGRA(unsigned int loopID)
 {
-#ifdef DEBUG
-  printf("configureCGRA loop %d\n", loopID);
-#endif
-  unsigned int i=0;
-  int kernelCount = *(initCGRA + initCGRA_size*(loopID-1) + 5);
-  FILE* count;
+  #ifdef DEBUG
+    printf("configureCGRA loop %d\n", loopID);
+  #endif
+
+  FILE* initFile;
   char loopno[25];
   char directoryPath[20] = "./CGRAExec/L";
   
   sprintf(loopno,"%d",loopID);
   strcat(directoryPath,loopno);
 
-  // Fix me: kernelCount is only given when loop CGRA invoked whilst configureCGRA is at load time of the application, need to write kernelCount to initCGRA.txt file at execution time for gem5 to read in
-  if(kernelCount <= 0)
-  {
-    int newTC = kernelCount + dynamicTCVal;
-    *(initCGRA + initCGRA_size*(loopID-1) + 5) = newTC; 
-  }
-
-  //char initCGRAfile[40] = "./CGRAExec/L1";
-  //strcat(initCGRAfile,"/initCGRA.txt");
-  //count = fopen(initCGRAfile, "wb");
   strcat(directoryPath,"/initCGRA.txt");
-  count = fopen(directoryPath, "wb");
+  initFile = fopen(directoryPath, "wb");
   
-  for(i=0; i<7; i++)
-    fprintf(count, "%d\n", *(initCGRA + initCGRA_size*(loopID-1) + i));
-  fprintf(count, "%ld\n", (unsigned long long) epilogPtr[loopID-1]);
-  fprintf(count, "%ld\n", (unsigned long long) prologPtr[loopID-1]);
-  fprintf(count, "%ld\n", (unsigned long long) kernelPtr[loopID-1]);
-  fprintf(count, "%d\n", *(initCGRA + initCGRA_size*(loopID-1) + 7));
-  fprintf(count, "%d\n", *(initCGRA + initCGRA_size*(loopID-1) + 8));
-  fclose(count);
+  for(unsigned i = 0; i < 3; i++)
+    fprintf(initFile, "%d\n", *(initCGRA + initCGRA_size*(loopID-1) + i));
+  fprintf(initFile, "%ld\n", (unsigned long long) liveinPtr[loopID-1]);
+  fprintf(initFile, "%ld\n", (unsigned long long) kernelPtr[loopID-1]);
+  fprintf(initFile, "%ld\n", (unsigned long long) iterPtr[loopID-1]);
+  fprintf(initFile, "%ld\n", (unsigned long long) liveout[loopID-1]);
+  fclose(initFile);
 
-  /*FILE* execLoop = fopen("./CGRAExec/LoopID.txt", "wb");
-  fprintf(execLoop, "L%d", loopID);
-  fclose(execLoop);*/
-  
-  //printf("Exiting cgra.c configureCGRA\n");
   return 0;
 }
 
 void checkTotalLoops( )
 {
-#ifdef DEBUG
-  printf("checkTotalLoops\n");
-#endif
-    char myfile[40] = "./CGRAExec/total_loops.txt";
-    FILE* count;
-    count = fopen(myfile, "r");
-    fscanf(count, "%u", &totalLoops);
-    fclose(count);
+  #ifdef DEBUG
+    printf("checkTotalLoops\n");
+  #endif
+  char myfile[40] = "./CGRAExec/total_loops.txt";
+  FILE* count;
+  count = fopen(myfile, "r");
+  if (count == NULL) {
+    printf("ERROR! Can't open total loops\n");
+    exit(1);
+  }
+  fscanf(count, "%u", &totalLoops);
+  fclose(count);
+  #ifdef DEBUG
+    printf("total loop count %d\n", totalLoops);
+  #endif
+
 }
 
 //__attribute__((noinline))
@@ -368,41 +371,48 @@ void deleteCGRA()
 
 void createCGRA()
 {
-#ifdef DEBUG
-  printf("createCGRA\n");
-#endif
-  int result = 0;
-  unsigned i=1;
+  #ifdef DEBUG
+    printf("createCGRA\n");
+  #endif
   
   checkTotalLoops();
+
+  // for splitmap, we have live_in.bin, kernel.bin, live_out.bin, iter.bin
+
   initCGRA  = (int *)malloc(sizeof(int)*initCGRA_size*totalLoops);
-  prologPtr = (int *)malloc(sizeof(int)*totalLoops);
+  liveinPtr = (int *)malloc(sizeof(int)*totalLoops);
   kernelPtr = (int *)malloc(sizeof(int)*totalLoops);
-  epilogPtr = (int *)malloc(sizeof(int)*totalLoops);
-  prolog_size = (int *)malloc(sizeof(int)*totalLoops);
-  kernel_size =	(int *)malloc(sizeof(int)*totalLoops);
-  epilog_size =	(int *)malloc(sizeof(int)*totalLoops);
+  liveoutPtr = (int *)malloc(sizeof(int)*totalLoops);
+  iterPtr = (int *)malloc(sizeof(int)*totalLoops);
+  livein_size = (unsigned *)malloc(sizeof(unsigned)*totalLoops);
+  kernel_size =	(unsigned *)malloc(sizeof(unsigned)*totalLoops);
+  liveout_size =	(unsigned *)malloc(sizeof(unsigned)*totalLoops);
+  iter_size = (unsigned *)malloc(sizeof(unsigned)*totalLoops);
 
   readInstructionSize();
-  int total_size[3] = {0,0,0}; // Size of prolog/kernel/epilog for all loops                                                  
-  for(i=1; i<=totalLoops; i++){
-    total_size[0] += prolog_size[i-1];
+
+  int total_size[4] = {0, 0, 0, 0}; // Size of livein/kernel/iter/liveout for all loops                                                  
+  for (unsigned i = 1; i <= totalLoops; i++) {
+    total_size[0] += livein_size[i-1];
     total_size[1] += kernel_size[i-1];
-    total_size[2] += epilog_size[i-1];
+    total_size[2] += iter_size[i-1];
+    total_size[3] += liveout_size[i-1];
   }
 
-  mallopt(M_MMAP_THRESHOLD, total_size[0]*sizeof(unsigned long long)*2);  // This tries to avoid memory allocation in stack when requesting over 128kB
+  mallopt(M_MMAP_THRESHOLD, total_size[0] * sizeof(unsigned long long) * 2);  // This tries to avoid memory allocation in stack when requesting over 128kB
   
-  prolog=(unsigned long long*)malloc(total_size[0]*sizeof(unsigned long long));
-  kernel=(unsigned long long*)malloc(total_size[1]*sizeof(unsigned long long));
-  epilog=(unsigned long long*)malloc(total_size[2]*sizeof(unsigned long long));
+  livein = (unsigned long long*)malloc(total_size[0]*sizeof(unsigned long long));
+  kernel = (unsigned long long*)malloc(total_size[1]*sizeof(unsigned long long));
+  iter = (unsigned*)malloc(total_size[2]*sizeof(unsigned));
+  liveout = (unsigned long long*)malloc(total_size[3]*sizeof(unsigned long long));
 
-#ifdef DEBUG
-  printf("Total prolog: %d - total kernel: %d - total epilog: %d\nbase prologPC: %lx - base kernelPC: %lx - base epilogPC: %lx\n", total_size[0], total_size[1], total_size[2], prolog, kernel, epilog);
-#endif
+  #ifdef DEBUG
+    printf("Total livein: %d - total kernel: %d - total iter: %d - total liveout: %d\n"
+          "base livein PC: %lx - base kernel PC: %lx - base iter PC: %lx - base liveout PC: %lx\n", 
+          total_size[0], total_size[1], total_size[2], total_size[3], livein, kernel, iter, liveout);
+  #endif
 
-  for(i = 1; i <= totalLoops; i++)
-  {
+  for (unsigned i = 1; i <= totalLoops; i++) {
     initializeParameters(i);
     configureCGRA(i);
   }

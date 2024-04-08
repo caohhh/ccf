@@ -21,13 +21,13 @@
 #define CGRA_EXEC_OVER 0xbfffffff  // Previously 66
 #define SYS_CLOCK 0xafffffff
 
+#define DEBUG
 
 /*#define activate_CGRA 0xefffffff  // 15
 #define stop_CGRA 0xcfffffff  // 16
 #define deactivate_CGRA 0xdfffffff  // 17*/
 //#define CPU_idle  71
 
-#define initCGRA_size 9
 
 extern volatile unsigned get_clock(void);
 void accelerateOnCGRA(unsigned int loopNo);
@@ -37,13 +37,16 @@ int configureCGRA(unsigned int loopID);
 void* runOnCGRA(void);
 void deleteCGRA(); 
 
-int *prolog_size, *kernel_size, *epilog_size; // size of instruction array for individual loopID
-volatile unsigned long long *prolog,*epilog,*kernel; // instruction array for all loops
+unsigned *livein_size, *kernel_size, *liveout_size, *iter_size; // size of instruction array for individual loopID
+volatile unsigned long long *livein,*kernel,*liveout; // instruction array for all loops
+volatile unsigned *iter;
 unsigned int *ArrPtr;
 
-volatile unsigned long long * prologPtr, *kernelPtr, *epilogPtr;
+volatile unsigned long long * liveinPtr, *kernelPtr, *liveoutPtr, *iterPtr;
 
+// the liveinLength, II, liveoutLength
 int *initCGRA;
+#define initCGRA_size 3
 unsigned totalLoops=0;
 
 pthread_t pth;

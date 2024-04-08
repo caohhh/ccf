@@ -255,18 +255,13 @@ if [ -d "CGRAExec" ]; then
         
         insgen="$ccf_root/InstructionGenerator/SplitMap_insgen/bin"
         $insgen/insgen $X $Y $llvmnode node.sch CGRA.sch liveout_node.txt liveout_edge.txt Control_Node.txt livein_edge.txt livein_node.txt ../../$obj
-
-        exit 1
-
-        $nodefile/nodefile $llvmnode DUMP_node.txt > final_node.txt
-
-        cp $ccf_root/scripts/CGRALib/run.sh ./
-        echo "start running run.sh"
-        ./run.sh ../../$obj ${ccf_root}
         cd ..
     done
     cd ..
 fi
+
+cp $ccf_root/scripts/CGRALib/simulate.sh simulate.sh
+sed -i "s/obj=\"\"/obj=\".\/$obj\"/" simulate.sh
 
 exit
 
