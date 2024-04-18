@@ -70,7 +70,7 @@ inline
 unsigned
 LocalPred::getLocalIndex(Addr instAddr)
 {
-    return (instAddr >> 2) & indexMask;
+    return (instAddr >> shiftAmt) & indexMask;
 }
 
 

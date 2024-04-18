@@ -43,6 +43,9 @@ class CGRA_PE
     bool OutputP;
     int Output;
     unsigned config_boundary;
+    // the output to recover to
+    int* outputRecover;
+    bool* outputPRecover;
 
     // FP inputs and outputs
     float FPInput1;
@@ -83,6 +86,8 @@ class CGRA_PE
   public:
     CGRA_PE(); //default constructor to set the RF size 4 per PE.
     virtual ~CGRA_PE();
+    // setup the backup registers of the PE
+    void setupBackup(unsigned iterCount);
 
     void Fetch(CGRA_Instruction* ins);
     void Decode();
@@ -118,6 +123,11 @@ class CGRA_PE
     void setDatatypeBus(int * dt);
 
     bool isNOOP();
+
+    // set the recovery output as the current output
+    void setRecovery(int updatePtr);
+    // rollback to the recovery output
+    void rollback(int rollbackPtr);
 };
 
 

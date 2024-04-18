@@ -125,8 +125,7 @@ Parser::ParseDFG(DFG* myDFG)
     std::istringstream lineIn(line);
     int splitPath;
     lineIn >> splitPath;
-    if (splitPath != -1)
-      myDFG->setSplitSource(true);
+    myDFG->setSplitSource(splitPath);
   } else {
     FATAL("Can't open split info file");
   }

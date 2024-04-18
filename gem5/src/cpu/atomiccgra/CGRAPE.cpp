@@ -489,7 +489,7 @@ CGRA_PE::IExecute()
             break;
           }
           case NOOP:
-            DPRINTF(CGRA_Detailed,"CGRA: NOOP.Execute()\n");
+            DPRINTF(CGRA_Detailed,"CGRA: NOOP\n");
             break;
           default:
             DPRINTF(CGRA_Detailed," 1. Opcode is %ld\n",(unsigned) insOpcode);
@@ -1093,4 +1093,30 @@ void
 CGRA_PE::setDatatypeBus(int * dt)
 {
   (this->BsDatatype) = dt; 
+}
+
+
+void
+CGRA_PE::setRecovery(int updatePtr)
+{
+    outputRecover[updatePtr] = Output;
+    outputPRecover[updatePtr] = OutputP;
+    DPRINTF(CGRA_Detailed,"backup output: %d, outputp:%d\n", outputRecover, outputPRecover);
+}
+
+
+void
+CGRA_PE::rollback(int rollbackPtr)
+{
+    Output = outputRecover[rollbackPtr];
+    OutputP = outputPRecover[rollbackPtr];
+    DPRINTF(CGRA_Detailed,"rolled back to output: %d, outputp:%d\n", Output, OutputP);
+}
+
+
+void
+CGRA_PE::setupBackup(unsigned iterCount)
+{
+    outputRecover = new int[iterCount];
+    outputPRecover = new bool[iterCount];
 }

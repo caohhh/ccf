@@ -30,27 +30,20 @@ class CGRA_IFU
     virtual ~CGRA_IFU();
 
     /**
-     * Debug function to print CMP history
-    */
-    void printCMPHistory();
-
-    /**
      * Setup IFU for the execution of one loop
     */
     void setupExec(SimpleThread *thread, int loopID);
-    void advancePC(SimpleThread *thread);
+    void advanceState();
     void advanceTime();
 
     enum State
     {
-        PRO,
+        LIVEIN,
         KERN,
-        EPI,
+        LIVEOUT,
         FINISH
     };
     State getState();
-    // returns the pointer to the instructions in CGRA
-    uint64_t* getInstPtr();
 
     /**
      * returns the instruction word given a PE's position
@@ -63,29 +56,41 @@ class CGRA_IFU
      * this cycle
     */
     bool finishedIter();
-    void setPrologBranchCycle(unsigned cycles);
     void setConditionalReg(bool reg);
-
-    /**
-     * Before individule PEs fetch instructions from IFU, mark out
-     * all the cond instructions
-    */
-    void markCond();
 
     /**
      * After execution, expose the predication output to the IFU
     */
     void setPred(unsigned peIndex, bool predication);
 
-    /**
-     * Use the predictor to predict the outcome of all the CMP 
-     * instructions in fly
-    */
-    void predict();
+    // returns the size, ptr, and address of live in instructions
+    std::tuple<unsigned, uint64_t*, long> getLiveinReq();
+
+    // returns the size, ptr and address of kernel instructions
+    std::tuple<unsigned, uint64_t*, long> getKernelReq();
+
+    // returns the size, ptr and address of liveout instructions
+    std::tuple<unsigned, uint64_t*, long> getLiveoutReq();
+
+    // returns the size, ptr and address of iteration info
+    std::tuple<unsigned, int*, long> getIterReq();
+
+    // print out all the instructions
+    void printIns();
+
+    // issue instructions to cgraInstructions
+    void issue();
+
+    // if need to set recovery
+    int getRecoveryReg();
+
+    // if need rollback
+    int getRollbackReg();
+
+    // returns the iteration count
+    unsigned getIterCount();
 
   private:
-    // <PC, outcome> result of all the CMP instruction history
-    std::vector<std::pair<Addr, bool>> cmpHistory;
     unsigned int cgraXDim;
     unsigned int cgraYDim;
     CGRAPredUnit* cgraPred;
@@ -93,44 +98,91 @@ class CGRA_IFU
     // CGRA state controlling variables
 
     int loopID;
-    long epilogPC;
-    long prologPC;
+    long liveinPC;
+    long liveoutPC;
     long kernelPC;
+    long iterPC;
     unsigned II;
-    unsigned epilogLen;
-    unsigned prologLen;
-    unsigned prologVersionCycle;
+    unsigned liveinLen;
+    unsigned liveoutLen;
     unsigned len;
+    unsigned iterCount;
 
-    // PC CGRA is on, should be the same pc as the inst in pe0
-    unsigned long cgraPC;
-    unsigned prologBranchCycle;
     State state;
 
+    uint64_t *liveinIns;
+    uint64_t *liveoutIns;
+    uint64_t *kernelIns;
+    int *iterInfo;
+
+
+    // instructions issued to the PEs
     uint64_t *cgraInstructions;
 
     // False: LE instruction execution indicates should exit loop
     bool conditionalReg;
 
-    // If the instruction in the PE is a Cond instruction
-    bool *isCond;
+    // True: issuing first iter, should use phi ins, False: kernel running, issue normal ins
+    bool phiReg;
+
+    // True: kernel executiong have ended, should switch to liveout state
+    bool kernEndReg;
+
 
     // the predication output of all the PEs
     bool *predOutput;
 
-    // prediction of all the predications
-    bool *predPredicted;
+    // if the split condition have been issued
+    bool splitCondIssued;
 
-    // with the predication output of the PEs, update the predictor
-    void updatePredictor();
+    // the PE of a condition issued, -1 for not issued
+    int condPE;
 
-    /**
-     * register this result into the compare history
-     * 
-     * @param PC PC of the CMP instruction
-     * @param outcome the result of this CMP instruction
-    */
-    void recordCMP(Addr PC, bool outcome);
+    // iteration of the loop exit
+    int leIter;
+
+    // -1: not a recovery point
+    // other: need to update and the update pointer to update backup
+    int recoveryReg;
+
+    // -1: no need to rollback
+    // other: need to rollback and the rollback pointer
+    int rollbackReg;
+
+    enum iterState
+    {
+        OFF,
+        TRUE_PATH,
+        FALSE_PATH
+    };
+
+    struct iterController
+    {
+        // the iteration this controller controls
+        int iter;
+        // the state this iteration should be in
+        iterState state;
+        // a counter for how many cycles this controller should remain in OFF state
+        unsigned offCounter;
+        // if the contoller's iteration is speculative
+        bool speculative;
+        // if we are entering epilogue
+        bool epilogue;
+    };
+    iterController* controller;
+    std::vector<std::vector<iterController>> backupController;
+    // pointer pointing to the set of backup to rollback to
+    unsigned rollbackPtr;
+    // pointer pointer to the set of backup to update
+    unsigned updatePtr;
+
+
+    // the controller No. the split cond in fly belongs to
+    int splitController;
+
+
+    // returns if the instruction at t, x, y is an phi ins
+    bool isPhi(int t, int x, int y);
 };
 
 #endif

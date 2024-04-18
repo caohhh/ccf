@@ -24,7 +24,15 @@ class CGRAPredUnit : public SimObject
     /**
      * Predict the outcome of a cmp instruction
     */
-    bool predict(Addr instPC);
+    bool predict(Addr instPC, bool splitCond);
+
+    /**
+     * update the predictor with the correct outcome
+     * @param instPC PC of the CMP instruction to be updated
+     * @param SplitCond if this CMP is the split condition
+     * @param outcome resolved outcome of this instruction
+    */
+    void update(Addr instPC, bool SplitCond, bool outcome);
 
     /**
      * Updates the predictor with the correct outcome
@@ -46,6 +54,10 @@ class CGRAPredUnit : public SimObject
     */
     void squash();
 
+  protected:
+    // bits address needs to be shifted before indexing
+    unsigned shiftAmt;
+
   private:
 
     struct CGRAPredUnitStats : public Stats::Group {
@@ -58,6 +70,9 @@ class CGRAPredUnit : public SimObject
         /** Stat for number of conditional branches predicted incorrectly. */
         Stats::Scalar condIncorrect;
     } stats;
+
+    // how many unrosolved predictions are still in fly
+    unsigned inFly;
 
 };
 

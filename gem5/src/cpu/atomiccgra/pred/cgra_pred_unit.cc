@@ -6,7 +6,9 @@
 
 CGRAPredUnit::CGRAPredUnit(const Params *params)
     : SimObject(params),
-      stats(this)
+      shiftAmt(params->shiftAmt),
+      stats(this),
+      inFly(0)
 {
     DPRINTF(CGRAPred, "Created CGRA Prediction Unit\n");
 }
@@ -22,13 +24,14 @@ CGRAPredUnit::CGRAPredUnitStats::CGRAPredUnitStats(Stats::Group *parent)
 
 
 bool
-CGRAPredUnit::predict(Addr instPC)
+CGRAPredUnit::predict(Addr instPC, bool splitCond)
 {
     ++stats.lookups;
 
-    ++stats.condPredicted;
+    if (splitCond)
+        ++stats.condPredicted;
     bool prediction = lookup(instPC);
-
+    inFly++;
     DPRINTF(CGRAPred, "Predictor predicted %i for PC %s\n",
             prediction, instPC);
     return prediction;
@@ -39,4 +42,13 @@ void
 CGRAPredUnit::squash()
 {
     ++stats.condIncorrect;
+    // return to the recovery point
+}
+
+
+void
+CGRAPredUnit::update(Addr instPC, bool SplitCond, bool outcome)
+{
+
+    update(instPC, outcome);
 }

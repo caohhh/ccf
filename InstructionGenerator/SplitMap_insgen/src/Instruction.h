@@ -233,7 +233,7 @@ uint64_t encodeIns(Datatype dType, OPCode opCode, bool pred, bool cond, PEInputM
 const uint64_t noopIns = encodeIns(int32, NOOP, 0, 0, Self, Self, 0, 0, 0, false, false, false, 0);
 
 // for prologue, meaning this PE's operation is not a phi, we set the unused bit 33 as 1
-const uint64_t prologueSkip = 0x0000000300000000;
+const uint64_t prologueSkip = 0x0000000200000000;
 
 
 

@@ -237,7 +237,7 @@ class AtomicCGRA: public BaseCGRA
 
       public:
       AtomicCGRADPort(const std::string &_name, BaseCGRA* _cpu, std::string index) // index = row number
-	: AtomicCGRAPort(_name, _cpu, index), cpu(_cpu), _status(Idle)
+	    : AtomicCGRAPort(_name, _cpu, index), _status(Idle), cpu(_cpu)
         {
             cacheBlockMask = ~(cpu->cacheLineSize() - 1);
         }
@@ -347,7 +347,7 @@ class AtomicCGRA: public BaseCGRA
                   const std::vector<bool>& byte_enable = std::vector<bool>());  //override;
 
     /* CGRA readMem*/
-    Fault readMem(Addr addr, uint8_t *data, unsigned size,
+    Fault readMemCGRA(Addr addr, uint8_t *data, unsigned size,
                   Request::Flags flags,
                   const std::vector<bool>& byte_enable = std::vector<bool>(),int xdim=-1);
 
@@ -367,7 +367,7 @@ class AtomicCGRA: public BaseCGRA
                    Addr addr, Request::Flags flags, uint64_t *res,
                    const std::vector<bool>& byte_enable = std::vector<bool>()); // override;
     /* CGRA writeMem */
-    Fault writeMem(uint8_t *data, unsigned size,
+    Fault writeMemCGRA(uint8_t *data, unsigned size,
                    Addr addr, Request::Flags flags, uint64_t *res,
                    const std::vector<bool>& byte_enable = std::vector<bool>(),int xdim=-1);
 

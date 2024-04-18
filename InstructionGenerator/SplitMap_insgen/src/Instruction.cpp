@@ -59,7 +59,7 @@ Instruction::encodeCIns(Datatype dType, CondOpCode opCode, bool loopExit, bool s
   condInsWord |= ((0UL | dType) << SHIFT_C_DATATYPE) & INS_C_DATATYPE;
   condInsWord |= ((0UL | opCode) << SHIFT_C_OPCODE) & INS_C_OPCODE;
   condInsWord |= ((0UL | splitCond) << SHIFT_C_SP) & INS_C_SP;
-  condInsWord |= ((0UL | loopexit) << SHIFT_C_LE) & INS_C_LE;
+  condInsWord |= ((0UL | loopExit) << SHIFT_C_LE) & INS_C_LE;
   condInsWord |= ((0UL | 1UL) << SHIFT_COND) & INS_COND;
   condInsWord |= ((0UL | lMux) << SHIFT_C_LMUX) & INS_C_LMUX;
   condInsWord |= ((0UL | rMux) << SHIFT_C_RMUX) & INS_C_RMUX;

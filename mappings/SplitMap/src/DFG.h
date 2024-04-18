@@ -99,7 +99,7 @@ class DFG
     bool canBeSplit();
 
     // set if this DFG is a split source
-    void setSplitSource(bool ifSource);
+    void setSplitSource(int splitPath);
 
     // set the path count for this DFG
     void setPathCount(int pathCount);

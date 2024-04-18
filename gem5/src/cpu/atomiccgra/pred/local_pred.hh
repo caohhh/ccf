@@ -1,5 +1,5 @@
 /**
- * Local predictor using PC to index branch history buffer
+ * Local counter based last time predictor
 */
 
 #ifndef __CGRA__LOCAL_PRED_HH__
@@ -54,9 +54,6 @@ class LocalPred : public CGRAPredUnit
 
     /** Mask to get index bits. */
     const unsigned indexMask;
-
-
-
 };
 
 

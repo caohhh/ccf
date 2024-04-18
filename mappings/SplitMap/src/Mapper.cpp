@@ -432,6 +432,12 @@ Mapper::scheduleModulo(DFG* myDFG, std::vector<Node*> sortedNodes, int II,
     std::shuffle(tryTime.begin(), tryTime.end(), rng);
     bool scheduled = false;
 
+    // here we want to make sure the split cond node is scheduled at the earliest time slot
+    if (scheduleNode->isSplitCond()) {
+      DEBUG("[Modulo]Node is the split cond node, mapping at earliest time");
+      tryTime = {startTime};
+    }
+
     // now to schedule the node at a tryTime
     for (int scheduleTime : tryTime) {
       #ifndef NDEBUG

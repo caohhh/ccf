@@ -49,8 +49,8 @@
   maybe the extra 2 bits can be set as reserved
 
   Normal Instruction Decode:
-  63 62 61 | 60 59 58 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 | 34 | 33 32  | 31 ... 0
-  DT       |    OpCode   | P  | C  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE | AB | DB | Unused | Immediate
+  63 62 61 | 60 59 58 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 | 34 | 33  | 32 | 31 ... 0
+  DT       |    OpCode   | P  | C  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE | AB | DB | Phi |    |Immediate
 
   P-Type Instruction Decode:
   63 62 61 | 60 59 58 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 35 34 | 33 32  |31 ... 0
@@ -85,6 +85,7 @@
 #define SHIFT_WE                36
 #define SHIFT_ABUS              35
 #define SHIFT_DBUS              34
+#define SHIFT_PHI               33
 #define SHIFT_IMMEDIATE         00
 
 #define INS_DATATYPE            (WIDTH_DATATYPE)<<SHIFT_DATATYPE
@@ -99,6 +100,7 @@
 #define INS_WE                  (WIDTH_ENABLE)<<SHIFT_WE
 #define INS_AB                  (WIDTH_ENABLE)<<SHIFT_ABUS
 #define INS_DB                  (WIDTH_ENABLE)<<SHIFT_DBUS
+#define INS_PHI                 (WIDTH_ENABLE)<<SHIFT_PHI
 #define INS_IMMEDIATE           (WIDTH_IMMEDIATE)<<SHIFT_IMMEDIATE
 
 // P-Type

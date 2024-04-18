@@ -152,6 +152,15 @@ class Node
     // returns the id of the merged node, nullptr for not merged
     Node* getMergedNode();
 
+    // returns which path this node is used as an condition for, -1 for not a cond
+    int getCondBr();
+
+    // set this node as the split condition node
+    void setSplitCond();
+
+    // returns if this node is the split cond node
+    bool isSplitCond();
+
   protected:
     // unique id of Node in DFG
     int uid;
@@ -193,6 +202,8 @@ class Node
     bool loopCtrl;
     // for split mapping, the node this node is merged with
     Node* mergedNode;
+    // if this node is the split cond node
+    bool splitCond;
 };
 
 

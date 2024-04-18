@@ -35,6 +35,8 @@ class CGRAPredictor(SimObject):
     cxx_header = "cpu/atomiccgra/pred/cgra_pred_unit.hh"
     abstract = True
 
+    shiftAmt = Param.Unsigned(0, "Number of bits to shift instructions by");
+
 class LocalPredictor(CGRAPredictor):
     type = 'LocalPredictor'
     cxx_class = 'LocalPred'
@@ -42,3 +44,13 @@ class LocalPredictor(CGRAPredictor):
     
     localPredictorSize = Param.Unsigned(2048, "Size of local predictor")
     localCtrBits = Param.Unsigned(2, "Bits per counter")
+
+class HistoryPredictor(CGRAPredictor):
+    type = 'HistoryPredictor'
+    cxx_class = 'HistoryPred'
+    cxx_header = "cpu/atomiccgra/pred/history_pred.hh"
+
+    globalPredictorSize = Param.Unsigned(8192, "Size of global predictor")
+    globalCtrBits = Param.Unsigned(2, "Bits per counter")
+    choicePredictorSize = Param.Unsigned(8192, "Size of choice predictor")
+    choiceCtrBits = Param.Unsigned(2, "Bits of choice counters")

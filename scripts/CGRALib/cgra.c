@@ -192,7 +192,7 @@ int initializeParameters(unsigned int loopID)
   fread(&livein[livein_index],sizeof(unsigned long long),liveinSize,liveinFile);
   fread(&liveout[liveout_index],sizeof(unsigned long long),liveoutSize,liveoutFile);
   fread(&kernel[kernel_index],sizeof(unsigned long long),kernelSize,kernFile);
-  fread(&iter[iter_index],sizeof(unsigned),iterSize,iterFile);
+  fread(&iter[iter_index],sizeof(int),iterSize,iterFile);
 
 
   char line[256];
@@ -216,10 +216,14 @@ int initializeParameters(unsigned int loopID)
   int II = kernelSize/(XDim*YDim*3);
   int liveinLength = liveinSize/(XDim*YDim);
   int liveoutLength = liveoutSize/(XDim*YDim);
+  int iterCount;
+  fread(&iterCount,sizeof(int),1,iterFile);
+
 
   *(initCGRA + initCGRA_size*(loopID-1)) = liveinLength;
   *(initCGRA + initCGRA_size*(loopID-1) + 1) = II;
   *(initCGRA + initCGRA_size*(loopID-1) + 2) = liveoutLength;
+  *(initCGRA + initCGRA_size*(loopID-1) + 3) = iterCount;
 
   fclose(liveinFile);
   fclose(liveoutFile);
@@ -272,12 +276,12 @@ int configureCGRA(unsigned int loopID)
   strcat(directoryPath,"/initCGRA.txt");
   initFile = fopen(directoryPath, "wb");
   
-  for(unsigned i = 0; i < 3; i++)
+  for(unsigned i = 0; i < initCGRA_size; i++)
     fprintf(initFile, "%d\n", *(initCGRA + initCGRA_size*(loopID-1) + i));
   fprintf(initFile, "%ld\n", (unsigned long long) liveinPtr[loopID-1]);
   fprintf(initFile, "%ld\n", (unsigned long long) kernelPtr[loopID-1]);
   fprintf(initFile, "%ld\n", (unsigned long long) iterPtr[loopID-1]);
-  fprintf(initFile, "%ld\n", (unsigned long long) liveout[loopID-1]);
+  fprintf(initFile, "%ld\n", (unsigned long long) liveoutPtr[loopID-1]);
   fclose(initFile);
 
   return 0;

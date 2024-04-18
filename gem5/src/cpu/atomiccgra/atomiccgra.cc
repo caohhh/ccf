@@ -94,17 +94,17 @@ AtomicCGRA::AtomicCGRA(AtomicCGRAParams *p)
     : BaseCGRA(p),
       tickEvent([this]{ tick(); }, "AtomicCGRA tick",
                 false, Event::CPU_Tick_Pri),
+      cgraPred(p->predictor),
       width(p->width), locked(false),
       simulate_data_stalls(p->simulate_data_stalls),
       simulate_inst_stalls(p->simulate_inst_stalls),
       icachePort(name(), this, ".icache_port"),
       dcachePort(name(), this, ".dcache_port"),
-      dcache_access(false), dcache_latency(0),
-      ppCommit(nullptr),
       CGRA_XDim(p->CGRA_rows),
       CGRA_YDim(p->CGRA_cols),
       RFSize(p->rfsize),
-      cgraPred(p->predictor)
+      dcache_access(false), dcache_latency(0),
+      ppCommit(nullptr)
       //connection_type(p->connection)
 {
     _status = Idle;
@@ -360,9 +360,6 @@ void
 AtomicCGRA::suspendContext(ThreadID thread_num)
 {
     DPRINTF(SimpleCPU, "SuspendContext %d\n", thread_num); //TODO
-
-    SimpleExecContext& t_info = *threadInfo[curThread];
-    SimpleThread* thread = t_info.thread;
     
     assert(thread_num < numThreads);
     activeThreads.remove(thread_num);
@@ -565,7 +562,7 @@ AtomicCGRA::readMem(Addr addr, uint8_t * data, unsigned size,
 }
 
 Fault
-AtomicCGRA::readMem(Addr addr, uint8_t * data, unsigned size,
+AtomicCGRA::readMemCGRA(Addr addr, uint8_t * data, unsigned size,
                          Request::Flags flags,
                          const std::vector<bool>& byte_enable, int xdim)
 {
@@ -779,7 +776,7 @@ AtomicCGRA::writeMem(uint8_t *data, unsigned size, Addr addr,
 }
 
 Fault
-AtomicCGRA::writeMem(uint8_t *data, unsigned size, Addr addr,
+AtomicCGRA::writeMemCGRA(uint8_t *data, unsigned size, Addr addr,
                           Request::Flags flags, uint64_t *res,
                           const std::vector<bool>& byte_enable, int xdim)
 {
@@ -987,7 +984,6 @@ void
 AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
 {
     //SimpleExecContext& t_info = *threadInfo[curThread];
-    SimpleThread* thread = t_info.thread;
 
     DPRINTF(SimpleCPU, "CGRA Pipeline\n");
     Fault fault = NoFault;
@@ -1009,12 +1005,11 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
         return;
     }
 
-    // mark out all the cond ins
-    // and then predict their outcome
-    cgraIFU->markCond();
-    cgraIFU->predict();
 
     //*********FETCH********************
+    // first issue all the instructions for the PEs
+    cgraIFU->issue();
+
     for (unsigned i = 0; i < CGRA_XDim; i++) {
         for (unsigned j = 0; j < CGRA_YDim; j++) {
             // little modification compared to hardware implementation
@@ -1038,24 +1033,17 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
     // Support for multiple datatypes added in exec unit.
     for (int i = 0; i < CGRA_XDim; i++) {
         for (int j = 0; j < CGRA_YDim; j++) {
-            DPRINTF(CGRA_Detailed, "Ins: %lx @ %lx \t@ PE %d\n", 
-                    cgraIFU->getInsWord(i*CGRA_YDim + j), 
-                    thread->instAddr() + ((i*CGRA_XDim)+j)*(sizeof(unsigned long)), 
-                    (i*CGRA_YDim)+j);
+            DPRINTF(CGRA_Detailed, "Ins: %lx \t@ PE %d\n", cgraIFU->getInsWord(i*CGRA_YDim + j), (i*CGRA_YDim)+j);
 
             if (cgra_PEs[i * CGRA_YDim + j].GetDatatype() == character || 
                 cgra_PEs[i * CGRA_YDim + j].GetDatatype() == int32 || 
                 cgra_PEs[i * CGRA_YDim + j].GetDatatype() == int16) {
-                unsigned jmpCycles = cgra_PEs[i * CGRA_YDim + j].IExecute();
-                cgraIFU->setPrologBranchCycle(jmpCycles);
+                cgra_PEs[i * CGRA_YDim + j].IExecute();
             } else if (cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float32) {
-                unsigned jmpCycles = cgra_PEs[i * CGRA_YDim + j].FExecute();
-                cgraIFU->setPrologBranchCycle(jmpCycles);
+                cgra_PEs[i * CGRA_YDim + j].FExecute();
             }
-            //else if(cgra_PEs[i * CGRA_YDim + j].GetDatatype() == float64)
-            //  cgra_PEs[i * CGRA_YDim + j].DExecute();
 
-            if(!cgra_PEs[i * CGRA_YDim + j].isNOOP())
+            if (!cgra_PEs[i * CGRA_YDim + j].isNOOP())
                 cgraIFU->setConditionalReg(cgra_PEs[i * CGRA_YDim + j].getController_Reg());
             
             // output predication to IFU
@@ -1087,13 +1075,13 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
             //int content;
             if (MemBusDatatype[i] == CGRA_MEMORY_INT) {
                 // int memory read
-                readMem((Addr) MemAddress[i], (uint8_t *) &mem_content, (unsigned)MemAccessAlignment[i], (unsigned) 163, be, i);
+                readMemCGRA((Addr) MemAddress[i], (uint8_t *) &mem_content, (unsigned)MemAccessAlignment[i], (unsigned) 163, be, i);
                 MemData[i] = mem_content;
                 mem_content = 0;
                 DPRINTF(CGRA_Execute, "Read data: %d\n", MemData[i]);
             } else {
                 // float memory read
-                readMem((Addr) MemAddress[i], (uint8_t *) &FMemData[i], (unsigned)MemAccessAlignment[i], (unsigned) 163, be, i);
+                readMemCGRA((Addr) MemAddress[i], (uint8_t *) &FMemData[i], (unsigned)MemAccessAlignment[i], (unsigned) 163, be, i);
                 DPRINTF(CGRA_Execute, "Read data: %d\n", FMemData[i]);
             }
             MemAccessCount++;
@@ -1107,13 +1095,13 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
                         "In writing INT %d\t to address:%lx\t -- row: %d\n", 
                         MemData[i], (Addr) (MemAddress[i] & 0xffffffff), i);
                 const std::vector<bool> be1; // byte_enable placeholder, not used in function
-                writeMem((uint8_t *) &MemData[i], (unsigned) MemAccessAlignment[i], 
+                writeMemCGRA((uint8_t *) &MemData[i], (unsigned) MemAccessAlignment[i], 
                             (Addr) (MemAddress[i] & 0xffffffff), (unsigned) 0b10110111, unknownRes, be1, i);
                 /*****************************/
             } else {
                 DPRINTF(CGRA||CGRA_Detailed, "In writing %f\t to address:%lx\t -- row: %d\n" , FMemData[i], MemAddress[i], i);
                 const std::vector<bool> be1; // byte_enable placeholder, not used in function
-                writeMem((uint8_t *) &FMemData[i], (unsigned) MemAccessAlignment[i], 
+                writeMemCGRA((uint8_t *) &FMemData[i], (unsigned) MemAccessAlignment[i], 
                             (Addr) MemAddress[i], (unsigned) 0b10110111, unknownRes, be1, i);
             }
             MemAccessCount++;
@@ -1128,9 +1116,15 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
     
     //DPRINTF(Instruction_print, "Fault after exe: %d\n",(int)fault);
 
- 
-    if (fault != NoFault || !t_info.stayAtPC) 
-        cgraIFU->advancePC(t_info.thread);
+    cgraIFU->advanceState();
+
+    if (cgraIFU->getRecoveryReg() != -1) {
+        for (unsigned i = 0; i < CGRA_XDim * CGRA_YDim; i++)
+            cgra_PEs[i].setRecovery(cgraIFU->getRecoveryReg());
+    } else if (cgraIFU->getRollbackReg() != -1) {
+        for (unsigned i = 0; i < CGRA_XDim * CGRA_YDim; i++)
+            cgra_PEs[i].rollback(cgraIFU->getRollbackReg());
+    }
 
   
     if (tryCompleteDrain()) {
@@ -1150,6 +1144,7 @@ AtomicCGRA::CGRA_Execution(SimpleExecContext& t_info)
     }
     DPRINTF(CGRA_Execute, "Exiting schedule events\n"); 
 } //CGRA_Execution
+
 
 void AtomicCGRA::CGRA_advanceTime()
 {
@@ -1233,7 +1228,7 @@ AtomicCGRA::tick()
             AccessCount = 0;
         }
 
-
+        // fetch instruction, no need for CGRA 
         if (is_CPU()) {
             if (needToFetch) {
                 ifetch_req->taskId(taskId());
@@ -1263,51 +1258,11 @@ AtomicCGRA::tick()
                     assert(!ifetch_pkt.isError());
                 } // end of needToFetch
             } // end of fault == NoFault
-        } else { // end of is_CPU()
-            if (needToFetch) {
-                ifetch_req->taskId(taskId());
-                // get PC and size to fetch
-                setupFetchRequest(ifetch_req);
+        } 
 
-                Addr frag_addr = ifetch_req->getVaddr();
-                int frag_size = 0;
-                int size_left = ifetch_req->getSize();
-                uint64_t * instruction = cgraIFU->getInstPtr();
-                
-                // for multiple cache line access
-                while (size_left > 0) {
-                    frag_size = std::min(cacheLineSize() - addrBlockOffset(frag_addr, cacheLineSize()),(Addr) size_left);
-                    Addr inst_addr = threadInfo[curThread]->thread->pcState().instAddr();
-                    ifetch_req->setVirt(frag_addr, frag_size, Request::INST_FETCH, dataRequestorId(), inst_addr);
-                    size_left -= frag_size;
-                    // to physical address
-                    fault = thread->itb->translateAtomic(ifetch_req, thread->getTC(),
-                                                    BaseTLB::Execute);
-                    DPRINTF(Instruction_Fetch,"vaddr: %#x, paddr: %#x, size: %d, left: %d\n",
-                                                frag_addr, ifetch_req->getPaddr(), frag_size, size_left);
-                    if (fault == NoFault) {
-                        icache_latency = 0;
-                        icache_access = false;
-                        dcache_access = false; // assume no dcache access
-
-                        if (needToFetch) {
-                            icache_access = true;
-                            Packet ifetch_pkt = Packet(ifetch_req, MemCmd::ReadReq);
-                            ifetch_pkt.dataStatic(instruction);
-                            icache_latency += sendPacket(icachePort, &ifetch_pkt);
-                            assert(!ifetch_pkt.isError());
-                        }
-                    } else {
-                        break;
-                    }
-                    frag_addr += frag_size;
-                    instruction += frag_size/sizeof(instruction);
-                }
-            }
-        }
-
+        // execution
         if (is_CPU()) {
-	        //DPRINTF(SimpleCPU, "CGRA is_CPU().\n"); 
+            //DPRINTF(SimpleCPU, "CGRA is_CPU().\n"); 
             //DPRINTF(CGRA, "inside isCPU reg: %d\n", (int) thread->readIntReg(11));
 	  
             #ifdef DEBUG_BINARY
@@ -1339,27 +1294,27 @@ AtomicCGRA::tick()
             }
 
             #ifdef PC_DEBUG
-                    if((unsigned long) thread->instAddr() >= PC_DEBUG_BASE && (unsigned long) thread->instAddr() <= PC_DEBUG_TOP){
-                        DPRINTF(CGRA||CGRA_Detailed, "Inst %lx @ PC: %lx\n", inst, thread->instAddr());
-                        DPRINTF(CGRA||CGRA_Detailed, "\tR0: %d - R1: %d - R2: %d - R3: %d - R4: %d - R5: %d - R6: %d - R7: %d\n", \
-                            (int)thread->readIntReg(0), \
-                            (int)thread->readIntReg(1), \
-                            (int)thread->readIntReg(2), \
-                            (int)thread->readIntReg(3), \
-                            (int)thread->readIntReg(4), \
-                            (int)thread->readIntReg(5), \
-                            (int)thread->readIntReg(6), \
-                            (int)thread->readIntReg(7));
-                        DPRINTF(CGRA||CGRA_Detailed, "\tR8: %d - R9: %d - R10: %d - R11: %lx - R12: %lx - R13: %lx - R14: %lx - R15: %lx\n", \
-                            (int)thread->readIntReg(8), \
-                            (int)thread->readIntReg(9), \
-                            (int)thread->readIntReg(10),\
-                            (int)thread->readIntReg(11),\
-                            (int)thread->readIntReg(12),\
-                            (int)thread->readIntReg(13),\
-                            (int)thread->readIntReg(14),\
-                            (int)thread->readIntReg(15));
-                    }
+                if((unsigned long) thread->instAddr() >= PC_DEBUG_BASE && (unsigned long) thread->instAddr() <= PC_DEBUG_TOP){
+                    DPRINTF(CGRA||CGRA_Detailed, "Inst %lx @ PC: %lx\n", inst, thread->instAddr());
+                    DPRINTF(CGRA||CGRA_Detailed, "\tR0: %d - R1: %d - R2: %d - R3: %d - R4: %d - R5: %d - R6: %d - R7: %d\n", \
+                        (int)thread->readIntReg(0), \
+                        (int)thread->readIntReg(1), \
+                        (int)thread->readIntReg(2), \
+                        (int)thread->readIntReg(3), \
+                        (int)thread->readIntReg(4), \
+                        (int)thread->readIntReg(5), \
+                        (int)thread->readIntReg(6), \
+                        (int)thread->readIntReg(7));
+                    DPRINTF(CGRA||CGRA_Detailed, "\tR8: %d - R9: %d - R10: %d - R11: %lx - R12: %lx - R13: %lx - R14: %lx - R15: %lx\n", \
+                        (int)thread->readIntReg(8), \
+                        (int)thread->readIntReg(9), \
+                        (int)thread->readIntReg(10),\
+                        (int)thread->readIntReg(11),\
+                        (int)thread->readIntReg(12),\
+                        (int)thread->readIntReg(13),\
+                        (int)thread->readIntReg(14),\
+                        (int)thread->readIntReg(15));
+                }
             #endif
 
             // @todo remove me after debugging with legion done
@@ -1412,7 +1367,6 @@ AtomicCGRA::tick()
             if (cgraIFU->getState() == CGRA_IFU::FINISH) {
                 DPRINTF(CGRA_Detailed,"\n************************PREPARING TO MOVE TO CPU************\n");
                 Prepare_to_Switch_Back_to_CPU(thread);
-                cgraIFU->printCMPHistory();
                 DPRINTF(CGRA||CGRA_Detailed,"\n\n********************** CGRA Execution is over @ %d **********************\n", debugCycles);
                 Restore_CPU_Execution(thread);
                 Switch_To_CPU();
@@ -1515,10 +1469,6 @@ AtomicCGRA::Setup_CGRA()
 
             DPRINTF(Setup_DEBUG, "Passed the setting of RF \n"); 
             //set neighbors for PEs.
-            //if(connection_type == Simple_Connection) 
-
-            //{
-            // Set Integer Neighbors
             cgra_PEs[current_PE].SetNeighbours(
                 cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
                 cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),	//Right
@@ -1538,92 +1488,6 @@ AtomicCGRA::Setup_CGRA()
                 cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getPredOutputPtr(),  //Right
                 cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getPredOutputPtr(),  //Up
                 cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getPredOutputPtr()); //Down
-            //}
-            /*else if(connection_type == Diagonal_Connection)
-            {
-
-                if(CGRA_XDim == CGRA_YDim)
-                {
-                cgra_PEs[current_PE].SetNeighbours(
-                    cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
-                    cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
-                    cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
-                    cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down
-
-                if(current_position == topleftcorner)
-                    cgra_PEs[current_PE].SetLTCornerDiagonal(
-                        cgra_PEs[current_PE + (CGRA_YDim+1)].getOutputPtr(),
-                        cgra_PEs[(CGRA_XDim * CGRA_YDim) -1].getOutputPtr());    
-                else if(current_position == toprightcorner)
-                    cgra_PEs[current_PE].SetRTCornerDiagonal( 
-                        cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr(),
-                        cgra_PEs[current_PE * CGRA_XDim].getOutputPtr()); 
-                else if(current_position == toprow)
-                    cgra_PEs[current_PE].SetTopRowDiagonal(
-                        cgra_PEs[current_PE + (CGRA_YDim - 1)].getOutputPtr(),
-                        cgra_PEs[current_PE + (CGRA_YDim + 1)].getOutputPtr());
-                else if(current_position == bottomrightcorner)  
-                    cgra_PEs[current_PE].SetRBCornerDiagonal(
-                        cgra_PEs[current_PE - (CGRA_YDim - 2)].getOutputPtr(),
-                        cgra_PEs[0].getOutputPtr());
-                else if(current_position == rightcol)
-                    cgra_PEs[current_PE].SetRightColDiagonal(
-                        cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr(),
-                        cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr());
-                else if(current_position == bottomleftcorner)
-                    cgra_PEs[current_PE].SetLBCornerDiagonal(
-                        cgra_PEs[current_PE/CGRA_XDim].getOutputPtr(),
-                        cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr()); 
-                else if(current_position == bottomrow)
-                    cgra_PEs[current_PE].SetBottomRowDiagonal(
-                        cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
-                        cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr());
-                else if(current_position == leftcol)
-                    cgra_PEs[current_PE].SetLeftColDiagonal(
-                        cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
-                        cgra_PEs[current_PE + CGRA_YDim + 1].getOutputPtr());
-                else if(current_position == regular)
-                    cgra_PEs[current_PE].SetRegularDiagonal(
-                        cgra_PEs[current_PE - CGRA_YDim - 1].getOutputPtr(),
-                        cgra_PEs[current_PE - CGRA_YDim + 1].getOutputPtr(),
-                        cgra_PEs[current_PE + CGRA_YDim - 1].getOutputPtr(),
-                        cgra_PEs[current_PE + CGRA_YDim + 1].getOutputPtr());
-                }
-                else
-                {
-                cgra_PEs[current_PE].SetNeighbours(
-                    cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
-                    cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
-                    cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
-                    cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down  
-                }
-
-
-
-            }
-            else if(connection_type == Hop_Connection)
-            {
-                cgra_PEs[current_PE].SetNeighbours(
-                    cgra_PEs[i * CGRA_YDim + ((jIndex - 1) % CGRA_YDim)].getOutputPtr(), //Left
-                    cgra_PEs[i * CGRA_YDim + ((jIndex + 1) % CGRA_YDim)].getOutputPtr(),  //Right
-                    cgra_PEs[(((iIndex - 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),  //Up
-                    cgra_PEs[(((iIndex + 1) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr()); //Down
-
-                cgra_PEs[current_PE].SetHopNeighbors(
-                    cgra_PEs[i * CGRA_YDim + ((jIndex - 2) % CGRA_YDim)].getOutputPtr(),
-                    cgra_PEs[i * CGRA_YDim + ((jIndex + 2) % CGRA_YDim)].getOutputPtr(),
-                    cgra_PEs[(((iIndex - 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),
-                    cgra_PEs[(((iIndex + 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr());
-
-            }
-            else if(connection_type == Only_Hop_Connection)
-            {
-                cgra_PEs[current_PE].SetHopNeighbors(
-                    cgra_PEs[i * CGRA_YDim + ((jIndex - 2) % CGRA_YDim)].getOutputPtr(),
-                    cgra_PEs[i * CGRA_YDim + ((jIndex + 2) % CGRA_YDim)].getOutputPtr(),
-                    cgra_PEs[(((iIndex - 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr(),
-                    cgra_PEs[(((iIndex + 2) % CGRA_XDim) * CGRA_YDim) + j].getOutputPtr());
-            }*/
             DPRINTF(Setup_DEBUG, "Passed the setting of neighbors \n");
 
             cgra_PEs[i * CGRA_YDim + j].setFDataBus((&FMemData[i]));
@@ -1659,11 +1523,39 @@ void AtomicCGRA::Setup_CGRA_Execution(SimpleThread* thread, int loopID)
     backPC = thread->pcState();
     cgraIFU->setupExec(thread, loopID);
 
+    // for the setup part, we also need to fetch all the instructions
+    unsigned size;
+    uint64_t* ins;
+    long addr;
+    std::tie(size, ins, addr) = cgraIFU->getLiveinReq();
+    Fault fault = readMem((Addr)addr, (uint8_t*)ins, size, Request::ATOMIC_RETURN_OP);
+    if (fault != NoFault)
+        warn("Fault when reading livein\n");
+
+    std::tie(size, ins, addr) = cgraIFU->getKernelReq();
+    fault = readMem((Addr)addr, (uint8_t*)ins, size, Request::ATOMIC_RETURN_OP);
+    if (fault != NoFault)
+        warn("Fault when reading kernel\n");
+
+    std::tie(size, ins, addr) = cgraIFU->getLiveoutReq();
+    fault = readMem((Addr)addr, (uint8_t*)ins, size, Request::ATOMIC_RETURN_OP);
+    if (fault != NoFault)
+        warn("Fault when reading liveout\n");
+    
+    int* info;
+    std::tie(size, info, addr) = cgraIFU->getIterReq();
+    fault = readMem((Addr)addr, (uint8_t*)info, size, Request::ATOMIC_RETURN_OP);
+    if (fault != NoFault)
+        warn("Fault when reading iter\n");
+
+    cgraIFU->printIns();
+
     DPRINTF(CGRA,"\n********************** CGRA Execution is started @ %d ****************************\n", debugCycles);
 
     for (int i = 0; i < CGRA_XDim; i++) {
         for (int j = 0; j < CGRA_YDim; j++) {
             cgra_PEs[i * CGRA_YDim + j].SetController_Reg();
+            cgra_PEs[i * CGRA_YDim + j].setupBackup(cgraIFU->getIterCount());
         }
     }
 }

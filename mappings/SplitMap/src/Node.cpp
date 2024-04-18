@@ -25,6 +25,7 @@ Node::Node(Instruction_Operation ins, Datatype dt, int laten, int id, std::strin
   liveOut = false;
   loopCtrl = false;
   mergedNode = nullptr;
+  splitCond = false;
 }
 
 
@@ -45,6 +46,7 @@ Node::Node(const Node& originalNode)
   storeOutputAddressBus = originalNode.storeOutputAddressBus;
   outputDataBus = originalNode.outputDataBus;
   mergedNode = nullptr;
+  splitCond = originalNode.splitCond;
 }
 
 
@@ -518,6 +520,27 @@ Node*
 Node::getMergedNode()
 {
   return mergedNode;
+}
+
+
+int
+Node::getCondBr()
+{
+  return condBrId;
+}
+
+
+void
+Node::setSplitCond()
+{
+  splitCond = true;
+}
+
+
+bool
+Node::isSplitCond()
+{
+  return splitCond;
 }
 
 /***********************routeNode********************************/

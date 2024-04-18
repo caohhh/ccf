@@ -124,7 +124,8 @@ CGRA::updateDataSource(std::vector<Node*> nodeSet, std::map<int, int> constants,
                   }
                   // set the source
                   pe->setSource(path, i, getDirection(sourcePE, pe));
-                  DEBUG("[Data Source]Source " << i << ": PE " << getDirection(sourcePE, pe));
+                  DEBUG("[Data Source]Source " << i << ": PE " << getDirection(sourcePE, pe) <<
+                        " <" << std::get<1>(sourcePE->getCoord()) << ", " << std::get<2>(sourcePE->getCoord()) << ">");
                 }
               }
             } // end of iterating through operands
@@ -155,7 +156,8 @@ CGRA::updateDataSource(std::vector<Node*> nodeSet, std::map<int, int> constants,
                   }
                   // set the source
                   pe->setSource(path, 1, getDirection(sourcePE, pe));
-                  DEBUG("[Data Source]Source " << 1 << ": PE " << getDirection(sourcePE, pe));
+                  DEBUG("[Data Source]Source " << 1 << ": PE " << getDirection(sourcePE, pe) <<
+                        " <" << std::get<1>(sourcePE->getCoord()) << ", " << std::get<2>(sourcePE->getCoord()) << ">");
                 }
               } else 
                 FATAL("[Data Source]ERROR! store data with no data source");
@@ -255,17 +257,17 @@ CGRA::getDirection(PE* sourcePE, PE* pe)
     if (sourceY == y)
       return same;
     else if (sourceY == (y + 1) % ySize)
-      return up;
+      return right;
     else if (y == (sourceY + 1) % ySize)
-      return down;
+      return left;
     else
       FATAL("[Direction]2 PE not connected with same x");
   } else if (sourceY == y) {
     // sourceX != x
     if (sourceX == (x + 1) % xSize)
-      return right;
+      return down;
     else if (x == (sourceX + 1) % xSize)
-      return left;
+      return up;
     else
       FATAL("[Direction]2 PE not connected with same y");
 
@@ -475,6 +477,7 @@ CGRA::dumpIns()
   // number of time extanded PEs
   unsigned numPe = xSize * ySize * II;
   iteration.write(reinterpret_cast<const char*>(&numPe), sizeof(numPe));
+  int maxIter = -1;
   // Write the instructions to the file
   for (int t = 0; t < II; t++) {
     for (int x = 0; x < xSize; x++) {
@@ -484,6 +487,8 @@ CGRA::dumpIns()
         auto insF = pe->getInsWord().second;
         auto insP = pe->getProIns();
         auto IT = pe->getIter();
+        if (IT > maxIter)
+          maxIter = IT;
         kernel.write(reinterpret_cast<const char*>(&insT), sizeof(insT));
         kernel.write(reinterpret_cast<const char*>(&insF), sizeof(insF));
         kernel.write(reinterpret_cast<const char*>(&insP), sizeof(insP));
@@ -491,6 +496,9 @@ CGRA::dumpIns()
       }
     }
   }
+  maxIter++;
+  // at last write the max iter
+  iteration.write(reinterpret_cast<const char*>(&maxIter), sizeof(maxIter));
   kernel.close();
   iteration.close();
   // last the liveout
@@ -736,8 +744,15 @@ PE::generateIns()
           else
             FATAL("[genIns]ERROR! Can't find the register for live in");
         }
+        bool we = false;
+        int regW = 0;
+        if (node->isLiveOut()) {
+          // if a node is liveout, it needs to write to its register
+          we = true;
+          regW = liveOutReg[node->getLiveOut()];
+        }
         insWordPath[path] = Instruction::encodeCIns(Instruction::int32, opCode, loopExit, spBit, lMux, 
-                        rMux, reg1, reg2, 0, false, brImm, imm);
+                        rMux, reg1, reg2, regW, we, brImm, imm);
         DEBUG("[genIns]C type ins word for path " << path << " is " << std::hex << insWordPath[path]);
 
       } else if (node->isPType()) {
@@ -835,8 +850,15 @@ PE::generateIns()
         // regular ins word
         if (node->getOp() == ld_data) {
           // load data: will just be an or op with source from bus
+          bool we = false;
+          int regW = 0;
+          if (node->isLiveOut()) {
+            // if a node is liveout, it needs to write to its register
+            we = true;
+            regW = liveOutReg[node->getLiveOut()];
+          }
           insWordPath[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, 
-                          false, Instruction::DataBus, Instruction::Immediate, 0, 0, 0, false, false, false, 0);
+                          false, Instruction::DataBus, Instruction::Immediate, 0, 0, regW, we, false, false, 0);
           DEBUG("[genIns]LD ins word for path " << path << " is " << std::hex << insWordPath[path]);
         } else if (node->getOp() == st_data) {
           // store data will be an or op of lmux with 0, with data bus asserted
@@ -851,8 +873,15 @@ PE::generateIns()
           auto lMux = dirToMux(sourceDirections[path][0]);
           if (lMux == Instruction::Immediate)
             FATAL("[genIns]ERROR! Routing constant");
+          bool we = false;
+          int regW = 0;
+          if (node->isLiveOut()) {
+            // if a node is liveout, it needs to write to its register
+            we = true;
+            regW = liveOutReg[node->getLiveOut()];
+          }
           insWordPath[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
-                          lMux, Instruction::Immediate, 0, 0, 0, false, false, false, 0);
+                          lMux, Instruction::Immediate, 0, 0, regW, we, false, false, 0);
           DEBUG("[genIns]Route ins word for path " << path << " is " << std::hex << insWordPath[path]);
         } else {
           Instruction::OPCode opCode;
@@ -936,8 +965,15 @@ PE::generateIns()
             else
               FATAL("[genIns]ERROR! Can't find the register for live in");
           }
+          bool we = false;
+          int regW = 0;
+          if (node->isLiveOut()) {
+            // if a node is liveout, it needs to write to its register
+            we = true;
+            regW = liveOutReg[node->getLiveOut()];
+          }
           insWordPath[path] = Instruction::encodeIns(Instruction::int32, opCode, false, false, 
-                          lMux, rMux, reg1, reg2, 0, false, false, false, imm);
+                          lMux, rMux, reg1, reg2, regW, we, false, false, imm);
           DEBUG("[genIns]Regular ins word for path " << path << " is " << std::hex << insWordPath[path]);
         }
       }

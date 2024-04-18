@@ -577,9 +577,16 @@ DFG::canBeSplit()
 
 
 void
-DFG::setSplitSource(bool ifSource)
+DFG::setSplitSource(int splitPath)
 {
-  splitSource = ifSource;
+  if (splitPath == -1)
+    splitSource = false;
+  else {
+    splitSource = true;
+    for (auto node : nodeSet)
+      if (node->getCondBr() == splitPath)
+        node->setSplitCond();
+  }
 }
 
 
