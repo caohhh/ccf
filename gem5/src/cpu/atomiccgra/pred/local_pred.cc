@@ -42,7 +42,7 @@ LocalPred::update(Addr instPC, bool outcome)
         DPRINTF(CGRAPred, "updated as false.\n");
         localCtrs[local_predictor_idx]--;
     }
-
+    backupCtrs[updatePtr] = localCtrs;
 }
 
 
@@ -55,7 +55,8 @@ LocalPred::lookup(Addr instPC)
     DPRINTF(CGRAPred, "Looking up index %#x\n",
             local_predictor_idx);
 
-    uint8_t counter_val = localCtrs[local_predictor_idx];
+    auto predictSet = backupCtrs[predictPtr];
+    uint8_t counter_val = predictSet[local_predictor_idx];
 
     DPRINTF(CGRAPred, "prediction is %i.\n",
             (int)counter_val);
@@ -80,6 +81,20 @@ LocalPred::getPrediction(uint8_t &count)
 {
     // Get the MSB of the count
     return (count >> (localCtrBits - 1));
+}
+
+
+void
+LocalPred::setupBackup()
+{
+    backupCtrs.resize(iterCount, std::vector<SatCounter>(localPredictorSets, SatCounter(localCtrBits)));
+}
+
+
+void
+LocalPred::rollback()
+{
+    localCtrs = backupCtrs[predictPtr];
 }
 
 

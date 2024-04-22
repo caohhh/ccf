@@ -31,8 +31,9 @@ class CGRAPredUnit : public SimObject
      * @param instPC PC of the CMP instruction to be updated
      * @param SplitCond if this CMP is the split condition
      * @param outcome resolved outcome of this instruction
+     * @param squashed if this update is after a squash
     */
-    void update(Addr instPC, bool SplitCond, bool outcome);
+    void update(Addr instPC, bool SplitCond, bool outcome, bool squashed);
 
     /**
      * Updates the predictor with the correct outcome
@@ -41,7 +42,7 @@ class CGRAPredUnit : public SimObject
     */
     virtual void update(Addr instPC, bool outcome) = 0;
 
-      /**
+    /**
      * Looks up a given PC in the predictor to see the outcome
      * @param instPC The PC to look up.
      * @return predicted outcome of the CMP instruction
@@ -54,12 +55,32 @@ class CGRAPredUnit : public SimObject
     */
     void squash();
 
+    /**
+     * set the iteration count, used as the number of backup sets to use
+    */
+    void setIterCount(unsigned count);
+
   protected:
     // bits address needs to be shifted before indexing
     unsigned shiftAmt;
+    // the iteration count of the current task
+    unsigned iterCount;
+    // pointer to the set of predictor used for prediction (no speculative info is used to update this set)
+    unsigned predictPtr;
+    // pointer to the set of predictor to update
+    unsigned updatePtr;
+
+    /**
+     * setup the backups
+    */
+    virtual void setupBackup() = 0;
+
+    /**
+     * roll back to the predict set
+    */
+    virtual void rollback() = 0;
 
   private:
-
     struct CGRAPredUnitStats : public Stats::Group {
         CGRAPredUnitStats(Stats::Group *parent);
 
@@ -70,10 +91,6 @@ class CGRAPredUnit : public SimObject
         /** Stat for number of conditional branches predicted incorrectly. */
         Stats::Scalar condIncorrect;
     } stats;
-
-    // how many unrosolved predictions are still in fly
-    unsigned inFly;
-
 };
 
 

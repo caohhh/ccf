@@ -94,6 +94,9 @@ CGRA_IFU::setupExec(SimpleThread *thread, int loopID)
     liveoutIns = new uint64_t[cgraXDim * cgraYDim * liveoutLen];
     kernelIns = new uint64_t[cgraXDim * cgraYDim * II * 3];
     iterInfo = new int[cgraXDim * cgraYDim * II];
+    
+    // setup predictor
+    cgraPred->setIterCount(iterCount);
 
     // initialize all the controllers
     controller = new iterController[iterCount];
@@ -164,7 +167,7 @@ CGRA_IFU::advanceState()
                     rollbackPtr = (rollbackPtr + 1) % iterCount;
                     // update predicter
                     Addr splitPC = cgraXDim * cgraYDim * II;
-                    cgraPred->update(splitPC, true, condResult);
+                    cgraPred->update(splitPC, true, condResult, false);
                 } else {
                     // rollback needed
                     DPRINTF(CGRA_IFU, "controller %d state predicted incorrect, rollback needed\n", splitController);
@@ -189,7 +192,7 @@ CGRA_IFU::advanceState()
                     // update predictor
                     cgraPred->squash();
                     Addr splitPC = cgraXDim * cgraYDim * II;
-                    cgraPred->update(splitPC, true, condResult);
+                    cgraPred->update(splitPC, true, condResult, true);
                     // reset len
                     len = II;
                     // rollback should also reset condition reg
@@ -200,7 +203,7 @@ CGRA_IFU::advanceState()
             // the issued cond is not the split cond, just need to update the predictor
             unsigned t = II - len + 1;
             Addr condPC = t * cgraXDim * cgraYDim + condPE;
-            cgraPred->update(condPC, false, condResult);
+            cgraPred->update(condPC, false, condResult, false);
         }
     }
 

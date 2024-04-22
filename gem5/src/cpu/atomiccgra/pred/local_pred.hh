@@ -26,6 +26,9 @@ class LocalPred : public CGRAPredUnit
 
     bool lookup(Addr instPC);
 
+  protected:
+    void setupBackup();
+    void rollback();
 
   private:
     /**
@@ -37,7 +40,7 @@ class LocalPred : public CGRAPredUnit
     inline bool getPrediction(uint8_t &count);
 
 
-     /** Size of the local predictor. */
+    /** Size of the local predictor. */
     const unsigned localPredictorSize;
 
     /** Number of bits of the local predictor's counters. */
@@ -54,6 +57,9 @@ class LocalPred : public CGRAPredUnit
 
     /** Mask to get index bits. */
     const unsigned indexMask;
+
+    // backup related
+    std::vector<std::vector<SatCounter>> backupCtrs;
 };
 
 

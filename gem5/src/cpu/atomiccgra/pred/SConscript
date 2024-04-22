@@ -36,6 +36,7 @@ SimObject('CGRAPredictor.py')
 Source('cgra_pred_unit.cc')
 Source('local_pred.cc')
 Source('history_pred.cc')
+Source('tournament_pred.cc')
 
 
 DebugFlag('CGRAPred')

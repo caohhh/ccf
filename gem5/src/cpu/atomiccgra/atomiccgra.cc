@@ -92,9 +92,9 @@ AtomicCGRA::init()
 
 AtomicCGRA::AtomicCGRA(AtomicCGRAParams *p)
     : BaseCGRA(p),
+      cgraPred(p->predictor),
       tickEvent([this]{ tick(); }, "AtomicCGRA tick",
                 false, Event::CPU_Tick_Pri),
-      cgraPred(p->predictor),
       width(p->width), locked(false),
       simulate_data_stalls(p->simulate_data_stalls),
       simulate_inst_stalls(p->simulate_inst_stalls),

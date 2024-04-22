@@ -20,11 +20,15 @@ class HistoryPred : public CGRAPredUnit
 
     void update(Addr instPC, bool outcome);
     bool lookup(Addr instPC);
-    
+  
+  protected:
+    void setupBackup();
+
+    void rollback();
+
   private:
     void updateGlobalHistReg(bool taken);
 
-    // the GHR will be 32 bits, with the bits after defined used as backup
     unsigned globalHistoryReg;
     unsigned globalHistoryBits;
     unsigned historyRegisterMask;
@@ -46,6 +50,12 @@ class HistoryPred : public CGRAPredUnit
     unsigned choiceThreshold;
     unsigned takenThreshold;
     unsigned notTakenThreshold;
+
+    // backup and restore related
+    std::vector<unsigned> backupGHR;
+    std::vector<std::vector<SatCounter>> backupChoice;
+    std::vector<std::vector<SatCounter>> backupTaken;
+    std::vector<std::vector<SatCounter>> backupNotTaken;
 };
 
 
