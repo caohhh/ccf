@@ -22,12 +22,13 @@ objFound=0;
 objNum=0
 target_arm=0
 obj=""
-src="clang -w -g -O3 -mllvm -force-vector-width=1 -fno-unroll-loops -Wpadded --target=armv7a-none-linux-eabi -isystem /usr/arm-linux-gnueabi/include";
-srcIR="clang -w -g -O3 -mllvm -force-vector-width=1 -Wpadded -fno-unroll-loops --target=armv7a-none-linux-eabi -isystem /usr/arm-linux-gnueabi/include -S -o - -emit-llvm";
+src="clang -w -g -O3 -mllvm -force-vector-width=1 -fno-unroll-loops -fno-builtin -Wpadded --target=armv7a-none-linux-eabi -isystem /usr/arm-linux-gnueabi/include";
+srcIR="clang -w -g -O3 -mllvm -force-vector-width=1 -Wpadded -fno-unroll-loops -fno-builtin --target=armv7a-none-linux-eabi -isystem /usr/arm-linux-gnueabi/include -S -o - -emit-llvm";
 LIB="";
 zero=0;
 MakeType=2;
 split=-1;
+splitNum=0
 
 j=1
 for i in "$@"
@@ -61,7 +62,12 @@ do
     if [[ "$i" == *-split* ]]
     then
         echo "split mapping"
-        split=0;
+        splitNum=$(( j + 1 ))
+    fi
+
+    if [[ $j -eq $splitNum ]]
+    then
+        split="$i"
     fi
 
     ((j = j + 1))
@@ -115,9 +121,14 @@ objFound=0;
 if [ $MakeType -eq 1 ]
 then
     #TypeOne
+    j=1
     for i in "$@"
     do 
-        src+=" $i"
+        if [[ "$i" != *-split* && "$j" != "$splitNum" ]]
+        then
+            src+=" $i"
+        fi
+        ((j=j+1))
     done
     $src
     for i in "$@"
@@ -252,9 +263,11 @@ if [ -d "CGRAExec" ]; then
         map="$ccf_root/mappings/SplitMap/bin"
         echo "mapping with SplitMap"
         $map/SplitMap -EDGE $llvmedge -NODE $llvmnode -X $X -Y $Y -R $R -MSA $MSA -MAPII $MAPII -MAX_MAP $MAX_MAP -MAX_II $MAX_II -LAMBDA $LAMBDA
-        
+        echo "done mapping"
+
         insgen="$ccf_root/InstructionGenerator/SplitMap_insgen/bin"
         $insgen/insgen $X $Y $llvmnode node.sch CGRA.sch liveout_node.txt liveout_edge.txt Control_Node.txt livein_edge.txt livein_node.txt ../../$obj
+        echo "done insgen"
         cd ..
     done
     cd ..
