@@ -197,8 +197,10 @@ Mapper::generateMap(Parser* myParser)
     DEBUG("[Mapper]Done calculating resMII of the trueDFG as " << trueResMII << ", falseDFG as " << falseResMII);
 
     // find memory resource MII
-    int trueMemMII = ceil(float(trueDFG->getLoadOpCount() + trueDFG->getStoreOpCount()) / cgraInfo.Y_Dim);
-    int falseMemMII = ceil(float(falseDFG->getLoadOpCount() + falseDFG->getStoreOpCount()) / cgraInfo.Y_Dim);
+    int trueMemMII = ceil(float(trueDFG->getLoadOpCount() + trueDFG->getStoreOpCount()) 
+                        / (cgraInfo.X_Dim * cgraInfo.PER_ROW_MEM_AVAILABLE));
+    int falseMemMII = ceil(float(falseDFG->getLoadOpCount() + falseDFG->getStoreOpCount()) 
+                        / (cgraInfo.X_Dim * cgraInfo.PER_ROW_MEM_AVAILABLE));
     DEBUG("[Mapper]Done calculating memMII of the trueDFG as " << trueMemMII << ", falseDFG as " << falseMemMII);
 
     // the MII is the largest of the three
@@ -236,7 +238,8 @@ Mapper::generateMap(Parser* myParser)
     DEBUG("[Mapper]Done calculating resMII as " << resMII);
 
     // find memory resource MII
-    int memMII = ceil(float(originalDFG->getLoadOpCount() + originalDFG->getStoreOpCount()) / cgraInfo.Y_Dim);
+    int memMII = ceil(float(originalDFG->getLoadOpCount() + originalDFG->getStoreOpCount()) 
+                  / (cgraInfo.X_Dim * cgraInfo.PER_ROW_MEM_AVAILABLE));
     DEBUG("[Mapper]Done calculating memMII as " << memMII);
 
     // the MII is the largest of the three
@@ -272,8 +275,14 @@ Mapper::generateMap(Parser* myParser)
   // ALAP Feasible
   // the ALAP schedule considering resources available
   schedule* alapFeasibleOrig = new schedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
-  scheduleALAPFeasible(originalDFG, length, alapFeasibleOrig, asapFeasibleOrig);
-  DEBUG("[Mapper]ALAP Feasible schedule successful");
+  int oldL = length;
+  while (!scheduleALAPFeasible(originalDFG, length, alapFeasibleOrig, asapFeasibleOrig)) {
+    length++;
+    alapFeasibleOrig = new schedule(cgraInfo.X_Dim, cgraInfo.Y_Dim);
+    if (length > (2 * oldL))
+      FATAL("ERROR! ALAP schedule too long");
+  }
+  DEBUG("[Mapper]ALAP Feasible schedule successful with length of " << length);
 
   DEBUG("[Mapper]Done premapping with II of " << MII);
 
@@ -291,10 +300,11 @@ Mapper::generateMap(Parser* myParser)
     DEBUG("[Mapper]Mapping for II: " << currentII);
     // Fraction of scheduling space based on user input.
     int lambda =  mappingPolicy.LAMBDA * cgraSize * currentII * originalDFG->getNodeSize();
+    bool modScheduleSuccess = false;
     for (int attempt = 0; attempt < lambda; attempt++) {
       DEBUG("[Mapper]attempt: " << attempt << "/" << lambda);
-      bool modScheduleSuccess = false;
       DFG* routeDFG = nullptr;
+      modScheduleSuccess = false;
       // here we do modulo schedule
       for (int modAttempt = 0; modAttempt < mappingPolicy.MODULO_SCHEDULING_ATTEMPTS; modAttempt++) {
         DEBUG("[Mapper]modulo schedule attempt " << modAttempt << " of " << mappingPolicy.MODULO_SCHEDULING_ATTEMPTS);
@@ -335,6 +345,8 @@ Mapper::generateMap(Parser* myParser)
         return true;
       } 
     } // end of iterating through attempts
+    if (!modScheduleSuccess)
+      continue;
     DEBUG("[Mapper]Reached maximum attempt for current II, increasing II");
     currentII++;
   } // end of while current II <= maxII
@@ -831,7 +843,7 @@ Mapper::scheduleASAPFeasible(DFG* myDFG, schedule* asapFeasible)
         int startTime = (scheduleTime < scheduleTimeRel) ? scheduleTimeRel : scheduleTime;
         for (int t = startTime; t < mappingPolicy.MAX_LATENCY; t++) {
           // start from lastest time
-          if (node->isLiveOut()) {
+          if (node->isLiveOut() || relatedNode->isLiveOut()) {
             // for live out node, we need to schedule it after loop control node
             Node* loopCtrlNode = myDFG->getLoopCtrlNode();
             // skip node if loop control not scheduled yet
@@ -979,8 +991,12 @@ Mapper::scheduleASAPFeasible(DFG* myDFG, schedule* asapFeasible)
         }
       }
     } // end of iterating through load nodes
-    if (!scheduled)
+    if (!scheduled) {
+      for (int id : rest) {
+        DEBUG("[ASAP Feasible]NODE: " << id << " not scheduled");
+      }
       FATAL("[ASAP Feasible]ERROR! " << rest.size() << " nodes can't be scheduled");
+    }
   } // end of while rest.size() > 0
   return latestTime + 1;
 }
@@ -1009,7 +1025,7 @@ Mapper::checkALAP(Node* node, int length, schedule* alapFeasible)
 }
 
 
-void
+bool
 Mapper::scheduleALAPFeasible(DFG* myDFG, int length, schedule* alapFeasible, schedule* asapFeasible)
 {
   DEBUG("[ALAP Feasible]start");
@@ -1193,9 +1209,12 @@ Mapper::scheduleALAPFeasible(DFG* myDFG, int length, schedule* alapFeasible, sch
       for (int nodeId : scheduledNodes)
         rest.erase(nodeId);
       scheduledNodes.clear();
-    } else
-      FATAL("[ALAP Feasible]ERROR! " << rest.size() << " nodes can't be scheduled");
+    } else {
+      DEBUG("[ALAP Feasible]ERROR! " << rest.size() << " nodes can't be scheduled");
+      return false;
+    }
   } // end of rest.size() > 0
+  return true;
 }
 
 
@@ -1669,6 +1688,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
       }
       if (addPred != nullptr) {
         // address gen pred mapped, row fixed
+        DEBUG("mapped addgen pred: " << addPred->getId());
         int xCoor = std::get<0>(timeExCgra->getPeMapped(addPred)->getCoord());
         Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
         if (row->dataAvailable(path, iter)) {
@@ -1689,6 +1709,7 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
         } // end of iterating through rows at mod schedule time
       }
       if (dataPred != nullptr) {
+        DEBUG("mapped data pred: " << dataPred->getId());
         auto posIt = potentialPos.begin();
         for (; posIt != potentialPos.end(); ) {
           // if this pos is removed
@@ -1698,7 +1719,6 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
             // not accessable, remove this pos
             posIt = potentialPos.erase(posIt);
             removed = true;
-            break;
           }
           if (!removed)
             ++posIt;
@@ -1804,8 +1824,10 @@ Mapper::remapBasic(Node* failedNode, CGRA* timeExCgra, moduloSchedule* modSchedu
       timeExCgra->removeNode(succ);
     }
   } // end of iterating through succs
-  if (mappedNodes.empty())
-    FATAL("[Remap Basic]ERROR! Probably should not happen, remapping a node without constraints");
+  if (mappedNodes.empty()) {
+    DEBUG("[Remap Basic]Remapping a node without constraints, most likely a memory operation without resources");
+    return false;
+  }
   // we add a shuffle here
   std::shuffle(mappedNodes.begin(), mappedNodes.end(), rng);
   // we can check all the potential mappings of mapped preds and succs to find a mapping
@@ -1893,8 +1915,10 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedul
       timeExCgra->removeNode(succ);
     }
   } // end of iterating through succs
-  if (mappedCons.empty())
-    FATAL("[Remap T]ERROR!! Remapping a node without constraints");
+  if (mappedCons.empty()) {
+    DEBUG("[Remap T]Remapping a node without constraints, most likely a memory operation without resources");
+    return false;
+  }
 
   // for this, we remove all nodes in the same time slot, and do basic remap, than try and remap all the removed nodes
   // all the mapped nodes in current time slot for later remap/restore
@@ -2005,8 +2029,10 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule
       timeExCgra->removeNode(succ);
     }
   } // end of iterating through succs
-  if (mappedCons.empty())
-    FATAL("[Remap Adj]ERROR!! Remapping a node without constraints");
+  if (mappedCons.empty()) {
+    DEBUG("[Remap Adj]Remapping a node without constraints, most likely a memory operation without resources");
+    return false;
+  }
 
   // now we get the time slots to remap, of the constraints and the failed node
   std::set<int> remapTimeSlots;

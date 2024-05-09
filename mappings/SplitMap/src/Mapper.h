@@ -67,7 +67,7 @@ class Mapper
 
     // schedule operations in ALAP manner considering number of available resources
     // this step is carried out after an asap feasible schedule is done
-    void scheduleALAPFeasible(DFG* myDFG, int length, schedule* alapFeasible, schedule* asapFeasible);
+    bool scheduleALAPFeasible(DFG* myDFG, int length, schedule* alapFeasible, schedule* asapFeasible);
 
     /**
      * check if a node is ready for asap scheduling, as in all

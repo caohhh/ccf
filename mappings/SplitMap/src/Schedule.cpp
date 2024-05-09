@@ -537,7 +537,7 @@ moduloSchedule::print(DFG* myDFG, std::string name)
       if (arc->getDistance() != 0) {
         dotFile << " [style=bold, label=" << arc->getDistance() << "]";
       }
-    } else if (arc->getDependency() == LoadDep) {
+    } else if (arc->getDependency() == LoadDep || arc->getDependency() == StoreDep) {
       dotFile << " [style=dotted, label= mem]";
     } else {
       FATAL("[Print Modulo]Encountered arc dependency not implemented " << arc->getDependency());
