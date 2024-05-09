@@ -128,6 +128,7 @@ NODE::NODE(Instruction_Operation ins, int laten, int id, std::string name, Value
   bbIdx = basicBlockIdx;
   brPath = none;
   splitCond = false;
+  switchCondId = -1;
 }
 
 void NODE::set_self_loop(ARC* s_loop)
@@ -459,13 +460,13 @@ int NODE::getCondBrId()
 }
 
 
-void NODE::setBasicBlockIdx(unsigned idx)
+void NODE::setBasicBlockIdx(int idx)
 {
   bbIdx = idx;
 }
 
 
-unsigned NODE::getBasicBlockIdx()
+int NODE::getBasicBlockIdx()
 {
   return bbIdx;
 }
@@ -498,6 +499,20 @@ void NODE::setSplitCond(bool isSplitCond)
 bool NODE::isSplitCond()
 {
   return splitCond;
+}
+
+
+void 
+NODE::setSwitchCond(int switchCond)
+{
+  switchCondId = switchCond;
+}
+
+
+void
+NODE::setLLVMIns(Value* ins)
+{
+  Node_Ins = ins;
 }
 
 /*************************************DFG*************************************/
@@ -545,8 +560,6 @@ NODE* DFG::get_Node(std::string name){
 
 NODE* DFG::get_Node(Value* ins)
 {
-  if (ins->getValueID() == llvm::Value::ConstantIntVal)
-    errs() << "WARNNING!!!!!Getting a constant int node with LLVM value, will most likely cause problem, check to DFG to make sure" << "\n";
   std::vector<NODE*>::iterator iNode1;
   for (iNode1 = _node_Set.begin(); iNode1 != _node_Set.end(); iNode1++)
   {
@@ -834,7 +847,13 @@ void DFG::Dot_Print_DFG(std::string filename)
     }
     else if (_ARC_Set[i]->Get_Inter_Iteration_Distance() == 0)
     {
-      dotFile << _ARC_Set[i]->get_From_Node()->get_ID() << " -> " << _ARC_Set[i]->get_To_Node()->get_ID() << "\n";
+      dotFile << _ARC_Set[i]->get_From_Node()->get_ID() << " -> " << _ARC_Set[i]->get_To_Node()->get_ID();
+      if (_ARC_Set[i]->getPath() == true_path)
+        dotFile << "[color=lightblue]\n";
+      else if (_ARC_Set[i]->getPath() == false_path)
+        dotFile << "[color=lightcoral]\n";
+      else
+        dotFile << "\n";
     }
     else
     {

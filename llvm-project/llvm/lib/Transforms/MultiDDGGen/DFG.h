@@ -132,11 +132,14 @@ class NODE
     // which branch this node is used as a condition for, -1 for not a cond
     int condBrId;
     // index of the basic block this node belongs to
-    unsigned bbIdx;
+    int bbIdx;
     // the branch path this node belongs to
     nodePath brPath;
     // if this node is used as the splitting cond
     bool splitCond; 
+
+    // which switch cond this cmp is for, -1 for not a switch cond
+    int switchCondId;
 
   public:
     virtual ~NODE();
@@ -225,10 +228,10 @@ class NODE
     int getCondBrId();
 
     // set the basic block this node belongs to
-    void setBasicBlockIdx(unsigned basicBlockIdx);
+    void setBasicBlockIdx(int basicBlockIdx);
 
     // get the index of the basic block this node belongs to
-    unsigned getBasicBlockIdx();
+    int getBasicBlockIdx();
 
     // set the instruction operation of this node
     void setOperation(Instruction_Operation);
@@ -241,6 +244,12 @@ class NODE
 
     void setSplitCond(bool isSplitCond);
     bool isSplitCond();
+
+    // set the switch cond id for this node
+    void setSwitchCond(int switchCond);
+
+    // set the instruction for this node
+    void setLLVMIns(Value* Ins);
 };
 
 class ARC

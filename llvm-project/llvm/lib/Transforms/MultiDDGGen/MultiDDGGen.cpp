@@ -384,13 +384,31 @@ class MultiDDGGen : public LoopPass {
     // struct to store all the path info of a branch
     struct branchPaths
     {
-      std::vector<unsigned> truePath;
-      std::vector<unsigned> falsePath;
+      std::set<int> truePath;
+      std::set<int> falsePath;
     };
     
     // map of conditional branch index (the basic block it belongs to) 
     // to all the dominated blocks of either true or false path
     std::map<int, branchPaths> mapBrIdPaths;
+
+    // map of <switch br id: ordered case value vector>
+    std::map<int, int64_t> switchCasevalues;
+
+    // map of switch instruction to its cmp nodes
+    std::map<Instruction*, std::vector<NODE*>> switchCaseNodes;
+
+    // map of phi ins to its nodes
+    std::map<Instruction*, std::vector<NODE*>> phiNodes;
+
+    // map of branch ins to their brIDs
+    std::map<Value*, std::vector<int>> mapBrValueId;
+
+    // the negative bbid for each switch case to hold the cmp and phi
+    int caseHolderBBId = -1;
+
+    // map of brId to its holderID
+    std::map<int, int> brHolderId;
 
     /**
      * updates the branching information of each basic block of the loop
@@ -503,6 +521,8 @@ MultiDDGGen::updateBranchInfo(Loop* L, DominatorTree* DT)
   DEBUG("updating branch info\n");
   // basic blocks of the loop
   std::vector<BasicBlock *> bbs = L->getBlocks();
+  // the branching index
+  int brIdx = 0;
   for (int i = 0; i < (int) bbs.size(); i++) {
     // skip latch
     if (bbs[i] == L->getLoopLatch())
@@ -511,37 +531,130 @@ MultiDDGGen::updateBranchInfo(Loop* L, DominatorTree* DT)
     if (bbs[i]->getSingleSuccessor() != nullptr)
       continue;
     // now find the br instruction
-    BranchInst* brInst;
-    DEBUG("multiple successors with basic block " << i << "\n");
-    for (BasicBlock::iterator BBI = bbs[i]->begin(); BBI != bbs[i]->end(); ++BBI) {
-      if (BBI->getOpcode() != Instruction::Br)
-        continue;
-      DEBUG("the branch instruction: " << (*BBI) << "\n");
-      brInst = dyn_cast<llvm::BranchInst>(BBI);
+    DEBUG("multiple successors with basic block " << i <<"\n");
+    auto terminatorIns = bbs[i]->getTerminator();
+    DEBUG("the terminator ins: " << *terminatorIns << "\n");
+    if (terminatorIns->getOpcode() == Instruction::Br) {
+      // br, all good
+      DEBUG("terminator a branch instruction\n");
+      BranchInst* brInst = dyn_cast<llvm::BranchInst>(terminatorIns);
       if (brInst->isUnconditional()) {
         DEBUG("Weird, unconditional branch at the block\n");
         continue;
       }
-    }
-    // now find the true block and false block
-    // for br inst, successor 0 is true path, successor 1 is false path
-    branchPaths paths;
-    BasicBlockEdge* trueEdge = new BasicBlockEdge(bbs[i], brInst->getSuccessor(0));
-    BasicBlockEdge* falseEdge = new BasicBlockEdge(bbs[i], brInst->getSuccessor(1));
+      // now find the true block and false block
+      // for br inst, successor 0 is true path, successor 1 is false path
+      branchPaths paths;
+      BasicBlockEdge* trueEdge = new BasicBlockEdge(bbs[i], brInst->getSuccessor(0));
+      BasicBlockEdge* falseEdge = new BasicBlockEdge(bbs[i], brInst->getSuccessor(1));
 
-    // here we get the blocks that blong to true or false path
-    // mabe ii should start at i for efficiency, but just in case
-    // here it starts at 0
-    for (int ii = 0; ii < (int) bbs.size(); ii++) {
-      if (DT->dominates(*trueEdge, bbs[ii])) {
-        paths.truePath.push_back(ii);
-        DEBUG("block " << ii << " in true path\n");
-      } else if (DT->dominates(*falseEdge, bbs[ii])) {
-        paths.falsePath.push_back(ii);
-        DEBUG("block " << ii << " in false path\n");
+      // here we get the blocks that blong to true or false path
+      // mabey ii should start at i for efficiency, but just in case
+      // here it starts at 0
+      DEBUG("For brid: " << brIdx << "\n");
+      for (int ii = 0; ii < (int) bbs.size(); ii++) {
+        if (DT->dominates(*trueEdge, bbs[ii])) {
+          paths.truePath.insert(ii);
+          DEBUG("block " << ii << " in true path\n");
+        } else if (DT->dominates(*falseEdge, bbs[ii])) {
+          paths.falsePath.insert(ii);
+          DEBUG("block " << ii << " in false path\n");
+        }
       }
+      mapBrIdPaths[brIdx] = paths;
+      mapBrValueId[terminatorIns].push_back(brIdx);
+      brIdx++;
+    } else if (terminatorIns->getOpcode() == Instruction::Switch) {
+      // switch, some things need to be done, we lower switch in another pass
+      DEBUG("terminator a switch instruction\n");
+      auto swiIns = dyn_cast<llvm::SwitchInst>(terminatorIns);
+      // map of cases in a switch to its edge
+      std::map<int64_t, BasicBlockEdge*> caseEdges;
+      // populated all the cases with their edges
+      for (auto succ : swiIns->cases()) {
+        // skip the default case
+        if (succ.getCaseSuccessor() == swiIns->getDefaultDest())
+          continue;
+        int64_t caseValue = succ.getCaseValue()->getSExtValue();
+        auto edge = new BasicBlockEdge(bbs[i], succ.getCaseSuccessor());
+        caseEdges[caseValue] = edge;
+      }
+      // the set of blocks dominated by each case
+      std::map<int64_t, std::set<int>> caseBlocks;
+      // iterate through all the cases with their edges, find out the blocks they dominate
+      for (auto it : caseEdges) {
+        auto caseValue = it.first;
+        auto caseEdge = it.second;
+        DEBUG("Case: " << caseValue << " dominates: ");
+        // iterate through all the blocks
+        for (int ii = 0; ii < (int) bbs.size(); ii++) {
+          if (DT->dominates(*caseEdge, bbs[ii])) {
+            DEBUG(ii << " ");
+            caseBlocks[caseValue].insert(ii);
+          }
+        } // end of iterating through bbs
+        DEBUG("\n");
+      } // end of iterating through caseEdges
+      // don't forget default case
+      auto defaultEdge = new BasicBlockEdge(bbs[i], swiIns->getDefaultDest());
+      // blocks dominated by the default case
+      std::set<unsigned> defaultCaseBlocks;
+      DEBUG("Case: default dominates: ");
+      // iterate through all the blocks
+      for (int ii = 0; ii < (int) bbs.size(); ii++) {
+        if (DT->dominates(*defaultEdge, bbs[ii])) {
+          DEBUG(ii << " ");
+          defaultCaseBlocks.insert(ii);
+        }
+      } // end of iterating through bbs
+      DEBUG("\n");
+      // now add each to the map
+      int lastBrId = -1;
+      for (auto it = caseBlocks.rbegin(); it != caseBlocks.rend(); it++) {
+        auto value = (*it).first;
+        auto domBlocks = (*it).second;
+        // skip the case if it doesn't dominate any blocks
+        if (domBlocks.empty())
+          continue;
+        DEBUG("For brid: " << brIdx << " value: " << value << "\n");
+        // path info for this case
+        branchPaths paths;
+        // now we first put all the blocks dominated by this case in the true path
+        for (auto blk : domBlocks) {
+          DEBUG("block " << blk << " in true path\n");
+          paths.truePath.insert(blk);
+        }
+        paths.truePath = domBlocks;
+        // insert the previous brid to false path
+        if (lastBrId != -1) {
+         for (auto blk : mapBrIdPaths[lastBrId].truePath) {
+            DEBUG("block " << blk << " in false path\n");
+            paths.falsePath.insert(blk);
+          }
+          for (auto blk : mapBrIdPaths[lastBrId].falsePath) {
+            DEBUG("block " << blk << " in false path\n");
+            paths.falsePath.insert(blk);
+          }
+        } else {
+          // if no prev, insert the default
+          for (auto blk : defaultCaseBlocks) {
+            DEBUG("block " << blk << " in false path\n");
+            paths.falsePath.insert(blk);
+          }
+        }
+        // also a placeholder for the cmp and phi in false path
+        DEBUG("block " << caseHolderBBId << " in false path\n");
+        brHolderId[brIdx] = caseHolderBBId;
+        paths.falsePath.insert(caseHolderBBId--);
+        mapBrIdPaths[brIdx] = paths;
+        mapBrValueId[terminatorIns].push_back(brIdx);
+        switchCasevalues[brIdx] = value;
+        lastBrId = brIdx;
+        brIdx++;
+      } // end of iterating through case blocks
+    } else {
+      DEBUG("ERROR!! Unsupported terminator\n");
     }
-    mapBrIdPaths[i] = paths;
   }
   DEBUG("Done updating branch info\n");
 }
@@ -565,11 +678,22 @@ MultiDDGGen::addNode(Instruction *BI, DFG* myDFG, unsigned bbIdx)
     case Instruction::Br:
       return true;
 
-    // switch not implemented yet, should add later if have time
-    case Instruction::Switch:
+    // switch need to transformed into several cmpeq
+    case Instruction::Switch: {
       DEBUG("\n\nSwitch Detected!\n\n");
-      DEBUG("num_cases: " << cast<SwitchInst>(BI)->getNumCases() << "\n");
-      return false;
+      unsigned numCases = cast<SwitchInst>(BI)->getNumCases();
+      DEBUG("num_cases: " << numCases << "\n");
+      for (int i = 0; i < numCases; i++) {
+        node = new NODE(cmpEQ, 1, nodeID++, BI->getName().str(), NULL, bbIdx);
+        node->setDatatype(dt);
+        node->setSwitchCond(i);
+        switchCaseNodes[BI].push_back(node);
+      }
+      // insert a dummy node
+      node = new NODE(cmpEQ, 1, nodeID++, "dummynode", BI, bbIdx);
+      myDFG->insert_Node(node);
+      return true;
+    }
 
     case Instruction::IndirectBr:
       errs() << "\n\nIndirectBr Detected!\n\n";
@@ -885,9 +1009,16 @@ MultiDDGGen::addNode(Instruction *BI, DFG* myDFG, unsigned bbIdx)
           If Phi is not in loopHeader block, treat it as a select instruction
       */
       DEBUG("We are here for PHI\n");
+      // this is the only node in DFG
       node = new NODE(cgra_select, 1, nodeID++, BI->getName().str(), BI, bbIdx);
       node->setDatatype(dt);
       myDFG->insert_Node(node);
+      // these are the actual nodes
+      for (int ii = 1; ii < dyn_cast<PHINode>(BI)->getNumIncomingValues(); ii++) {
+        node = new NODE(cgra_select, 1, nodeID++, BI->getName().str(), NULL, bbIdx);
+        node->setDatatype(dt);
+        phiNodes[BI].push_back(node);
+      }
       return true;
     }
     case Instruction::Select:
@@ -941,9 +1072,15 @@ MultiDDGGen::resetVariables()
   mapLiveinNameDatatype.clear();
   mapLiveoutInstName.clear();
   mapBrIdPaths.clear();
+  switchCaseNodes.clear();
+  switchCasevalues.clear();
+  mapBrValueId.clear();
+  phiNodes.clear();
+  brHolderId.clear();
   
   nodeID = 0;
   edgeID = 0;
+  caseHolderBBId = -1;
 
   loadBlock = nullptr;
 }
@@ -1209,6 +1346,55 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
     }
   }
 
+  // we place switch here
+  if (BI->getOpcode() == Instruction::Switch) {
+    // first delete the dummy node from the DFG
+    DEBUG("Updating for a switch instruction\n");
+    NODE* dummyNode = loopDFG->get_Node(BI);
+    loopDFG->delete_Node(dummyNode);
+    auto caseNodes = switchCaseNodes[BI];
+    // the condition value
+    Value* condValue = dyn_cast<SwitchInst>(BI)->getCondition();
+    // the condition node
+    NODE* condNode = loopDFG->get_Node(condValue);
+    if (condNode == NULL) {
+      DEBUG("ERROR! Can't get the condition node\n");
+      exit(1);
+    }
+    if (condNode->is_Load_Address_Generator())
+      condNode = condNode->get_Related_Node();
+    DEBUG("The condition node is " << condNode->get_ID() << "\n");
+    auto switchBrIds = mapBrValueId[BI];
+    if (switchBrIds.size() != caseNodes.size()) {
+      DEBUG("ERROR! For a switch, the size of branches and cmps does not match\n");
+      exit(1);
+    }
+    for (int ii = 0; ii < switchBrIds.size(); ii++) {
+      // get the cmp node
+      NODE* cmpNode = caseNodes[ii];
+      // get the cmp const
+      int64_t cmpValue = switchCasevalues[switchBrIds[ii]];
+      DEBUG("brid: " << switchBrIds[ii] << ", cmp constant: " << cmpValue << "\n");
+      cmpNode->setBasicBlockIdx(bbIdx);
+      DEBUG("CMP node: " << cmpNode->get_ID() << " in bb: " << bbIdx << "\n");
+      loopDFG->insert_Node(cmpNode);
+      // insert the const as a node
+      NODE* nodeCmpValue = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(cmpValue), NULL, bbIdx);
+      DEBUG("inserted cmp value node id:" << nodeCmpValue->get_ID() << "\n");
+      nodeCmpValue->setDatatype(int32);
+      loopDFG->insert_Node(nodeCmpValue);
+      // make the 2 arcs
+      loopDFG->make_Arc(condNode, cmpNode, edgeID++, 0, TrueDep, 0);
+      loopDFG->make_Arc(nodeCmpValue, cmpNode, edgeID++, 0, TrueDep, 1);
+      // get the cmpBBId, should be the basic block of this case
+      if (mapBrIdPaths[switchBrIds[ii]].truePath.size() != 1) {
+        DEBUG("ERROR! Switch case should only have 1 bb in true path\n");
+        exit(1);
+      }
+    }
+    return;
+  }
+
   // now for other instructions, iterate through operands
   for (unsigned int oprandNo = 0; oprandNo < BI->getNumOperands(); oprandNo++) {
     Value *operandVal = BI->getOperand(oprandNo);
@@ -1221,26 +1407,32 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       DEBUG("  is constintval\n");
       // here we can either make a change that all of the same LLVM value only have 1 node
       // or add in an extra attribute stating the ownership of a constant
-      int constVal = 0;
-      if (dyn_cast<llvm::ConstantInt>(operandVal)->getBitWidth() > 1)
-        constVal = dyn_cast<llvm::ConstantInt>(operandVal)->getSExtValue();
-      else
-        constVal = dyn_cast<llvm::ConstantInt>(operandVal)->getZExtValue();
-      DEBUG("  Node name: " << "ConstInt"+std::to_string(constVal) << "\n");
-      Datatype dt;
-      Value *v = dyn_cast<Value>(BI);
-      Type* T = v->getType();
-      int bit_width = T->getPrimitiveSizeInBits()/8;
-      if (bit_width == 1)
-        dt = character;
-      else if (bit_width == 2)
-        dt = int16;
-      else
-        dt = int32;
-      nodeFrom = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(constVal), operandVal, bbIdx);
-      DEBUG("  inserted new constant int id: " << nodeFrom->get_ID() <<"\n");
-      nodeFrom->setDatatype(dt);
-      loopDFG->insert_Node(nodeFrom);
+      if (loopDFG->get_Node(operandVal) == NULL) {
+        // the const node does not exist
+        int constVal = 0;
+        if (dyn_cast<llvm::ConstantInt>(operandVal)->getBitWidth() > 1)
+          constVal = dyn_cast<llvm::ConstantInt>(operandVal)->getSExtValue();
+        else
+          constVal = dyn_cast<llvm::ConstantInt>(operandVal)->getZExtValue();
+        DEBUG("  Node name: " << "ConstInt"+std::to_string(constVal) << "\n");
+        Datatype dt;
+        Value *v = dyn_cast<Value>(BI);
+        Type* T = v->getType();
+        int bit_width = T->getPrimitiveSizeInBits()/8;
+        if (bit_width == 1)
+          dt = character;
+        else if (bit_width == 2)
+          dt = int16;
+        else
+          dt = int32;
+        nodeFrom = new NODE(constant, 1, nodeID++, "ConstInt"+std::to_string(constVal), operandVal, bbIdx);
+        DEBUG("  inserted new constant int id: " << nodeFrom->get_ID() <<"\n");
+        nodeFrom->setDatatype(dt);
+        loopDFG->insert_Node(nodeFrom);
+      } else {
+        // the const node already exist
+        nodeFrom = loopDFG->get_Node(operandVal);
+      }
       nodeTo = loopDFG->get_Node(BI);
       // since for store there are 2 nodes, the arc is skipped to later
       if (BI->getOpcode() != Instruction::Store)
@@ -1250,26 +1442,29 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       DEBUG("  in constFPval\n");
       //We support only single precision fp. But sometimes IR converts the float to doubles.
       // SO we need to get the appropriate FP val.
-      Datatype dt;
-      Value *v = dyn_cast<Value>(BI);
-      Type* T = v->getType();
-      std::ostringstream constVal;
-      int bit_width = T->getPrimitiveSizeInBits()/8;
-      if(bit_width == 8)
-        dt = float64;
-      else if (bit_width == 2)
-        dt = float16;
-      else if (bit_width == 4)
-        dt = float32;
+      if (loopDFG->get_Node(operandVal) == NULL) {
+        Datatype dt;
+        Value *v = dyn_cast<Value>(BI);
+        Type* T = v->getType();
+        std::ostringstream constVal;
+        int bit_width = T->getPrimitiveSizeInBits()/8;
+        if(bit_width == 8)
+          dt = float64;
+        else if (bit_width == 2)
+          dt = float16;
+        else if (bit_width == 4)
+          dt = float32;
 
-      if (dt == float64)
-        constVal << cast<ConstantFP>(operandVal)->getValueAPF().convertToDouble();
-      else
-        constVal << cast<ConstantFP>(operandVal)->getValueAPF().convertToFloat();
-      nodeFrom = new NODE(constant, 1, nodeID++, "ConstFP" + constVal.str(), operandVal, bbIdx);
-      nodeFrom->setDatatype(dt);
-      loopDFG->insert_Node(nodeFrom);
-      nodeFrom->setDatatype(dt);
+        if (dt == float64)
+          constVal << cast<ConstantFP>(operandVal)->getValueAPF().convertToDouble();
+        else
+          constVal << cast<ConstantFP>(operandVal)->getValueAPF().convertToFloat();
+        nodeFrom = new NODE(constant, 1, nodeID++, "ConstFP" + constVal.str(), operandVal, bbIdx);
+        nodeFrom->setDatatype(dt);
+        loopDFG->insert_Node(nodeFrom);
+        nodeFrom->setDatatype(dt);
+      } else 
+        nodeFrom = loopDFG->get_Node(operandVal);
       nodeTo = loopDFG->get_Node(BI);
       // since for store there are 2 nodes, the arc is skipped to later
       if (BI->getOpcode() != Instruction::Store)
@@ -1403,8 +1598,10 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
             DEBUG("    data nodeStoreFrom: " << nodeStoreFrom->get_Name());
             DEBUG(" -> data nodeStoreTo: " << nodeStoreTo->get_Name() << "\n");
             // arc for store data
-            loopDFG->make_Arc(nodeStoreFrom, nodeStoreTo, edgeID++, 0, TrueDep,0);
+            loopDFG->make_Arc(nodeStoreFrom, nodeStoreTo, edgeID++, 0, TrueDep,1);
           }
+          DEBUG("  pointer node From: " << nodeFrom->get_Name() << " - nodeTo: " << nodeTo->get_Name() << "\n");
+          loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, distance,dep,0);
         } else {
           // operand the store value, need to add arc for address
           DEBUG("   operand is the value operand\n");
@@ -1423,17 +1620,23 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
             // arc for store address
             loopDFG->make_Arc(nodeStoreFrom, nodeStoreTo, edgeID++, 0, TrueDep,0);
           }
+          DEBUG("  value node From: " << nodeFrom->get_Name() << " - nodeTo: " << nodeTo->get_Name() << "\n");
+          loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, distance,dep,1);
         }
       } else if (BI->getOpcode() == Instruction::Load) {
         DEBUG("  instruction is a load\n"); 
         nodeTo = loopDFG->get_Node_Mem_Add(BI);
+        DEBUG("  load nodeFrom: " << nodeFrom->get_Name() << " - nodeTo: " << nodeTo->get_Name() << "\n");
+        loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, distance,dep,oprandNo);
       } else {
         DEBUG("  ins not load or store\n");
         nodeTo = loopDFG->get_Node(BI);
+        DEBUG("  nodeFrom: " << nodeFrom->get_ID() << " - nodeTo: " << nodeTo->get_ID() << "\n");
+        if (!loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, distance,dep,oprandNo)) {
+          DEBUG("ERROR making the arc\n");
+          exit(1);
+        }
       }
-
-      DEBUG("  nodeFrom: " << nodeFrom->get_Name() << " - nodeTo: " << nodeTo->get_Name() << "\n");
-      loopDFG->make_Arc(nodeFrom, nodeTo, edgeID++, distance,dep,oprandNo);
     } // end of value not a constant
   } // end of iterating through operands
 
@@ -1584,8 +1787,9 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
             constIndex = 0;
             // remove this arc
             loopDFG->Remove_Arc(nodeOp, nodeGEP);
-            // delete the constant node 
-            loopDFG->delete_Node(nodeOp);
+            // delete the constant node if no other refrences
+            if (nodeOp->Get_Next_Nodes().size() == 0)
+              loopDFG->delete_Node(nodeOp);
           } else {
             // other constants
             // first get the constant
@@ -1704,7 +1908,7 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       if (priorInst->getOpcode() == Instruction::GetElementPtr) {
         nodeFrom = loopDFG->get_Node(BI->getOperand(i));
         ARC* arc = loopDFG->get_Arc(nodeFrom, nodeTo);
-        if(arc != NULL)
+        if (arc != NULL)
           arc->SetOperandOrder(0);
       }
     }
@@ -1725,12 +1929,12 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
       // list of the basic blocks of the phi node
       std::vector<BasicBlock*> bbList;
       // list of the operands of the phi node
-      std::vector<Instruction*> operandList;
+      std::vector<Value*> operandList;
 
       //Populate lists with the information from phi node
       for (unsigned int ii=0; ii < dyn_cast<PHINode>(BI)->getNumIncomingValues(); ii++) {
         bbList.push_back(dyn_cast<PHINode>(BI)->getIncomingBlock(ii));
-        operandList.push_back(dyn_cast<Instruction>(BI->getOperand(ii)));
+        operandList.push_back(BI->getOperand(ii));
       } 
       #ifndef NDEBUG_M
         for (unsigned int ii=0; ii < (int) operandList.size(); ii++)
@@ -1744,110 +1948,269 @@ MultiDDGGen::updateDataDependencies(Instruction *BI, DFG* loopDFG, Loop* L, Domi
         }
       #endif
 
-      // now first we need to find the br instruction
-      // only consider the phi node to have 2 operands for now
+      // now first we need to find the terminator instruction      
       if (bbList.size() != 2) {
-        DEBUG("ERROR, the phi node have a incoming size of " << bbList.size());
-        DEBUG("currently only considering size of 2\n");
-        exit(1);
-      }
-
-      // find the common dominator of the 2 basic blocks
-      BasicBlock* commonDom =  DT->findNearestCommonDominator(bbList[0], bbList[1]);
-      if (!L->contains(commonDom)) {
-        // this should not happen with a simplified loop
-        DEBUG("ERROR! PHI node common domninator not in loop\n");
-        exit(1);
-      }
-
-      // get the index for the common dominator
-      int domIndex = 0;
-      for (std::vector<BasicBlock*>::const_iterator it = bbs.begin() ; it != bbs.end(); ++it) {
-        if (commonDom == (*it))
-          break;
-        else 
-          domIndex++;
-      }
-
-      DEBUG("The common dominator is: " << commonDom->getName());
-      DEBUG(" with id of " << domIndex << "\n");
-      // the branching instruction causing this phi
-      BranchInst* brInst;
-      // cond instruction of this branching
-      Instruction* condInst;
-      // next, find the condition instruction of this branching
-      for(BasicBlock::iterator BBI = commonDom->begin(); BBI !=commonDom->end(); ++BBI) {
-        if (BBI->getOpcode() != Instruction::Br)
-          continue;
-        DEBUG("inside common Dom: " << (*BBI) << "\n");
-        brInst = dyn_cast<llvm::BranchInst>(BBI);
-        if (brInst->isUnconditional()) {
-          DEBUG("ERROR! Unconditional branch at common dominator\n");
+        // make sure if the operand size is not 2, it should be larger than 2
+        if (!bbList.size() > 2) {
+          DEBUG("ERROR! Phi operand size < 2\n");
           exit(1);
         }
-        condInst = dyn_cast<llvm::Instruction>(brInst->getCondition());
-      }
-      // now find the true cond node and false cond node
-      NODE* trueNode;
-      NODE* falseNode;
-      // use edge here
-      BasicBlockEdge* trueEdge = new BasicBlockEdge(commonDom, brInst->getSuccessor(0));
-      BasicBlockEdge* falseEdge = new BasicBlockEdge(commonDom, brInst->getSuccessor(1));
-      BasicBlockEdge* phiEdge0 = new BasicBlockEdge(bbList[0], BI->getParent());
-      BasicBlockEdge* phiEdge1 = new BasicBlockEdge(bbList[1], BI->getParent());
-
-      // for br inst, successor 0 is true path, successor 1 is false path
-      if (DT->dominates(*trueEdge, *phiEdge0)) {
-        if (DT->dominates(*falseEdge, *phiEdge1)) {
-          trueNode = loopDFG->get_Node(operandList[0]);
-          falseNode = loopDFG->get_Node(operandList[1]);
-        } else {
-          DEBUG("ERROR, block 0 is true, block 1 is not false\n");
+        // we find a common dominator of all the basic blocks in bblist
+        // this is not a problem if the phi is from a single terminator (br or switch)
+        // but if a nested branch caused the phi to have more than 2 operands, there will be a problem
+        // currently not encountered yet, so will just ignore for now
+        BasicBlock* commonDom = bbList[0];
+        for (unsigned ii = 1; ii < bbList.size(); ii++) {
+          commonDom =  DT->findNearestCommonDominator(commonDom, bbList[ii]);
+          if (!L->contains(commonDom)) {
+            // this should not happen with a simplified loop
+            DEBUG("ERROR! PHI node common domninator not in loop\n");
+            exit(1);
+          }
+        }
+        if (commonDom->getTerminator()->getOpcode() != Instruction::Switch) {
+          DEBUG("ERROR! only considering phi of 3 or more preds from a switch\n");
           exit(1);
         }
-      } else if (DT->dominates(*falseEdge, *phiEdge0)) {
-        if (DT->dominates(*trueEdge, *phiEdge1)) {
-          trueNode = loopDFG->get_Node(operandList[1]);
-          falseNode = loopDFG->get_Node(operandList[0]);
-        } else {
-          DEBUG("ERROR, block 0 is false, block 1 is not true\n");
+        auto switchIns = commonDom->getTerminator();
+        // now get the domid for the common dominator
+        auto brIds = mapBrValueId[switchIns];
+        if (brIds.empty()) {
+          DEBUG("ERROR! No Br id for " << *switchIns << "\n");
           exit(1);
         }
+        DEBUG("The common dominator is: " << commonDom->getName() << "\n");
+        #ifndef NDEBUG_M
+          DEBUG("with brids: ");
+          for (auto id : brIds)
+            DEBUG(id << "\t");
+          DEBUG("\n");
+        #endif
+        // map of the brId to its order in the phi op
+        std::map<int, int> brIdPhiOrder;
+        int defaultBrId = bbList.size();
+        for (unsigned ii = 0; ii < bbList.size(); ii++) {
+          BasicBlock* bb = bbList[ii];
+          // first get the bbId
+          int bbId = 0;
+          for (auto block : bbs) {
+            if (block == bb)
+              break;
+            bbId++;
+          }
+          bool found = false;
+          // now get which brId this bb belongs to
+          for (int id : brIds) {
+            auto trueBlocks = mapBrIdPaths[id].truePath;
+            if (trueBlocks.find(bbId) != trueBlocks.end()) {
+              if (brIdPhiOrder.find(id) != brIdPhiOrder.end()) {
+                DEBUG("ERROR! Multiple phi blocks are from the same switch case\n");
+                exit(1);
+              }
+              brIdPhiOrder[id] = ii;
+              found = true;
+              break;
+            }
+          } // end of iterating through brIds
+          if (!found) {
+            // the default condition edge
+            BasicBlockEdge* defEdge = new BasicBlockEdge(commonDom, dyn_cast<SwitchInst>(switchIns)->getDefaultDest());
+            BasicBlockEdge* phiEdge = new BasicBlockEdge(bb, BI->getParent());
+            if (DT->dominates(*defEdge, *phiEdge)) {
+              // dominated by default case
+              if (brIdPhiOrder.find(defaultBrId) != brIdPhiOrder.end()) {
+                DEBUG("ERROR! Multiple phi blocks are from the default switch case\n");
+                exit(1);
+              }
+              brIdPhiOrder[defaultBrId] = ii;
+            } else {
+              DEBUG("ERROR! Can't find a case \n");
+              exit(1);
+            }
+          }
+        } // end of iterating through bblist
+        #ifndef NDEBUG_M
+          DEBUG("brids of the phi in the order of: \n");
+          for (auto it : brIdPhiOrder) {
+            DEBUG("id: " << it.first << "\t");
+            DEBUG("phi order: " << it.second << "\n");
+          }
+        #endif
+        // the false node should start with the default case
+        if (brIdPhiOrder.find(defaultBrId) == brIdPhiOrder.end()) {
+          DEBUG("ERROR! Can't find a brid of default case\n");
+          exit(1);
+        }
+        NODE* falseNode = loopDFG->get_Node(operandList[brIdPhiOrder[defaultBrId]]);
+        // the last phi and cond to put in the negative holder bb
+        NODE* lastPhi = nullptr;
+        NODE* lastCond = nullptr;
+        // we iterate through all the branches belonging to this switch
+        for (int ii = 0; ii < brIds.size(); ii++) {
+          int id = brIds[ii];
+          if (brIdPhiOrder.find(id) == brIdPhiOrder.end()) {
+            DEBUG("ERROR! Can't find a brid of the switch\n");
+            exit(1);
+          }
+          if (phiNodes[BI].size() != brIds.size()) {
+            DEBUG("ERROR! phi nodes size not matching\n");
+            exit(1);
+          }
+          if (switchCaseNodes[switchIns].size() != brIds.size()) {
+            DEBUG("ERROR! cmp nodes size not matching\n");
+            exit(1);
+          }
+          // get a phi node
+          NODE* phiNode = phiNodes[BI][ii];
+          // get the true node
+          NODE* trueNode = loopDFG->get_Node(operandList[brIdPhiOrder[id]]);
+          // get the cond node
+          NODE* condNode = switchCaseNodes[switchIns][ii];
+          // fix for address generator
+          if (trueNode->is_Load_Address_Generator())
+            trueNode = trueNode->get_Related_Node();
+          if (falseNode->is_Load_Address_Generator())
+            falseNode = falseNode->get_Related_Node();
+          condNode->setCondBrId(id);
+          phiNode->setBranchIndex(id);
+          // get the holder bbidx
+          int holderId = brHolderId[id];
+          if (lastPhi != nullptr) {
+            lastPhi->setBasicBlockIdx(holderId);
+            DEBUG("phi: " << lastPhi->get_Name() << " set to BB: " << holderId << "\n");
+          }
+          if (lastCond != nullptr) {
+            lastCond->setBasicBlockIdx(holderId);
+            DEBUG("cond: " << lastCond->get_Name() << " set to BB: " << holderId << "\n");
+          }
+          DEBUG("for brid: " << id);
+          DEBUG(" phi node: " << phiNode->get_ID() << " true node: " << trueNode->get_ID());
+          DEBUG(" false node: " << falseNode->get_ID() << " cond node: " << condNode->get_ID() << "\n");
+          loopDFG->insert_Node(phiNode);
+          // now the 3 edges to a select
+          // true op
+          loopDFG->make_Arc(trueNode, phiNode, edgeID++, 0, TrueDep, 0); 
+          // false op
+          loopDFG->make_Arc(falseNode, phiNode, edgeID++, 0, TrueDep, 1); 
+          // cond
+          loopDFG->make_Arc(condNode, phiNode, edgeID++, 0, PredDep, 2);
+          // update the false node to be the phi node
+          falseNode = phiNode;
+          lastPhi = phiNode;
+          lastCond = condNode;
+        }
+        // set the last phi as the access
+        falseNode->setLLVMIns(BI);
+        lastPhi->setBasicBlockIdx(lastCond->getBasicBlockIdx());
+        DEBUG("phi: " << lastPhi->get_Name() << " set to BB: " << lastCond->getBasicBlockIdx() << "\n");
+        // now we need to replace the use of dummy node to the last phi
+        for (NODE* succ : nodePhi->Get_Next_Nodes()) {
+          ARC* succArc = loopDFG->get_Arc(nodePhi, succ);
+          // make new arc
+          loopDFG->make_Arc(falseNode, succ, edgeID++, succArc->Get_Inter_Iteration_Distance(),
+                  succArc->Get_Dependency_Type(), succArc->GetOperandOrder());
+          // since we will delete nodePhi, no need to delete succArc
+        }
+        // and also delete the dummy node
+        loopDFG->delete_Node(nodePhi);
       } else {
-        DEBUG("ERROR, block 0 neither true or false\n");
-        exit(1);
+        // phi with 2 operands, should be from a branch
+        // find the common dominator of the 2 basic blocks
+        BasicBlock* commonDom =  DT->findNearestCommonDominator(bbList[0], bbList[1]);
+        if (!L->contains(commonDom)) {
+          // this should not happen with a simplified loop
+          DEBUG("ERROR! PHI node common domninator not in loop\n");
+          exit(1);
+        }
+
+        // get the index for the common dominator
+        auto brIds = mapBrValueId[commonDom->getTerminator()];
+        if (brIds.size() != 1) {
+          DEBUG("ERROR! brID size of br should be 1\n");
+          exit(1);
+        }
+        int domIndex = brIds[0];
+
+        DEBUG("The common dominator is: " << commonDom->getName());
+        DEBUG(" with id of " << domIndex << "\n");
+        // the branching instruction causing this phi
+        BranchInst* brInst;
+        // cond instruction of this branching
+        Instruction* condInst;
+        // next, find the condition instruction of this branching
+        for(BasicBlock::iterator BBI = commonDom->begin(); BBI !=commonDom->end(); ++BBI) {
+          if (BBI->getOpcode() != Instruction::Br)
+            continue;
+          DEBUG("inside common Dom: " << (*BBI) << "\n");
+          brInst = dyn_cast<llvm::BranchInst>(BBI);
+          if (brInst->isUnconditional()) {
+            DEBUG("ERROR! Unconditional branch at common dominator\n");
+            exit(1);
+          }
+          condInst = dyn_cast<llvm::Instruction>(brInst->getCondition());
+        }
+        // now find the true cond node and false cond node
+        NODE* trueNode;
+        NODE* falseNode;
+        // use edge here
+        BasicBlockEdge* trueEdge = new BasicBlockEdge(commonDom, brInst->getSuccessor(0));
+        BasicBlockEdge* falseEdge = new BasicBlockEdge(commonDom, brInst->getSuccessor(1));
+        BasicBlockEdge* phiEdge0 = new BasicBlockEdge(bbList[0], BI->getParent());
+        BasicBlockEdge* phiEdge1 = new BasicBlockEdge(bbList[1], BI->getParent());
+
+        // for br inst, successor 0 is true path, successor 1 is false path
+        if (DT->dominates(*trueEdge, *phiEdge0)) {
+          if (DT->dominates(*falseEdge, *phiEdge1)) {
+            trueNode = loopDFG->get_Node(operandList[0]);
+            falseNode = loopDFG->get_Node(operandList[1]);
+          } else {
+            DEBUG("ERROR, block 0 is true, block 1 is not false\n");
+            exit(1);
+          }
+        } else if (DT->dominates(*falseEdge, *phiEdge0)) {
+          if (DT->dominates(*trueEdge, *phiEdge1)) {
+            trueNode = loopDFG->get_Node(operandList[1]);
+            falseNode = loopDFG->get_Node(operandList[0]);
+          } else {
+            DEBUG("ERROR, block 0 is false, block 1 is not true\n");
+            exit(1);
+          }
+        } else {
+          DEBUG("ERROR, block 0 neither true or false\n");
+          exit(1);
+        }
+        // fix for address generator
+        if (trueNode->is_Load_Address_Generator())
+          trueNode = trueNode->get_Related_Node();
+        if (falseNode->is_Load_Address_Generator())
+          falseNode = falseNode->get_Related_Node();
+
+        NODE* condNode = loopDFG->get_Node(condInst);
+        if (condNode->is_Load_Address_Generator())
+          condNode = condNode->get_Related_Node();
+        // here we set the cond node to its corresponding br inst
+        condNode->setCondBrId(domIndex);
+
+        // now the 3 edges to a select
+        // first fix the order of the 2 operands
+        // true op
+        ARC* arcOp = loopDFG->get_Arc(trueNode, nodePhi);
+        if (arcOp == NULL)
+          loopDFG->make_Arc(trueNode, nodePhi, edgeID++, 0, TrueDep, 0); 
+        else
+          arcOp->SetOperandOrder(0);
+        // false op
+        arcOp = loopDFG->get_Arc(falseNode, nodePhi);
+        if (arcOp == NULL)
+          loopDFG->make_Arc(falseNode, nodePhi, edgeID++, 0, TrueDep, 1); 
+        else
+          arcOp->SetOperandOrder(1);
+        // cond
+        loopDFG->make_Arc(condNode, nodePhi, edgeID++, 0, PredDep, 2);
+
+        // set the branch idx of this phi node
+        nodePhi->setBranchIndex(domIndex);
       }
-      // fix for address generator
-      if (trueNode->is_Load_Address_Generator())
-        trueNode = trueNode->get_Related_Node();
-      if (falseNode->is_Load_Address_Generator())
-        falseNode = falseNode->get_Related_Node();
-
-      NODE* condNode = loopDFG->get_Node(condInst);
-      if (condNode->is_Load_Address_Generator())
-        condNode = condNode->get_Related_Node();
-      // here we set the cond node to its corresponding br inst
-      condNode->setCondBrId(domIndex);
-
-      // now the 3 edges to a select
-      // first fix the order of the 2 operands
-      // true op
-      ARC* arcOp = loopDFG->get_Arc(trueNode, nodePhi);
-      if (arcOp == NULL)
-        loopDFG->make_Arc(trueNode, nodePhi, edgeID++, 0, TrueDep, 0); 
-      else
-        arcOp->SetOperandOrder(0);
-      // false op
-      arcOp = loopDFG->get_Arc(falseNode, nodePhi);
-      if (arcOp == NULL)
-        loopDFG->make_Arc(falseNode, nodePhi, edgeID++, 0, TrueDep, 1); 
-      else
-        arcOp->SetOperandOrder(1);
-      // cond
-      loopDFG->make_Arc(condNode, nodePhi, edgeID++, 0, PredDep, 2);
-
-      // set the branch idx of this phi node
-      nodePhi->setBranchIndex(domIndex);
     } else { // end of BI not in loop header
       // for phi in loop header, all the incoming edges from within the loop should have a distance of 1
       // so, just in case distance is incorrect
@@ -1894,7 +2257,7 @@ MultiDDGGen::updateLiveOutVariables(Instruction* BI, DFG* loopDFG, Loop* L, unsi
   }
   if (!usedOutside) 
     return false; 
-  
+
   // skip liveout values already added 
   if (mapLiveoutInstName.find(BI) != mapLiveoutInstName.end() ) {
     return false;
@@ -1903,7 +2266,7 @@ MultiDDGGen::updateLiveOutVariables(Instruction* BI, DFG* loopDFG, Loop* L, unsi
   DEBUG("Ins: " << *BI << "\n");
   // for now, do not care if the value will be stored in a global variable beyond the loop  
   // treat the execution of the CGRA more atomically -> get livein, execute, store liveout
-  
+
   // create the new global variable and its node in the DFG
   std::string gPtrName;
   Value *v = dyn_cast<Value>(BI);
@@ -2022,17 +2385,22 @@ MultiDDGGen::updateLiveOutVariables(Instruction* BI, DFG* loopDFG, Loop* L, unsi
   // here to insert load instructions
   // since there are dedicated loop exits and we onlly deal with one
   // unique exit block now
-  auto *TI = loadBlock->getTerminator();
-  LoadInst* loadGlobal = new LoadInst(T, gPtr, "", TI);
-  // now replace all the usage outside of loop
+  std::vector<User*> users;
   for (auto U : BI->users()) {  // U is  f type User*
     if (auto Inst = dyn_cast<Instruction>(U)) {
       if (std::find(bbs.begin(), bbs.end(), Inst->getParent()) == bbs.end()) {
-        DEBUG("inside updating usage\t" << *(Inst) << ": " << *v << "to "<<*(dyn_cast<Value>(loadGlobal)) << "\n");
-        Inst->replaceUsesOfWith(dyn_cast<Value>(BI), dyn_cast<Value>(loadGlobal));
-        irChanged = true;
+        users.push_back(U);
       }
     }
+  }
+  auto *TI = loadBlock->getTerminator();
+  LoadInst* loadGlobal = new LoadInst(T, gPtr, "", false, TI);
+  // now replace all the usage outside of loop
+  for (auto U : users) {
+    auto Inst = dyn_cast<Instruction>(U);
+    DEBUG("inside updating usage\t" << *(Inst) << ": " << *v << "to "<<*(dyn_cast<Value>(loadGlobal)) << "\n");
+    Inst->replaceUsesOfWith(dyn_cast<Value>(BI), dyn_cast<Value>(loadGlobal));
+    irChanged = true;
   }
   return irChanged;
 }
@@ -2076,6 +2444,7 @@ MultiDDGGen::updateLoopControl (Loop *L, DFG* loopDFG)
     DEBUG("  branch_inst_pred node not found!\n");
     exit(1);
   }
+  // here we need to make sure the instruction of the loop control node
   DEBUG("  loopCtrlNode: " << loopCtrlNode->get_Name() << "\n");
   
   // get all the liveout nodes to add loop control edges
@@ -2112,17 +2481,17 @@ MultiDDGGen::splitDFG(DFG* loopDFG, int splitBrId)
   // first for all the nodes in the true and false paths
   if (mapBrIdPaths.find(splitBrId) != mapBrIdPaths.end()) {
     // the brSplit is a branch to split
-    std::vector<unsigned> truePath = mapBrIdPaths[splitBrId].truePath;
-    std::vector<unsigned> falsePath = mapBrIdPaths[splitBrId].falsePath;
+    auto truePath = mapBrIdPaths[splitBrId].truePath;
+    auto falsePath = mapBrIdPaths[splitBrId].falsePath;
     for (auto nodeIT: loopDFG->getSetOfVertices()) {
       if (std::find(truePath.begin(), truePath.end(), nodeIT->getBasicBlockIdx()) != truePath.end()) {
         // node is part of true path
         nodeIT->setBrPath(true_path);
-        DEBUG("node " << nodeIT->get_Name() <<" set to true path\n");
+        DEBUG("node " <<nodeIT->get_Name() << ", BB: "  << nodeIT->getBasicBlockIdx() << " set to true path\n");
       } else if (std::find(falsePath.begin(), falsePath.end(), nodeIT->getBasicBlockIdx()) != falsePath.end()) {
         // node is part of false path
         nodeIT->setBrPath(false_path);
-        DEBUG("node " << nodeIT->get_Name() <<" set to false path\n");
+        DEBUG("node " <<nodeIT->get_Name() << ", BB: "  << nodeIT->getBasicBlockIdx() << " set to false path\n");
       }
     }
   } else 
@@ -2282,6 +2651,15 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   DominatorTree * DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   // get the module at top because we will be dropping the loop later
   Module* M = L->getLoopPreheader()->getParent()->getParent();
+  M->materializeAll();
+  DEBUG("loop: " << L->getName() <<", with blocks: ");
+  #ifndef NDEBUG_M
+    for (auto block : bbs) {
+      block->printAsOperand(errs(), false);
+      errs() << " ";
+    }
+    DEBUG("\n");
+  #endif
 
   // check if loop has been marked to be executed on CGRA
   if (!HasCGRAEnablePragma(L) || HasCGRADisablePragma(L)) {
@@ -2396,7 +2774,7 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   DEBUG("completed update data dependency\n");
   liveInNodefile.close();
   liveInEdgefile.close();
-
+  
   // now for the liveouts
   // first insert a basic block between latch and the loop exit
   // to be the load block
@@ -2453,7 +2831,7 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
   // this is to split the DFG
   splitDFG(loopDFG, splitBr);
   DEBUG("Done splitting the DFG\n");
-  
+
   // after splitting the DFG, we need to fuse the nodes of the two paths
   //fuseNodes(loopDFG);
 
