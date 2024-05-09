@@ -695,7 +695,7 @@ DFG::padPath()
     if (arc->getPath() != none) {
       // sanity check to ensure arcs with path is to a node with none path
       if (arc->getToNode()->getBrPath() != none)
-        FATAL("[Pad Path]ERROR!!Edge with branch path should always be to a node with none path");
+        FATAL("[Pad Path]ERROR!!Edge with branch path should always be to a node with none path: " << arc->getToNode()->getId());
       if (arc->getFromNode()->getBrPath() == none) {
         // if from node is of none path, then padding is needed
         toPad[arc->getFromNode()].push_back(arc);
@@ -727,6 +727,50 @@ DFG::padPath()
       removeArc(arc->getId());
     } // end of iterating through arcs
   } // end of iterating through toPad
+
+  // also need to check the const arc
+  std::map<int, std::vector<Const_Arc>> constToPad;
+  for (auto constArc : constArcSet) {
+    if (constArc.brPath != none) {
+      Node* toNode = getNode(constArc.toNodeId);
+      if (toNode->getBrPath() != none)
+        FATAL("[Pad Path]ERROR!!Edge with branch path should always be to a node with none path: " << toNode->getId());
+      // for a const arc with path, we also need to add a route node 
+      constToPad[constArc.fromNodeId].push_back(constArc);
+    }
+  }
+
+  // now do the padding
+  for (auto it : constToPad) {
+    int fromNodeId = it.first;
+    std::vector<Const_Arc> constArcsToPad = it.second;
+    // path of the arcs, should be the same across the vector
+    nodePath path = constArcsToPad[0].brPath;
+    // first the new routing node
+    // this is to create a int32 routing node, may be need to be changed in the future to support
+    // more data types
+    routeNode* newRouteNode = new routeNode(new Node(rest, int32, 1, -1, "", none, -1), path);
+    insertNode(newRouteNode);
+    // connect it to from node, we make the routing node in the same iter as the from node
+    makeConstArc(fromNodeId, newRouteNode->getId(), 0, none);
+    for (auto constArc : constArcsToPad) {
+      DEBUG("[Pad Path]Padding between node: " << fromNodeId <<" to node: " << constArc.toNodeId << 
+            " of path " << constArc.brPath);
+      if (constArc.brPath != path)
+        FATAL("[Pad Path]ERROR!! All arc from the same node should be of the same path");
+      // connect
+      makeArc(newRouteNode, getNode(constArc.toNodeId), 0, TrueDep, constArc.opOrder, path);
+      // remove arc
+      for (auto constIt = constArcSet.begin(); constIt != constArcSet.end(); ++constIt) {
+        if ((*constIt).fromNodeId == constArc.fromNodeId &&
+            (*constIt).toNodeId == constArc.toNodeId &&
+            (*constIt).opOrder == constArc.opOrder) {
+          constArcSet.erase(constIt);
+          break;
+        }
+      }
+    } // end of iterating through const arcs
+  } // end of iterating through const to pad
 }
 
 
@@ -749,8 +793,9 @@ DFG::mergeNodes()
   // now we check each toMerge and set the nodes
   for (auto toMergeIt : toMerge) {
     std::vector<Node*> nodesToMerge = toMergeIt.second;
-    if (nodesToMerge.size() != 2)
+    if (nodesToMerge.size() != 2) {
       FATAL("[Merge Nodes]ERROR! There should always be 2 nodes to merge");
+    }
     if (nodesToMerge[0]->getBrPath() == nodesToMerge[1]->getBrPath())
       FATAL("[Merge Nodes]ERROR! The 2 nodes to merge should be of different paths");
     // now all checks are done, merge the 2 nodes
