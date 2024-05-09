@@ -192,7 +192,10 @@ enum CondOpCode
   CMPEQ,  // ==
   CMPNEQ, // !=
   CMPGT,  // >
-  CMPLT   // <
+  CMPLT,  // <
+  CAND,
+  COR,
+  CXOR
 };
 
 

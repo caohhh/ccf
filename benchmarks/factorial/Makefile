@@ -2,7 +2,7 @@ FILE1 = fact.c
 
 all: fact
 
-CC = cgracc #gcc
+CC = SplitMap
 ARMCC = arm-linux-gnueabi-gcc
 LIB = -lm
 fact: ${FILE1} Makefile

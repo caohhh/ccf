@@ -625,6 +625,24 @@ CGRA_PE::IExecute()
             DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
             DPRINTF(CGRA_Detailed,"\n******** NOT EQUALS IN THIS PE %d************\n",OutputP);
             break;
+          case CAND:
+            Output=Input1&Input2;
+            OutputP=(bool)(Input1&Input2); 
+            DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+            DPRINTF(CGRA_Detailed,"\n******** CAND IN THIS PE %d************\n",Output);
+            break;
+          case COR:
+            Output=(Input1|Input2);
+            OutputP=(bool)(Input1|Input2); 
+            DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+            DPRINTF(CGRA_Detailed,"\n******** COR IN THIS PE %d************\n",Output);
+            break;
+          case CXOR:
+            Output=(Input1^Input2);
+            OutputP=(bool)(Input1^Input2); 
+            DPRINTF(CGRA_Detailed,"\nInput1 = %d\tInput2 = %d\n",Input1, Input2);
+            DPRINTF(CGRA_Detailed,"\n******** CXOR IN THIS PE %d************\n",Output);
+            break;
           default:
             DPRINTF(CGRA_Detailed," 1. Opcode is %ld\n",(unsigned) insOpcode);
             throw new CGRAException("Unknown CGRA Opcode");

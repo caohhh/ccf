@@ -110,7 +110,8 @@ CGRA_IFU::setupExec(SimpleThread *thread, int loopID)
     }
     // for controller0, it needs to start working immediately
     controller[0].iter = 0;
-    Addr splitPC = cgraXDim * cgraYDim * II;
+    // loop id starts at 1, 50 is the max II for a loop, we can parameterize it
+    Addr splitPC = cgraXDim * cgraYDim * II + (loopID - 1) * cgraXDim * cgraYDim * 50;
     bool predState = cgraPred->predict(splitPC, true);
     if (predState == true)
         controller[0].state = TRUE_PATH;
@@ -166,7 +167,7 @@ CGRA_IFU::advanceState()
                     // advance rollbackPtr
                     rollbackPtr = (rollbackPtr + 1) % iterCount;
                     // update predicter
-                    Addr splitPC = cgraXDim * cgraYDim * II;
+                    Addr splitPC = cgraXDim * cgraYDim * II + (loopID - 1) * cgraXDim * cgraYDim * 50;
                     cgraPred->update(splitPC, true, condResult, false);
                 } else {
                     // rollback needed
@@ -191,7 +192,7 @@ CGRA_IFU::advanceState()
                     controller[splitController].speculative = false;
                     // update predictor
                     cgraPred->squash();
-                    Addr splitPC = cgraXDim * cgraYDim * II;
+                    Addr splitPC = cgraXDim * cgraYDim * II + + (loopID - 1) * cgraXDim * cgraYDim * 50;
                     cgraPred->update(splitPC, true, condResult, true);
                     // reset len
                     len = II;
@@ -202,7 +203,7 @@ CGRA_IFU::advanceState()
         } else {
             // the issued cond is not the split cond, just need to update the predictor
             unsigned t = II - len + 1;
-            Addr condPC = t * cgraXDim * cgraYDim + condPE;
+            Addr condPC = t * cgraXDim * cgraYDim + condPE + + (loopID - 1) * cgraXDim * cgraYDim * 50;
             cgraPred->update(condPC, false, condResult, false);
         }
     }
@@ -318,9 +319,15 @@ CGRA_IFU::advanceState()
                     DPRINTF(CGRA_IFU, "Controller: %d, iter: %d, state: %d, off counter: %d\n",\
                             i, controller[i].iter, controller[i].state,controller[i].offCounter);
             } else {
-                DPRINTF(CGRA_IFU,"\nKERNEL->LIVEOUT\n");
-                state = LIVEOUT;
-                len = liveoutLen;
+                // note that there may not be liveout
+                if (liveoutLen == 0) {
+                    DPRINTF(CGRA_IFU,"\nKERNEL->FINISH\n");
+                    state = FINISH;
+                } else {
+                    DPRINTF(CGRA_IFU,"\nKERNEL->LIVEOUT\n");
+                    state = LIVEOUT;
+                    len = liveoutLen;
+                }
             }
         } else if (state == LIVEOUT) // end of state == KERN
             state = FINISH;

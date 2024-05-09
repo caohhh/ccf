@@ -167,6 +167,14 @@ HistoryPred::updateGlobalHistReg(bool taken)
 void
 HistoryPred::setupBackup()
 {
+    // we reset the global history between calls
+    if (!backupGHR.empty()) {
+        backupGHR[0] = backupGHR[predictPtr];
+        backupChoice[0] = backupChoice[predictPtr];
+        backupTaken[0] = backupTaken[predictPtr];
+        backupNotTaken[0] = backupNotTaken[predictPtr];
+    }
+
     backupGHR.resize(iterCount, 0);
     backupChoice.resize(iterCount, std::vector<SatCounter>(choicePredictorSize, SatCounter(choiceCtrBits)));
     backupTaken.resize(iterCount, std::vector<SatCounter>(globalPredictorSize, SatCounter(globalCtrBits)));

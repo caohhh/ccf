@@ -16,3 +16,5 @@
 *.bc
 
 /rodinia_3.1/
+
+/BP_eval/

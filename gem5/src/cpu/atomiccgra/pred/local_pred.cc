@@ -87,6 +87,9 @@ LocalPred::getPrediction(uint8_t &count)
 void
 LocalPred::setupBackup()
 {
+    // we still want to save the predictor state between calls
+    if (!backupCtrs.empty())
+        backupCtrs[0] = backupCtrs[predictPtr];
     backupCtrs.resize(iterCount, std::vector<SatCounter>(localPredictorSets, SatCounter(localCtrBits)));
 }
 

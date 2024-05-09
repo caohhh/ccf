@@ -745,6 +745,15 @@ Cond_Instruction::decodeCondInstruction()
       case CMPNEQ:
         condOpCode= CMPNEQ;
         break;
+      case CAND:
+        condOpCode = CAND;
+        break;
+      case COR:
+        condOpCode = COR;
+        break;
+      case CXOR:
+        condOpCode = CXOR;
+        break;
     }
 
     switch((condInsWord & INS_C_LMUX ) >> SHIFT_C_LMUX) {

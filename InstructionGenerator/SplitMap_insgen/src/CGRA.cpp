@@ -702,6 +702,15 @@ PE::generateIns()
           case cmpULT:
             opCode = Instruction::CMPLT;
             break;
+          case andop:
+            opCode = Instruction::CAND;
+            break;
+          case orop:
+            opCode = Instruction::COR;
+            break;
+          case xorop:
+            opCode = Instruction::CXOR;
+            break;
           default:
             FATAL("[genIns]ERROR! Unsupported ctype op code");
         }
@@ -836,10 +845,13 @@ PE::generateIns()
         Instruction::PEInputMux lMux;
         if (sourceDirections[path][0] != constOp && sourceDirections[path][0] != liveInData) {
           // source 0 inside loop
+          if (sourceDirections[path][1] != constOp && sourceDirections[path][1] != liveInData)
+            FATAL("[genIns]Phi op with 2 operand outside loop");
           lMux = dirToMux(sourceDirections[path][0]);
         } else {
-          if (sourceDirections[path][1] != constOp && sourceDirections[path][1] != liveInData)
-            FATAL("[genIns]Phi op with 2 operand inside loop");
+          // source 0 not in loop
+          if (!(sourceDirections[path][1] != constOp && sourceDirections[path][1] != liveInData))
+            FATAL("[genIns]Phi op with 2 operand outside loop");
           // source 1 inside loop
           lMux = dirToMux(sourceDirections[path][1]);
         }
@@ -863,16 +875,21 @@ PE::generateIns()
         } else if (node->getOp() == st_data) {
           // store data will be an or op of lmux with 0, with data bus asserted
           auto lMux = dirToMux(sourceDirections[path][1]);
-          if (lMux == Instruction::Immediate)
-            FATAL("[genIns]ERROR! Storing constant");
+          int32_t imm = 0;
+          if (lMux == Instruction::Immediate) {
+            // if we are storing a constant, the op will be a OR op of the constant with itself
+            imm = sourceConstants[path][1];
+          }
           insWordPath[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
-                          lMux, Instruction::Immediate, 0, 0, 0, false, false, true, 0);
+                          lMux, Instruction::Immediate, 0, 0, 0, false, false, true, imm);
           DEBUG("[genIns]ST ins word for path " << path << " is " << std::hex << insWordPath[path]);
         } else if (node->getOp() == route) {
-          // route will be an or with 0
+          // route will be an or with 0 or with itself if routing a constant
           auto lMux = dirToMux(sourceDirections[path][0]);
-          if (lMux == Instruction::Immediate)
-            FATAL("[genIns]ERROR! Routing constant");
+          int32_t imm = 0;
+          if (lMux == Instruction::Immediate) {
+            imm = sourceConstants[path][0];
+          }
           bool we = false;
           int regW = 0;
           if (node->isLiveOut()) {
@@ -881,7 +898,7 @@ PE::generateIns()
             regW = liveOutReg[node->getLiveOut()];
           }
           insWordPath[path] = Instruction::encodeIns(Instruction::int32, Instruction::OR, false, false, 
-                          lMux, Instruction::Immediate, 0, 0, regW, we, false, false, 0);
+                          lMux, Instruction::Immediate, 0, 0, regW, we, false, false, imm);
           DEBUG("[genIns]Route ins word for path " << path << " is " << std::hex << insWordPath[path]);
         } else {
           Instruction::OPCode opCode;

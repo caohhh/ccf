@@ -207,6 +207,15 @@ TournamentPred::updateLocalHist(unsigned local_history_idx, bool taken)
 void
 TournamentPred::setupBackup()
 {
+    if (!backupLocalCtrs.empty()) {
+        backupLocalCtrs[0] = backupLocalCtrs[predictPtr];
+        // do we reset local history? reset for now
+        backupLocalHist[0] = backupLocalHist[predictPtr];//std::vector<unsigned>(localHistoryTableSize, 0);
+        // reset global history? reset for now
+        backupGlobalHist[0] = backupGlobalHist[predictPtr];//0;
+        backupChoiceCtrs[0] = backupChoiceCtrs[predictPtr];
+    }
+
     backupLocalCtrs.resize(iterCount, std::vector<SatCounter>(localPredictorSize, SatCounter(localCtrBits)));
     backupLocalHist.resize(iterCount, std::vector<unsigned>(localHistoryTableSize, 0));
     backupGlobalCtrs.resize(iterCount, std::vector<SatCounter>(globalPredictorSize, SatCounter(globalCtrBits)));

@@ -73,4 +73,7 @@ CGRAPredUnit::setIterCount(unsigned count)
 {
     iterCount = count;
     setupBackup();
+    // reset the ptr
+    updatePtr = 0;
+    predictPtr = 0;
 }
