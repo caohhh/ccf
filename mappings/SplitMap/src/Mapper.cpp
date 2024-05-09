@@ -1451,6 +1451,12 @@ Mapper::falconPlace(DFG* myDFG, int II, CGRA* timeExCgra, moduloSchedule* modSch
             placementFound = false;
             DEBUG("[Falcon]Mapping failed with " << nodeSetToMap.size() << " nodes left");
             break;
+          } else {
+            DEBUG("[Falcon]remap success");
+            #ifndef NDEBUG
+              DEBUG("after all remaps: ");
+              timeExCgra->print();
+            #endif
           }
         } else {
           // there is position for this node, choose a random one for now
@@ -1688,7 +1694,6 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
       }
       if (addPred != nullptr) {
         // address gen pred mapped, row fixed
-        DEBUG("mapped addgen pred: " << addPred->getId());
         int xCoor = std::get<0>(timeExCgra->getPeMapped(addPred)->getCoord());
         Row* row = timeExCgra->getRow(xCoor, modSchedule->getModScheduleTime(node));
         if (row->dataAvailable(path, iter)) {
@@ -1709,7 +1714,6 @@ Mapper::getPotentialPos(Node* node, CGRA* timeExCgra, moduloSchedule* modSchedul
         } // end of iterating through rows at mod schedule time
       }
       if (dataPred != nullptr) {
-        DEBUG("mapped data pred: " << dataPred->getId());
         auto posIt = potentialPos.begin();
         for (; posIt != potentialPos.end(); ) {
           // if this pos is removed
@@ -1871,9 +1875,6 @@ Mapper::remapBasic(Node* failedNode, CGRA* timeExCgra, moduloSchedule* modSchedu
         timeExCgra->mapNode(failedNode, selPE, modSchedule->getIter(failedNode));
         DEBUG("[Remap Basic]Remap success at PE: <" << std::get<0>(selPE->getCoord()) << ", " << 
                 std::get<1>(selPE->getCoord()) << ", " << std::get<2>(selPE->getCoord()) << ">");
-        #ifndef NDEBUG
-          timeExCgra->print();
-        #endif
         return true;
       } else {
         constraintIt--;
@@ -1982,9 +1983,6 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedul
       } // end of iterating through all nodes to map
       if (remapSuccess) {
         DEBUG("[Remap T]Attempt success: " << attempt);
-        #ifndef NDEBUG
-          timeExCgra->print();
-        #endif
         return true;
       }
     } // end of reaching max mapping attempts
@@ -1995,6 +1993,12 @@ Mapper::remapCurrT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedul
   } // end of if basic remap success
   // restore all the mapped nodes
   DEBUG("[Remap T]Failed, restoring locations of nodes in current time slot");
+  for (auto con : mappedCons) {
+    timeExCgra->removeNode(con);
+  }
+  for (auto con : mappedCons) {
+    timeExCgra->mapNode(con, originalConsPos[con], modSchedule->getIter(con));
+  }
   for (auto nodeId : mappedNodes) {
     timeExCgra->mapNode(myDFG->getNode(nodeId), originalPos[nodeId], modSchedule->getIter(myDFG->getNode(nodeId)));
   }
@@ -2110,9 +2114,6 @@ Mapper::remapAdjT(Node* failedNode, DFG* myDFG, CGRA* timeExCgra, moduloSchedule
       } // end of iterating through all nodes to map
       if (remapSuccess) {
         DEBUG("[Remap Adj]Attempt success: " << attempt);
-        #ifndef NDEBUG
-          timeExCgra->print();
-        #endif
         return true;
       }
     } // end of reaching max mapping attempts

@@ -447,13 +447,13 @@ Row::removeNode(Node* node)
   if (node->isLoadAddressGenerator() || node->isStoreAddressGenerator()) {
     // node is add gen
     if (std::get<0>(addNodeId[path]) != node->getId())
-      FATAL("[Row]ERROR! Removing a not mapped address node");
+      FATAL("[Row]ERROR! Removing a not mapped address node <" << t << ", " << x << ">, node: " << std::get<0>(addNodeId[path]));
     else
       addNodeId[path] = std::make_tuple(-1, -1);
   } else if (node->isLoadDataBusRead() || node->isStoreDataBusWrite()) {
     // node is data node
     if (std::get<0>(dataNodeId[path]) != node->getId())
-      FATAL("[Row]ERROR! Removing a not mapped data node");
+      FATAL("[Row]ERROR! Removing a not mapped data node <" << t << ", " << x << ">, node: " << std::get<0>(dataNodeId[path]));
     else
       dataNodeId[path] = std::make_tuple(-1, -1);
   } else
