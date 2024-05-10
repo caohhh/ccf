@@ -111,7 +111,7 @@ class Cond_Instruction
     Cond_Instruction();
     Cond_Instruction(unsigned long InstructionWord);
     Cond_Instruction(Datatype dt, CondOpCode opc, PEInputMux LMuxSel, PEInputMux RMuxSel,
-            int RRegAdd1,int RRegAdd2, int WAdd, bool WE, int ImmVal, int BranchOffset, 
+            int RRegAdd1,int RRegAdd2, int WAdd, bool WE, int ImmVal, 
             bool splitDirectionBit, bool loopExitEn);
     virtual ~Cond_Instruction();
 
@@ -124,7 +124,6 @@ class Cond_Instruction
     int getReadRegAddress2();
     int getWriteRegAddress();
     bool getWriteRegisterEnable();
-    unsigned getBranchOffset();
     int getImmediateValue();
     bool getSplitDirection();
     bool getloopExitEnable();
@@ -138,8 +137,6 @@ class Cond_Instruction
     int ReadRegAddress2;
     int WriteRegAddress;
     bool WriteRegisterEnable;
-    // 0x3ff for loop exiting, else for the cycles the jump
-    unsigned branchOffset;
     int ImmediateValue;
     bool splitDirection;
     bool loopExitEnable;

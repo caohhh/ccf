@@ -91,8 +91,8 @@ class CGRA_PE
 
     void Fetch(CGRA_Instruction* ins);
     void Decode();
-    unsigned IExecute();
-    unsigned FExecute();
+    void IExecute();
+    void FExecute();
     void WriteBack();
 
     int* getOutputPtr();

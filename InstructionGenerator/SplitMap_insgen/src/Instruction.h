@@ -20,8 +20,8 @@
   DT       |    OpCode   | 1  | 0  |   LMUX   |   RMUX   |      R1     |      R2     |      RP     |    PMUX  | Unused |Immediate
   
   Condition Instruction 
-  63 62 61 | 60 59 58 | 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 ... 26 | 25...0
-  DT       |  OpCode  | SP | LE | 1  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE |   BrImm   | Imme
+  63 62 61 | 60 59 58 | 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 ... 32 | 31...0
+  DT       |  OpCode  | SP | LE | 1  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE |   Unused  | Imme
 */
 
 #ifndef __INSGEN_INSTRUCTION_H__
@@ -105,8 +105,7 @@ const uint64_t WIDTH_C_LE = 0x1UL;
 const uint64_t WIDTH_C_MUX = 0x7UL;
 const uint64_t WIDTH_C_REGISTER = 0xfUL;
 const uint64_t WIDTH_C_ENABLE = 0x1UL;
-const uint64_t WIDTH_C_BROFFSET = 0x3ffUL;
-const uint64_t WIDTH_C_IMMEDIATE = 0x3ffffffUL;
+const uint64_t WIDTH_C_IMMEDIATE = 0xffffffffUL;
 
 const uint64_t SHIFT_C_DATATYPE = 61;
 const uint64_t SHIFT_C_OPCODE = 58;
@@ -118,7 +117,6 @@ const uint64_t SHIFT_C_R1 = 45;
 const uint64_t SHIFT_C_R2 = 41;
 const uint64_t SHIFT_C_RW = 37;
 const uint64_t SHIFT_C_WE = 36;
-const uint64_t SHIFT_C_BROFFSET = 26;
 const uint64_t SHIFT_C_IMMEDIATE = 00;
 
 const uint64_t INS_C_DATATYPE = (WIDTH_C_DATATYPE)<<SHIFT_C_DATATYPE;
@@ -131,7 +129,6 @@ const uint64_t INS_C_R1 = (WIDTH_C_REGISTER)<<SHIFT_C_R1;
 const uint64_t INS_C_R2 = (WIDTH_C_REGISTER)<<SHIFT_C_R2;
 const uint64_t INS_C_RW = (WIDTH_C_REGISTER)<<SHIFT_C_RW;
 const uint64_t INS_C_WE = (WIDTH_C_ENABLE)<<SHIFT_C_WE;
-const uint64_t INS_C_BROFFSET = (WIDTH_C_BROFFSET)<<SHIFT_C_BROFFSET;
 const uint64_t INS_C_IMMEDIATE = (WIDTH_C_IMMEDIATE)<<SHIFT_C_IMMEDIATE;
 
 
@@ -271,12 +268,11 @@ uint64_t encodePIns(Datatype dType, PredOPCode opCode, PEInputMux lMux, PEInputM
  * @param reg2 read registor address 2
  * @param regW write registor address
  * @param we write registor enable
- * @param brImm branch jump offset value
  * @param imm immediate value
  * @return the encoded C-Type instruction word
 */
 uint64_t encodeCIns(Datatype dType, CondOpCode opCode, bool loopExit, bool splitCond, PEInputMux lMux, PEInputMux rMux,
-          unsigned reg1, unsigned reg2, unsigned regW, bool we, int16_t brImm, int32_t imm);
+          unsigned reg1, unsigned reg2, unsigned regW, bool we, int32_t imm);
 
 }; // end of namespace Instruction
 

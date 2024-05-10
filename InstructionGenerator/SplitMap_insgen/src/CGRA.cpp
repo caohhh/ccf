@@ -716,12 +716,9 @@ PE::generateIns()
         }
         bool loopExit = false;
         bool spBit = false;
-        int16_t brImm = 0;
         if (node->isLoopExit()) {
           loopExit = true;
           spBit = node->getExitCond();
-          // for kernel loop exit, the br offset should be 0x3ff (all 1)
-          brImm = 0x3ff;
         } else
           spBit = node->isSplitCond();
         // get the first 2 inputs
@@ -761,7 +758,7 @@ PE::generateIns()
           regW = liveOutReg[node->getLiveOut()];
         }
         insWordPath[path] = Instruction::encodeCIns(Instruction::int32, opCode, loopExit, spBit, lMux, 
-                        rMux, reg1, reg2, regW, we, brImm, imm);
+                        rMux, reg1, reg2, regW, we, imm);
         DEBUG("[genIns]C type ins word for path " << path << " is " << std::hex << insWordPath[path]);
 
       } else if (node->isPType()) {

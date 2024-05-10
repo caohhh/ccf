@@ -53,7 +53,7 @@ Instruction::encodePIns(Datatype dType, PredOPCode opCode, PEInputMux lMux, PEIn
 uint64_t
 Instruction::encodeCIns(Datatype dType, CondOpCode opCode, bool loopExit, bool splitCond, 
               PEInputMux lMux, PEInputMux rMux, unsigned reg1, unsigned reg2, unsigned regW, bool we, 
-              int16_t brImm, int32_t imm)
+              int32_t imm)
 {
   uint64_t condInsWord = 0;
   condInsWord |= ((0UL | dType) << SHIFT_C_DATATYPE) & INS_C_DATATYPE;
@@ -67,7 +67,6 @@ Instruction::encodeCIns(Datatype dType, CondOpCode opCode, bool loopExit, bool s
   condInsWord |= ((0UL | reg2) << SHIFT_C_R2) & INS_C_R2;
   condInsWord |= ((0UL | regW) << SHIFT_C_RW) & INS_C_RW;
   condInsWord |= ((0UL | we) << SHIFT_C_WE) & INS_C_WE;
-  condInsWord |= ((0UL | brImm) << SHIFT_C_BROFFSET) & INS_C_BROFFSET;
   condInsWord |= ((0UL | imm) << SHIFT_C_IMMEDIATE) & INS_C_IMMEDIATE;
   return condInsWord;
 }

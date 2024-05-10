@@ -388,13 +388,12 @@ CGRA_PE::Decode()
 }
 
 
-unsigned 
+void 
 CGRA_PE::IExecute()
 {
     DPRINTF(PE_DEBUG, "Inside IExecute()\n");
     bool predicateBit = ins->getPredicator();
     bool condBit = ins->getCond();  
-    unsigned branch_offset = 0;
 
     if (!predicateBit && !condBit) {
         // normal instruction
@@ -657,33 +656,24 @@ CGRA_PE::IExecute()
 
         if (leBit) {
             bool leDest = condIns->getSplitDirection();
-            DPRINTF(CGRA_Execute, "LE Branch: %lx, Destination: %d\n", condIns->getBranchOffset(),leDest);
-            if (condIns->getBranchOffset() == 0x3ff) {
-                // for loop exit
-                this->Controller_Reg = !(Output == leDest);  // Output == LE_dest to exit
-                DPRINTF(CGRA_Detailed, "Set controller reg to %d\n", !((bool)Output == leDest));
-            } else {
-                // for prelog branching (skipping kernel)
-                branch_offset = ((bool)Output == leDest)? condIns->getBranchOffset():0;
-                DPRINTF(CGRA_Detailed, "\n***LE Instruction - branching %d cycles***\n", branch_offset);
-            }
+            DPRINTF(CGRA_Execute, "LE Branch Destination: %d\n",leDest);
+            // for loop exit
+            this->Controller_Reg = !(Output == leDest);  // Output == LE_dest to exit
+            DPRINTF(CGRA_Detailed, "Set controller reg to %d\n", !((bool)Output == leDest));
         } // end of loop exit
     }
 
     DPRINTF(CGRA_Detailed,"Distance is: %d\n",RegFile.distance);
     DPRINTF(PE_DEBUG, "Exiting Execute()\n");
-
-    return branch_offset;
 }
 
 
-unsigned 
+void 
 CGRA_PE::FExecute()
 {
     DPRINTF(PE_DEBUG, "Inside FExecute()\n");
     bool predicateBit = ins->getPredicator();
     bool condBit = ins->getCond();  
-    unsigned branch_offset = 0;
 
     if (!predicateBit && !condBit) {
         // normal ins
@@ -938,18 +928,12 @@ CGRA_PE::FExecute()
 
         if (LE_bit) {
             bool LE_dest = condIns->getSplitDirection();
-            DPRINTF(CGRA_Execute, "LE Branch: %lx\n", condIns->getBranchOffset());
-            if (condIns->getBranchOffset() == 0x3ff) {
-                this->Controller_Reg = !(Output == LE_dest);  // Output == LE_dest to exit
-            } else {
-                branch_offset = (Output == LE_dest)? condIns->getBranchOffset():0;
-                DPRINTF(CGRA_Detailed, "\n***LE Instruction - branching %d cycles***\n", branch_offset);
-            }
+            DPRINTF(CGRA_Execute, "LE Branch: %d\n", LE_dest);
+            this->Controller_Reg = !(Output == LE_dest);  // Output == LE_dest to exit
         }
     }
     DPRINTF(CGRA_Detailed,"Distance is: %d\n",RegFile.distance);
     DPRINTF(PE_DEBUG, "Exiting Execute()\n");
-    return branch_offset;
 }
 
 

@@ -58,8 +58,8 @@
   
   new Condition Instruction replacing Loop Exit Instruction
   with cond instructions, we currently ensure it will be an compare op
-  63 62 61 | 60 59 58 | 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 ... 26 | 25...0
-  DT       |  OpCode  | SP | LE | 1  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE |   BrImm   | Imme
+  63 62 61 | 60 59 58 | 57 | 56 | 55 | 54 53 52 | 51 50 49 | 48 47 46 45 | 44 43 42 41 | 40 39 38 37 | 36 | 35 ... 22 | 31 ... 0
+  DT       |  OpCode  | SP | LE | 1  |   LMUX   |   RMUX   |      R1     |      R2     |      RW     | WE |   Unused  | Immediate
 */
 
 
@@ -138,8 +138,7 @@
 #define WIDTH_C_MUX             0x7UL
 #define WIDTH_C_REGISTER        0xfUL
 #define WIDTH_C_ENABLE          0x1UL
-#define WIDTH_C_BROFFSET        0x3ffUL
-#define WIDTH_C_IMMEDIATE       0x3ffffffUL
+#define WIDTH_C_IMMEDIATE       0xffffffffUL
 
 #define SHIFT_C_DATATYPE        61
 #define SHIFT_C_OPCODE          58
@@ -151,7 +150,6 @@
 #define SHIFT_C_R2              41
 #define SHIFT_C_RW              37
 #define SHIFT_C_WE              36
-#define SHIFT_C_BROFFSET        26
 #define SHIFT_C_IMMEDIATE       00
 
 #define INS_C_DATATYPE          (WIDTH_C_DATATYPE)<<SHIFT_C_DATATYPE
@@ -164,7 +162,6 @@
 #define INS_C_R2                (WIDTH_C_REGISTER)<<SHIFT_C_R2
 #define INS_C_RW                (WIDTH_C_REGISTER)<<SHIFT_C_RW
 #define INS_C_WE                (WIDTH_C_ENABLE)<<SHIFT_C_WE
-#define INS_C_BROFFSET          (WIDTH_C_BROFFSET)<<SHIFT_C_BROFFSET
 #define INS_C_IMMEDIATE         (WIDTH_C_IMMEDIATE)<<SHIFT_C_IMMEDIATE
 
 

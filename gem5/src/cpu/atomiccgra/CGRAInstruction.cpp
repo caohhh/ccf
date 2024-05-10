@@ -594,7 +594,7 @@ Cond_Instruction::Cond_Instruction(unsigned long Instructionword)
 
 
 Cond_Instruction::Cond_Instruction(Datatype dt, CondOpCode opc, PEInputMux LMuxSel, PEInputMux RMuxSel,
-        int RRegAdd1,int RRegAdd2, int WAdd, bool WE, int ImmVal, int BranchOffset, 
+        int RRegAdd1,int RRegAdd2, int WAdd, bool WE, int ImmVal, 
         bool splitDirectionBit, bool loopExitEn) 
 {
     DType = dt;
@@ -607,7 +607,6 @@ Cond_Instruction::Cond_Instruction(Datatype dt, CondOpCode opc, PEInputMux LMuxS
     ReadRegAddress2 = RRegAdd2;
     WriteRegAddress = WAdd;
     WriteRegisterEnable = WE;
-    branchOffset = BranchOffset;
     ImmediateValue = ImmVal;
     encodeCondInstruction();
 }
@@ -671,13 +670,6 @@ bool
 Cond_Instruction::getWriteRegisterEnable()
 {
     return WriteRegisterEnable;
-}
-
-
-unsigned 
-Cond_Instruction::getBranchOffset()
-{
-    return branchOffset;
 }
 
 
@@ -814,7 +806,6 @@ Cond_Instruction::decodeCondInstruction()
     ReadRegAddress2 = (condInsWord & INS_C_R2) >> SHIFT_C_R2;
     WriteRegAddress = (condInsWord & INS_C_RW) >> SHIFT_C_RW;
     WriteRegisterEnable = (condInsWord & INS_C_WE) >> SHIFT_C_WE;
-    branchOffset = (condInsWord & INS_C_BROFFSET) >> SHIFT_C_BROFFSET;
     ImmediateValue = (condInsWord & INS_C_IMMEDIATE) >> SHIFT_C_IMMEDIATE;
     splitDirection = (condInsWord & INS_C_SP) >> SHIFT_C_SP;
     loopExitEnable = (condInsWord & INS_C_LE) >> SHIFT_C_LE;
@@ -836,7 +827,6 @@ Cond_Instruction::encodeCondInstruction()
     condInsWord |= ((0UL | ReadRegAddress2) << SHIFT_C_R2) & INS_C_R2;
     condInsWord |= ((0UL | WriteRegAddress) << SHIFT_C_RW) & INS_C_RW;
     condInsWord |= ((0UL | WriteRegisterEnable) << SHIFT_C_WE) & INS_C_WE;
-    condInsWord |= ((0UL | branchOffset) << SHIFT_C_BROFFSET) & INS_C_BROFFSET;
     condInsWord |= ((0UL | ImmediateValue) << SHIFT_C_IMMEDIATE) & INS_C_IMMEDIATE;
 }
 
