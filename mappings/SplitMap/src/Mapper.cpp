@@ -168,6 +168,9 @@ Mapper::generateMap(Parser* myParser)
     DEBUG("[Mapper]DFG can be split, padding first");
     originalDFG->padPath();
     DEBUG("[Mapper]Padding path done");
+    // also pad const here
+    originalDFG->padConst();
+    DEBUG("[Mapper]Padding constant done");
     // preprocess first
     originalDFG->preProcess(cgraInfo.MAX_NODE_INDEGREE, cgraInfo.MAX_NODE_OUTDEGREE);
     DEBUG("[Mapper]Done preprocessing DFG");
@@ -992,9 +995,10 @@ Mapper::scheduleASAPFeasible(DFG* myDFG, schedule* asapFeasible)
       }
     } // end of iterating through load nodes
     if (!scheduled) {
-      for (int id : rest) {
-        DEBUG("[ASAP Feasible]NODE: " << id << " not scheduled");
-      }
+      #ifndef NDEBUG
+        for (int id : rest) 
+          DEBUG("[ASAP Feasible]NODE: " << id << " not scheduled");
+      #endif
       FATAL("[ASAP Feasible]ERROR! " << rest.size() << " nodes can't be scheduled");
     }
   } // end of while rest.size() > 0

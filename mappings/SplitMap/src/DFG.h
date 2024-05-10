@@ -111,6 +111,10 @@ class DFG
     // pad a paths of a DFG with routing nodes so that edges with branch path always connects to a node of the path
     void padPath();
 
+    // since the micro architecture dictates an operation can only have 1 operand as constant, we need to pad 
+    // operations with multiple constant operands with a route node as the constant provider
+    void padConst();
+
     // this is to merge nodes of the 2 paths that should be mapped to the same location
     // that is nodes with arcs of their path to the same node
     void mergeNodes();

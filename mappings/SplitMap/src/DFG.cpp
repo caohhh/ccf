@@ -811,3 +811,53 @@ DFG::getConstArcs()
 {
   return constArcSet;
 }
+
+
+void
+DFG::padConst()
+{
+  DEBUG("[Pad Const]Padding constant operands of this DFG");
+  // the constant arc to each node
+  std::map<int, std::vector<Const_Arc>> constArcs;
+  // first fill in all the const arcs to the nodes
+  for (auto constArc : constArcSet) {
+    if (getNode(constArc.toNodeId) != nullptr) {
+      // the to node is a non-constant node
+      constArcs[constArc.toNodeId].push_back(constArc);
+    }
+  }
+  std::vector<Const_Arc> arcsToPad;
+  // check which node have more than 1 constant arcs
+  for (auto it : constArcs) {
+    auto constArcsOfNode = it.second;
+    if (constArcsOfNode.size() > 1) {
+      DEBUG("[Pad Const]Node: " << it.first << ", with " << constArcsOfNode.size() << " const arcs, need padding");
+      // might as well shuffle
+      std::shuffle(constArcsOfNode.begin(), constArcsOfNode.end(), rng);
+      for (unsigned ii = 1; ii < constArcsOfNode.size(); ii++)
+        arcsToPad.push_back(constArcsOfNode[ii]);
+    }
+  }
+  // now do the padding
+  for (auto arc : arcsToPad) {
+    // the path of the to node, should also be the path of the route node
+    nodePath path = getNode(arc.toNodeId)->getBrPath();
+    // insert the routing node
+    routeNode* newRouteNode = new routeNode(new Node(rest, int32, 1, -1, "", none, -1), path);
+    insertNode(newRouteNode);
+    // connect it to from node
+    makeConstArc(arc.fromNodeId, newRouteNode->getId(), 0, none);
+    DEBUG("[Pad Const]Padding between node: " << arc.fromNodeId <<" to node: " << arc.toNodeId);
+    // connect
+    makeArc(newRouteNode, getNode(arc.toNodeId), 0, TrueDep, arc.opOrder, none);
+    // remove arc
+    for (auto constIt = constArcSet.begin(); constIt != constArcSet.end(); ++constIt) {
+      if ((*constIt).fromNodeId == arc.fromNodeId &&
+          (*constIt).toNodeId == arc.toNodeId &&
+          (*constIt).opOrder == arc.opOrder) {
+        constArcSet.erase(constIt);
+        break;
+      }
+    }
+  } // end of iterating through const to pad
+}

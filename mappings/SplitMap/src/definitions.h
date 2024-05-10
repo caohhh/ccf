@@ -5,7 +5,7 @@
 #define __SPLITMAP_DEFINITIONS_H__
 #include <iostream>
 
-//#define NDEBUG
+#define NDEBUG
 struct CGRA_Architecture
 {
   unsigned X_Dim;
