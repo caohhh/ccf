@@ -134,8 +134,8 @@ CGRA_IFU::advanceState()
     DPRINTF(CGRA_IFU,"Controller states before:\n");
     DPRINTF(CGRA_IFU, "rollback pointer: %d, update pointer: %d\n", rollbackPtr, updatePtr);
     for (unsigned i = 0; i < iterCount; i++)
-        DPRINTF(CGRA_IFU, "Controller: %d, iter: %d, state: %d, off counter: %d\n",\
-                i, controller[i].iter, controller[i].state,controller[i].offCounter);
+        DPRINTF(CGRA_IFU, "Controller: %d, iter: %d, state: %d, speculative: %d, off counter: %d\n",\
+                i, controller[i].iter, controller[i].state, controller[i].speculative, controller[i].offCounter);
 
 
     // we need to update the predictor after execution is done
@@ -189,6 +189,11 @@ CGRA_IFU::advanceState()
                         controller[splitController].state = TRUE_PATH;
                     else
                         controller[splitController].state = FALSE_PATH;
+                    // also need to set all previous controller to not speculative
+                    for (unsigned i = 0; i < iterCount; i++) {
+                        if (controller[i].iter > controller[splitController].iter)
+                            controller[i].speculative = false;
+                    }
                     controller[splitController].speculative = false;
                     // update predictor
                     cgraPred->squash();

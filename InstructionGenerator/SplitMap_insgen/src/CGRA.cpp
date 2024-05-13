@@ -498,6 +498,7 @@ CGRA::dumpIns()
   }
   maxIter++;
   // at last write the max iter
+  DEBUG("max iter is : " << maxIter);
   iteration.write(reinterpret_cast<const char*>(&maxIter), sizeof(maxIter));
   kernel.close();
   iteration.close();

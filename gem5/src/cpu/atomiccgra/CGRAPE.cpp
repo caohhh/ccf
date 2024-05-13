@@ -1103,7 +1103,7 @@ CGRA_PE::setRecovery(int updatePtr)
 {
     outputRecover[updatePtr] = Output;
     outputPRecover[updatePtr] = OutputP;
-    DPRINTF(CGRA_Detailed,"backup output: %d, outputp:%d\n", outputRecover, outputPRecover);
+    DPRINTF(CGRA_Detailed,"backup output: %d, outputp:%d\n", outputRecover[updatePtr], outputPRecover[updatePtr]);
 }
 
 
