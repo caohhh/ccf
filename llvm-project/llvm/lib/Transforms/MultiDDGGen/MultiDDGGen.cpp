@@ -32,7 +32,7 @@ using namespace llvm;
 
 namespace {
 
-static cl::opt<int> splitBr("split", cl::desc("the branch id for the DFG to be split at"), cl::init(-1));
+static cl::opt<std::string> splitBrVec("split", cl::desc("the branch id for the DFG to be split at"), cl::init("-1"));
 
 /**
  * Get the loop hint metadata node with a given name
@@ -352,7 +352,7 @@ class MultiDDGGen : public LoopPass {
   private:
     // number of loops to be executed on CGRA
     unsigned totalLoops = 0;
-
+    int splitBr = 0;
     unsigned nodeID = 0;
     unsigned edgeID = 0;
 
@@ -2552,92 +2552,6 @@ MultiDDGGen::splitDFG(DFG* loopDFG, int splitBrId)
 }
 
 
-void
-MultiDDGGen::fuseNodes(DFG* loopDFG)
-{
-  // for now we can start with the phi node (remember to change 
-  // split and save this info), from bottom up traverse the two 
-  // path of the DFG tree -> first fuse the two select ops
-  // later: for each fused node, fuse based on operand order,
-  // if no op to fuse, fuse with noop
-  // don't think this is the most optimized method, but it should 
-  // work for now
-  /****************************************/
-  /**
-   * from bottom up, give each node a level
-   * basically a subgraph technique
-  */
-  /****************************************/
-
-  // or maybe we could even fuse all nodes in the same level
-  // while traversing
-
-  // for a fused node, what it means is that when mapping they exist
-  // in the same location (cycle and pe)
-  // use scalar evolution to analyse which node to fuse?
-
-  // in the end of this, we are producing a single part of DFG representing
-  // both true and false path
-  DEBUG("fusing nodes now, not doing anything now, may delete\n");
-  // first get the phi node as the base of the split
-  NODE* splitBaseNode;
-  for (auto nodeIT: loopDFG->getSetOfVertices()) {
-    if (nodeIT->get_Instruction() == cgra_select && nodeIT->getBranchIndex() != -1) {
-      // phi nodes inside loop
-      if (nodeIT->getBranchIndex() == splitBr) {
-        // first get the split phi node
-        splitBaseNode = nodeIT;
-        break;
-      }
-    }
-  }
-  // now fuse nodes from bottom up
-  // true nodes to be fused
-  std::vector<NODE*> trueNodeSet;
-  // false nodes to be fused
-  std::vector<NODE*> falseNodeSet;
-  for (auto prevNode : splitBaseNode->Get_Prev_Nodes()) {
-    if (loopDFG->get_Arc(prevNode, splitBaseNode)->GetOperandOrder() == 0)
-      trueNodeSet.push_back(prevNode);
-    else if (loopDFG->get_Arc(prevNode, splitBaseNode)->GetOperandOrder() == 1)
-      falseNodeSet.push_back(prevNode);
-  }
-  
-  // first remove nodes not in path
-  for (auto nodeIT = trueNodeSet.begin(); nodeIT != trueNodeSet.end();) {
-    if ((*nodeIT)->getBrPath() != true_path) 
-      nodeIT = trueNodeSet.erase(nodeIT);
-    else
-      ++nodeIT;
-  }
-  for (auto nodeIT = falseNodeSet.begin(); nodeIT != falseNodeSet.end();) {
-    if ((*nodeIT)->getBrPath() != false_path) 
-      nodeIT = falseNodeSet.erase(nodeIT);
-    else
-      ++nodeIT;
-  }
-  //  or we can first map...
-  #ifndef NDEBUG_M
-    DEBUG("true nodes to be fused include:\n");
-    for (auto nodeIT : trueNodeSet) {
-      DEBUG(nodeIT->get_Name() << ", " << nodeIT->get_ID() << "\n");
-    }
-    DEBUG("false nodes to be fused include:\n");
-    for (auto nodeIT : falseNodeSet) {
-      DEBUG(nodeIT->get_Name() << ", " << nodeIT->get_ID() << "\n");
-    }
-  #endif
-  // when choosing which nodes to fuse, we prioritize minimizing the 
-  // total arcs to a fused node
-
-  // arn arc to represent they are fused, 
-  // TODO: also consider address generator
-
-  
-  // now iterate through the connecting nodes (operands)
-  // until not in true or false path 
-}
-
 
 bool 
 MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
@@ -2702,7 +2616,19 @@ MultiDDGGen::runOnLoop(Loop *L, LPPassManager &LPM)
     // maybe should also add metadata about this to the loop
     return false;
   }
-
+  std::stringstream iss(splitBrVec);
+  int number;
+  DEBUG("the split vec: " << splitBrVec << "\n");
+  std::vector<int> splitBrs;
+  for (int i; iss >> i;) {
+    splitBrs.push_back(i);    
+    if (iss.peek() == ',')
+      iss.ignore();
+  }
+  if (splitBrs.size() > totalLoops)
+    splitBr = splitBrs[totalLoops];
+  else 
+    splitBr = -1;
   totalLoops++;
   DFG *loopDFG = new DFG();
   
